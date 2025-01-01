@@ -1,5 +1,6 @@
 #include "definitions.h"
 
+#include <Arduino.h>
 
 int pwm_lower_limit = 10;    //full range 0 - 255
 int pwm_upper_limit = 63;  //full range
