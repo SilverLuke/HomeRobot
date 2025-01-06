@@ -23,10 +23,9 @@
 #define MOTOR_DX_PWM 0 // pwm to control speed pin 0 for full speed
 
 // PID constants
-#define KP 10.
+#define KP 10.0
 #define KI 0.1
 #define KD 0.3
-
 
 /*
 I2C Sensors
@@ -34,14 +33,15 @@ I2C Sensors
 // HMC5883L  MAGNETOMETER On address: 0x0D
 // BMI160_HMC5883L
 */
-#define I2C_SDA 6
-#define I2C_SCL 7
+#define I2C_SDA 4
+#define I2C_SCL 5
 #define IMU_ADDR 0x68
 
 /*
 LIDAR
 */
-#define LDS_MOTOR_PWM_PIN  15 // LiDAR motor speed control using PWM
+// LiDAR motor speed control using PWM
+#define LDS_MOTOR_PWM_PIN     15
 #define LDS_MOTOR_PWM_FREQ    10000
 #define LDS_MOTOR_PWM_BITS    11
 #define LDS_MOTOR_PWM_CHANNEL    2 // ESP32 PWM channel for LiDAR motor speed control
@@ -55,13 +55,14 @@ extern Encoder encoder_dx;
 extern Motor motor_sx;
 extern Motor motor_dx;
 extern BMI160 imu;
+
 extern calData calib;
 extern AccelData IMUAccel;
 extern GyroData IMUGyro;
 extern MagData IMUMag;
 
 extern HardwareSerial LidarSerial;
-extern LDS_RPLIDAR_A1 lidar;
+extern LDS *lidar;
 
 void init_i2c();
 void init_imu();
