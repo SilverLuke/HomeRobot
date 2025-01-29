@@ -1,12 +1,16 @@
-#ifndef DEFINITIONS_H
-#define DEFINITIONS_H
+#pragma once
 
 #include <Encoder.h>
-#include <Motor_PID.h>
 #include <FastIMU.h>
+#include <HardwareSerial.h>
 #include <LDS.h>
 #include <LDS_RPLIDAR_A1.h>
-#include <HardwareSerial.h>
+#include <Motor_PID.h>
+#include <WiFi.h>
+#include <protocol.h>
+
+// LED
+#define RGB_BRIGHTNESS 64
 
 // MOTOR SX
 #define ENCODER_SX_A 20  // YELLOW from NXT motor encoder
@@ -33,8 +37,8 @@ I2C Sensors
 // HMC5883L  MAGNETOMETER On address: 0x0D
 // BMI160_HMC5883L
 */
-#define I2C_SDA 4
-#define I2C_SCL 5
+#define I2C_SDA  4
+#define I2C_SCL  5
 #define IMU_ADDR 0x68
 
 /*
@@ -44,8 +48,9 @@ LIDAR
 #define LDS_MOTOR_PWM_PIN     15
 #define LDS_MOTOR_PWM_FREQ    10000
 #define LDS_MOTOR_PWM_BITS    11
-#define LDS_MOTOR_PWM_CHANNEL    2 // ESP32 PWM channel for LiDAR motor speed control
-#define UART_NUM_0  0  // TODO check this 0
+#define LDS_MOTOR_PWM_CHANNEL 2 // ESP32 PWM channel for LiDAR motor speed control
+#define LDS_UART_NUM_0        1
+
 
 extern int pwm_lower_limit;
 extern int pwm_upper_limit;
@@ -63,11 +68,16 @@ extern MagData IMUMag;
 
 extern HardwareSerial LidarSerial;
 extern LDS *lidar;
+extern Protocol *protocol;
 
+void init_wifi();
+void init_server_connection();
 void init_i2c();
 void init_imu();
 void init_serial_lidar();
 void init_lidar();
 void init_motors();
 
-#endif // DEFINITIONS_H
+void lidar_start();
+
+void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue);

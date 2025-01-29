@@ -1,13 +1,14 @@
 #include "definitions.h"
+#include <secrets.h>
 
-int target = 360;  // target are the degrees of rotation
 
 int state = 0;
 int lidar_state = 0;
 
+int target = 360;  // target are the degrees of rotation
 int oldPosition = -9999;
-
 int oldRead = -120;
+
 
 void robot_run() {
   // motor_sx.set_target(target);
@@ -20,6 +21,7 @@ void robot_run() {
 
   delay(20);
 }
+
 
 void read_sensors() {
   imu.update();
@@ -35,6 +37,7 @@ void read_sensors() {
     // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ);
   }
 }
+
 
 void print_sensors() {
   Serial.print("IMU Accel: ");
@@ -69,21 +72,27 @@ void print_sensors() {
 
 
 void setup() {
+  neopixelWrite(RGB_BUILTIN, 0,0,0);
+
   Serial.begin(115200);
   while (!Serial);
   delay(100);
 
+  led_blink(".", RGB_BRIGHTNESS, RGB_BRIGHTNESS, RGB_BRIGHTNESS);
   log_i("###   INIT START   ###");
-
+  // init_wifi();
   init_i2c();
   init_imu();
   init_lidar();
-  // init_motors();
+  //init_motors();
   log_i("###   INIT DONE   ###");
+  led_blink("--", 0, RGB_BRIGHTNESS, 0);
+  Serial.println("Use 'w' to connect to WiFi");
+  Serial.println("Use 'l' to start LiDAR");
+  Serial.println("Use 's' to Emergency Stop");
 }
 
 void loop() {
-  // String cmd = Serial.readString();
   char cmd = Serial.read();
 
   switch (cmd) {
@@ -92,7 +101,9 @@ void loop() {
       log_i("Stop all");
       motor_dx.turn_off();
       motor_sx.turn_off();
+      lidar->stop();
       state = 0;
+      lidar_state = 0;
       break;
     case 'g':
       // case 'start':
@@ -113,12 +124,20 @@ void loop() {
       print_sensors();
       break;
     case 'l':
-      digitalWrite(LDS_MOTOR_PWM_PIN, HIGH);
+      // START LIDAR
+      if (lidar_state != 0) {
+        break;
+      }
+      lidar_start();
       lidar_state = 1;
       break;
-    case 'k':
-      digitalWrite(LDS_MOTOR_PWM_PIN, LOW);
-      lidar_state = 0;
+    case 'w':
+      Serial.println("CONNECTING to WIFI");
+      if (WiFi.status() != WL_CONNECTED) {
+        init_wifi();
+      }
+      protocol->restart();
+      break;
     default:
       break;
   }
