@@ -3,11 +3,11 @@
 //
 
 #include "definitions.h"
-#include "sensors.h"
-#include "protocol.h"
+#include "sensors/lidar.h"
+#include "communication/protocol.h"
+#include "utils.h"
 
 HomeRobotPacket home_robot_packet{};
-
 
 void lidar_info_callback(LDS::info_t code, String info) {
   Serial.print("LiDAR info ");
@@ -22,7 +22,6 @@ void lidar_error_callback(LDS::result_t code, String aux_info) {
   Serial.print(": ");
   Serial.println(aux_info);
 }
-
 
 int lidar_serial_read_callback() {
   return LidarSerial.read();
@@ -132,7 +131,6 @@ void init_lidar() {
 }
 
 void lidar_start() {
-
   LDS::result_t result = LDS::ERROR_TIMEOUT;
   while (result != LDS::RESULT_OK) {
     result = lidar->start();

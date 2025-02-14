@@ -1,32 +1,17 @@
 #pragma once
 
-#include <Arduino.h>
+#include <cstdint>
+#include <WString.h>
 
+#define LED_BRIGHTNESS RGB_BRIGHTNESS
 
-#define LED_TIMING 500
+#define RED     RGB_BRIGHTNESS, 0,              0
+#define GREEN   0,              RGB_BRIGHTNESS, 0
+#define BLUE    0,              0,              RGB_BRIGHTNESS
+#define YELLOW  RGB_BRIGHTNESS, RGB_BRIGHTNESS, 0
+#define PURPLE  RGB_BRIGHTNESS, 0,              RGB_BRIGHTNESS
+#define CYAN    0,              RGB_BRIGHTNESS, RGB_BRIGHTNESS
+#define WHITE   RGB_BRIGHTNESS, RGB_BRIGHTNESS, RGB_BRIGHTNESS
+
 // Sequence is a string in a morse like format - and . if - blink longer than . than power off the led
-void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue) {
-
-  // If the sequence is empty, return immediately
-  if (seq.length() == 0) {
-    return;
-  }
-  for(int i = 0; i < seq.length(); i++){
-    char c = seq[i];
-
-    // Blink the LED based on the character
-    switch (c) {
-      case '.':
-        neopixelWrite(RGB_BUILTIN, red, green, blue);
-        delay(LED_TIMING);
-        neopixelWrite(RGB_BUILTIN, 0, 0, 0);
-        break;
-      case '-':
-        neopixelWrite(RGB_BUILTIN, red, green, blue);
-        delay(LED_TIMING * 2);
-        neopixelWrite(RGB_BUILTIN, 0, 0, 0);
-        break;
-      default:;
-    }
-  }
-}
+void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue);

@@ -1,6 +1,8 @@
 #include "definitions.h"
-#include <secrets.h>
-
+#include "utils.h"
+#include "sensors/lidar.h"
+#include "sensors/battery.h"
+#include "sensors/imu.h"
 
 int state = 0;
 int lidar_state = 0;
@@ -23,87 +25,60 @@ void robot_run() {
 }
 
 
-void read_sensors() {
-  imu.update();
-  imu.getAccel(&IMUAccel);
-  imu.getGyro(&IMUGyro);
-  if (imu.hasMagnetometer()) {
-    imu.getMag(&IMUMag);
-    // filter.update(IMUGyro.gyroX, IMUGyro.gyroY, IMUGyro.gyroZ,
-    // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ, IMUMag.magX,
-    // IMUMag.magY, IMUMag.magZ);
-  } else {
-    // filter.updateIMU(IMUGyro.gyroX, IMUGyro.gyroY, IMUGyro.gyroZ,
-    // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ);
-  }
-}
-
-
-void print_sensors() {
-  Serial.print("IMU Accel: ");
-  Serial.print(IMUAccel.accelX);
-  Serial.print(", ");
-  Serial.print(IMUAccel.accelY);
-  Serial.print(", ");
-  Serial.println(IMUAccel.accelZ);
-
-  Serial.print("IMU Gyro: ");
-  Serial.print(IMUGyro.gyroX);
-  Serial.print(", ");
-  Serial.print(IMUGyro.gyroY);
-  Serial.print(", ");
-  Serial.println(IMUGyro.gyroZ);
-  // Serial.print("\tMX: ");
-  // Serial.print(IMUMag.magX);
-  // Serial.print("\tMY: ");
-  // Serial.print(IMUMag.magY);
-  // Serial.print("\tMZ: ");
-  // log_i(IMUMag.magZ);
-
-  // Serial.print("QW: ");
-  // Serial.print(filter.getQuatW());
-  // Serial.print("\tQX: ");
-  // Serial.print(filter.getQuatX());
-  // Serial.print("\tQY: ");
-  // Serial.print(filter.getQuatY());
-  // Serial.print("\tQZ: ");
-  // log_i(filter.getQuatZ());
-}
-
-
 void setup() {
   neopixelWrite(RGB_BUILTIN, 0,0,0);
+  led_blink(".", WHITE);
 
   Serial.begin(115200);
   while (!Serial);
   delay(100);
 
-  led_blink(".", RGB_BRIGHTNESS, RGB_BRIGHTNESS, RGB_BRIGHTNESS);
+  while (init_battery() != 0) {
+    log_e("Battery not connected. Waiting 5 seconds");
+    led_blink("-", PURPLE);
+    delay(5000);
+  }
+
   log_i("###   INIT START   ###");
-  // init_wifi();
-  init_i2c();
-  init_imu();
-  init_lidar();
-  //init_motors();
+  //init_wifi();
+  //init_i2c();
+  //init_imu();
+  //init_lidar();
+  init_motors();
   log_i("###   INIT DONE   ###");
-  led_blink("--", 0, RGB_BRIGHTNESS, 0);
+  led_blink("--", GREEN);
   Serial.println("Use 'w' to connect to WiFi");
   Serial.println("Use 'l' to start LiDAR");
   Serial.println("Use 's' to Emergency Stop");
 }
 
-void loop() {
-  char cmd = Serial.read();
+unsigned long lastBatteryRead = 0;
+void show_battery() {
+   // Do it only once every 10 seconds
+  if (millis() - lastBatteryRead >= 10000) {
+    lastBatteryRead = millis();
+    Serial.print("Battery level: ");
+    Serial.print(battery_level());
+    Serial.print("% raw: ");
+    Serial.println(battery_raw());
+  }
+}
 
+
+void loop() {
+  show_battery();
+  char cmd = Serial.read();
   switch (cmd) {
     case 's':
       // case 'stop':
       log_i("Stop all");
-      motor_dx.turn_off();
       motor_sx.turn_off();
-      lidar->stop();
+      motor_dx.turn_off();
+      // lidar->stop();
       state = 0;
       lidar_state = 0;
+      log_i("Stop all end");
+      // delay(10);
       break;
     case 'g':
       // case 'start':
@@ -146,16 +121,20 @@ void loop() {
     lidar->loop();
   }
 
-  if (state == 0) {
-    delay(100);
-  } else if (state == 1) {
-    robot_run();
-  } else if (state == 2) {
-    int read_enc = digitalRead(ENCODER_SX_A);
-    if (oldRead != read_enc) {
-      log_i("%d", oldRead);
-      oldRead = read_enc;
-    }
-    read_sensors();
+  switch (state) {
+    case 0:
+      delay(1000);
+      break;
+    case 1:
+      robot_run();
+      break;
+    case 2:
+      int read_enc = digitalRead(ENCODER_SX_A);
+      if (oldRead != read_enc) {
+        log_i("%d", oldRead);
+        oldRead = read_enc;
+      }
+      read_sensors();
+      break;
   }
 }

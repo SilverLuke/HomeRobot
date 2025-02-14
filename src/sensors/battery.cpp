@@ -1,0 +1,29 @@
+#include <Arduino.h>
+#include <cstdint>
+#include "sensors/battery.h"
+
+#define ADC_BATTERY_PIN 2
+
+#define BATTERY_MAX 4096  // TODO find a better value
+#define BATTERY_MIN 2250  // TODO find a better value
+#define BATTERY_NOT_CONNECTED 100
+
+long battery_level() {
+  int adcValue = analogRead(ADC_BATTERY_PIN);
+  return map(adcValue, BATTERY_MIN, BATTERY_MAX, 0, 100);
+}
+
+uint16_t battery_raw() {
+  return analogRead(ADC_BATTERY_PIN);
+}
+
+uint8_t init_battery() {
+  pinMode(ADC_BATTERY_PIN, INPUT);
+  analogReadResolution(12);
+
+  if (battery_raw() < BATTERY_NOT_CONNECTED) {
+    return 1;
+  }
+  return 0;
+  
+}

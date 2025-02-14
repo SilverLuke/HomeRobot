@@ -5,9 +5,9 @@
 #include <HardwareSerial.h>
 #include <LDS.h>
 #include <LDS_RPLIDAR_A1.h>
-#include <Motor_PID.h>
+#include "Motor_PID.h"
 #include <WiFi.h>
-#include <protocol.h>
+#include <communication/protocol.h>
 
 // LED
 #define RGB_BRIGHTNESS 64
@@ -56,11 +56,11 @@ extern int pwm_lower_limit;
 extern int pwm_upper_limit;
 
 extern Encoder encoder_sx;
-extern Encoder encoder_dx;
 extern Motor motor_sx;
+extern Encoder encoder_dx;
 extern Motor motor_dx;
-extern BMI160 imu;
 
+extern BMI160 imu;
 extern calData calib;
 extern AccelData IMUAccel;
 extern GyroData IMUGyro;
@@ -68,16 +68,10 @@ extern MagData IMUMag;
 
 extern HardwareSerial LidarSerial;
 extern LDS *lidar;
+
 extern Protocol *protocol;
 
 void init_wifi();
 void init_server_connection();
-void init_i2c();
-void init_imu();
-void init_serial_lidar();
-void init_lidar();
 void init_motors();
 
-void lidar_start();
-
-void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue);
