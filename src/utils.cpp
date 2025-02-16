@@ -1,7 +1,7 @@
 #include "utils.h"
 #include <Arduino.h>
 
-#define LED_TIMING 500
+#define LED_TIMING 250
 
 void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue) {
   // If the sequence is empty, return immediately
@@ -26,5 +26,6 @@ void led_blink(String seq, uint8_t red, uint8_t green, uint8_t blue) {
         break;
     }
     neopixelWrite(RGB_BUILTIN, 0, 0, 0);
+    delay(LED_TIMING);
   }
 }

@@ -6,11 +6,18 @@
 
 #define BATTERY_MAX 4096  // TODO find a better value
 #define BATTERY_MIN 2250  // TODO find a better value
+
+#define BATTERY_MAX_VOLTAGE 16800
 #define BATTERY_NOT_CONNECTED 100
 
 long battery_level() {
   int adcValue = analogRead(ADC_BATTERY_PIN);
   return map(adcValue, BATTERY_MIN, BATTERY_MAX, 0, 100);
+}
+
+long battery_voltage() {
+  int adcValue = analogRead(ADC_BATTERY_PIN);
+  return map(adcValue, 0, BATTERY_MAX, 0, BATTERY_MAX_VOLTAGE);
 }
 
 uint16_t battery_raw() {
@@ -26,4 +33,13 @@ uint8_t init_battery() {
   }
   return 0;
   
+}
+
+void serial_show_battery() {
+  Serial.print("Battery: ");
+  Serial.print(battery_level());
+  Serial.print("%, ");
+  Serial.print(battery_voltage());
+  Serial.print("mV, ");
+  Serial.println(battery_raw());
 }

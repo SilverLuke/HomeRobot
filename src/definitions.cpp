@@ -1,18 +1,26 @@
-#include <Arduino.h>
 #include "LDS_RPLIDAR_A1.h"
 #include "definitions.h"
 #include "communication/protocol.h"
 
 #include "secrets.h"
 
-int pwm_lower_limit = 10;  //full range 0 - 255
-int pwm_upper_limit = 63;  //full range
-
 Encoder encoder_sx = Encoder(ENCODER_SX_A, ENCODER_SX_B);
 Encoder encoder_dx = Encoder(ENCODER_DX_A, ENCODER_DX_B);
 
-Motor motor_sx = Motor(encoder_sx, MOTOR_SX_FORWARD, MOTOR_SX_BACKWARD, MOTOR_SX_PWM, pwm_lower_limit, pwm_upper_limit);
-Motor motor_dx = Motor(encoder_dx, MOTOR_DX_FORWARD, MOTOR_DX_BACKWARD, MOTOR_DX_PWM, pwm_lower_limit, pwm_upper_limit);
+Motor motor_sx = Motor(
+  encoder_sx,
+  MOTOR_SX_FORWARD,
+  MOTOR_SX_BACKWARD,
+  MOTOR_SX_PWM,
+  MOTOR_PWM_LOWER_LIMIT,
+  MOTOR_PWM_UPPER_LIMIT);
+Motor motor_dx = Motor(
+  encoder_dx,
+  MOTOR_DX_FORWARD,
+  MOTOR_DX_BACKWARD,
+  MOTOR_DX_PWM,
+  MOTOR_PWM_LOWER_LIMIT,
+  MOTOR_PWM_UPPER_LIMIT);
 
 // MPU6050_QMC5883L imu;
 // MPU6050 imu;  // 0x68

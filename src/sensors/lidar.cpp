@@ -7,7 +7,7 @@
 #include "communication/protocol.h"
 #include "utils.h"
 
-HomeRobotPacket home_robot_packet{};
+HomeRobotPacket home_robot_packet = {};
 
 void lidar_info_callback(LDS::info_t code, String info) {
   Serial.print("LiDAR info ");
@@ -47,7 +47,7 @@ void lidar_scan_point_callback(
   old = angle_deg;
   mesures++;
   if (scan_completed) {
-    Serial.println("SPC TDeg: " + String(total) + " AVGDEG: " + String(total / (mesures)) + " mesures:" + String(mesures) + " " + String(millis() - time));
+    Serial.println("SPC TDeg: " + String(total) + " AVGDEG: " + String(total / static_cast<float>(mesures)) + " mesures:" + String(mesures) + " " + String(millis() - time));
     mesures = 0;
     total = 0.;
     old = 0.;
@@ -78,25 +78,23 @@ void lidar_motor_pin_callback(float value, LDS::lds_pin_t lidar_pin) {
 }
 
 /**
- * This is the base function packet is a pointer to a struct
- * @param packet
- * @param length
- * @param scan_completed
+ * @brief This is the base function packet is a pointer to a struct
+ * @param[in] packet
+ * @param[in] length   For RPLIDAR A1 should be 8 + 16 + 16 = 40 byte
+ * @param[in] scan_completed
  */
 void lidar_packet_callback(uint8_t* packet, uint16_t length, bool scan_completed) {
-  static int sequence = 0;
+  static uint8_t sequence = 0;
+  static size_t total_size = 0;
   sequence++;
+  total_size += length;
 
-  home_robot_packet.millis = millis();
-  home_robot_packet.type = SENSOR_LIDAR;
-  home_robot_packet.size = length;
-  home_robot_packet.data = packet;
-
-  protocol->writePacket(home_robot_packet);
+  protocol->AddLidarPacket(packet, length);
 
   if (scan_completed) {
-    Serial.println("PC sended: " + String(sequence));
+    Serial.println("Scan end: " + String(sequence) + " total size " + String(total_size));
     sequence = 0;
+    total_size = 0;
   }
 }
 

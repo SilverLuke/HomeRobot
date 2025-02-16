@@ -11,6 +11,8 @@
 
 // LED
 #define RGB_BRIGHTNESS 64
+#define MOTOR_PWM_LOWER_LIMIT 10  //full range 0 - 255
+#define MOTOR_PWM_UPPER_LIMIT 64  //full range 0 - 255
 
 // MOTOR SX
 #define ENCODER_SX_A 20  // YELLOW from NXT motor encoder
