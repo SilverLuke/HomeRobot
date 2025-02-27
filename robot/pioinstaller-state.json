@@ -1,0 +1,13 @@
+{
+  "core_version": "6.1.15",
+  "python_version": "3.12.4",
+  "core_dir": "/home/luca/.platformio",
+  "cache_dir": "/home/luca/.platformio/.cache",
+  "penv_dir": "/home/luca/.platformio/penv",
+  "penv_bin_dir": "/home/luca/.platformio/penv/bin",
+  "platformio_exe": "/home/luca/.platformio/penv/bin/platformio",
+  "installer_version": "1.2.2",
+  "python_exe": "/home/luca/.platformio/penv/bin/python",
+  "system": "linux_x86_64",
+  "is_develop_core": false
+}

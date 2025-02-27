@@ -1,5 +1,10 @@
-.pio
-.idea/
-lib/
+# Generic
+**/.idea/
 
-src/secrets.h
+# Robot
+robot/.pio
+robot/lib/
+robot/src/secrets.h
+
+# Server
+server/target
