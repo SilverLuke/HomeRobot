@@ -48,7 +48,11 @@
 enum SendPacketType : uint8_t {
   /**
    * Maybe cache some points in the buffer and send a big packet with more
-   * points in it. LIDAR: ANGLE (0, 360), DISTANCE (0, 8000), QUALITY (0, 255)
+   * points in it.
+   * LIDAR:
+   * ANGLE (0, 360),
+   * DISTANCE (0, 8000),
+   * QUALITY (0, 255)
    */
   TX_LIDAR = 0,
 
@@ -71,7 +75,7 @@ enum SendPacketType : uint8_t {
    * MOTOR DX ENCODER,
    * MOTOR SX ENCODER
    */
-  TX_ENCODER_MOTORS = 3,
+  TX_ENCODER_MOTORS = 4,
 
   /**
    * LIDAR SPEED,
@@ -86,12 +90,12 @@ enum SendPacketType : uint8_t {
    *    KD,
    *    MAX_SPEED
    */
-  TX_CONFIG = 4,
+  TX_CONFIG = 8,
 
   /**
    *
    */
-  TX_ECHO = 6,
+  TX_ECHO = 16,
 };
 
 // Used from PC -> ESP32
@@ -128,17 +132,17 @@ enum ReceivePacketType : uint8_t {
    * Scan frequency of the LiDAR
    * Hz: (0, 256) -> then mapped to (0., 10.) float
    */
-  RX_LIDAR_MOTOR = 4,
+  RX_LIDAR_MOTOR = 2,
 
   /**
    * Stop all the motors and the LiDAR
    */
-  RX_STOP_ALL = 5,
+  RX_STOP_ALL = 4,
 
   /**
    * Request a TX packet, used for echo/ping
    */
-  RX_REQUEST = 6,
+  RX_REQUEST = 8,
 };
 
 union PacketType {

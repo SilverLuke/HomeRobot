@@ -31,6 +31,8 @@ size_t lidar_serial_write_callback(const uint8_t* buffer, size_t length) {
   return LidarSerial.write(buffer, length);
 }
 
+
+// For each point in the scan already processed data
 void lidar_scan_point_callback(
     float angle_deg,
     float distance_mm,
@@ -78,8 +80,8 @@ void lidar_motor_pin_callback(float value, LDS::lds_pin_t lidar_pin) {
 }
 
 /**
- * @brief This is the base function packet is a pointer to a struct
- * @param[in] packet
+ * @brief For each sensor read, like lidar_scan_point_callback but raw datastructure
+ * @param[in] packet   Raw data from the LiDAR, see RPLIDAR A1 @ref node_info
  * @param[in] length   For RPLIDAR A1 should be 8 + 16 + 16 = 40 byte
  * @param[in] scan_completed
  */

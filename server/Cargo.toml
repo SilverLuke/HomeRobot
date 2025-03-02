@@ -1,22 +1,23 @@
 [package]
-name = "brain"
+name = "server"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 byteorder = "1.4"
+num_enum = "0.7.3"
 
-[dependencies.gtk]
-package = "gtk4"
-version = "0.9.6"
-features = ["v4_16"]
-
-[dependencies.gtk-sys]
-package = "gtk4-sys"
-version = "0.9.6"
-features = ["v4_16"]
-
-[dependencies.gdk]
-package = "gdk4"
-version = "0.9.6"
-features = ["v4_16"]
+# [dependencies.gtk]
+# package = "gtk4"
+# version = "0.9.6"
+# features = ["v4_16"]
+# 
+# [dependencies.gtk-sys]
+# package = "gtk4-sys"
+# version = "0.9.6"
+# features = ["v4_16"]
+# 
+# [dependencies.gdk]
+# package = "gdk4"
+# version = "0.9.6"
+# features = ["v4_16"]

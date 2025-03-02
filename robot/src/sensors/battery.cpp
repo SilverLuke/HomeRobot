@@ -3,12 +3,12 @@
 #include "sensors/battery.h"
 
 #define ADC_BATTERY_PIN 2
-
-#define BATTERY_MAX 4096  // TODO find a better value
+// Values in the ADC range 0-4095
+#define BATTERY_MAX 2990
 #define BATTERY_MIN 2250  // TODO find a better value
-
-#define BATTERY_MAX_VOLTAGE 16800
-#define BATTERY_NOT_CONNECTED 100
+#define BATTERY_NOT_CONNECTED 800
+// Values in mV
+#define BATTERY_MAX_VOLTAGE 16500
 
 long battery_level() {
   int adcValue = analogRead(ADC_BATTERY_PIN);

@@ -19,3 +19,10 @@ This is a personal project, the goal is to create a robot that can navigate in a
 To be completed
 - [HomeRobot-CAD]() - CAD files for the robot
 - [HomeRobot-Brain]() - Server that controls the robot
+
+## To Do
+
+- [] Check endianess before sending in / recieving from  the network
+
+
+

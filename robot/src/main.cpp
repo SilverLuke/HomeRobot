@@ -29,7 +29,6 @@ void set_refresh(unsigned long refresh) {
 
 void setup() {
   neopixelWrite(RGB_BUILTIN, LED_OFF);
-  init_motors();
   led_blink(".", LED_WHITE);
 
   uint8_t retry = 0;
@@ -53,6 +52,7 @@ void setup() {
   log_i("###   INIT START   ###");
   init_wifi();
   init_server_connection();
+  //init_motors();
   init_i2c();
   init_imu();
   init_lidar();
