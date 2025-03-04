@@ -97,6 +97,10 @@ size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
 }
 
 void Protocol::SendLidarPacket() {
+  /**
+   * @brief Send the lidar buffer to the PC
+   */
+
   // HomeRobotPacket packet = {};
   // packet.sequence_millis = this->buffer_start_millis;
   // packet.type.send = SendPacketType::TX_LIDAR;
@@ -104,27 +108,37 @@ void Protocol::SendLidarPacket() {
   // packet.data = this->lidar_buffer;
   size_t offset = 0;
 
+  // Coping the millis - 4 bytes
   memcpy(this->lidar_buffer, &this->buffer_start_millis, sizeof(this->buffer_start_millis));
   offset += sizeof(this->buffer_start_millis);
 
-  this->lidar_buffer[offset] = SendPacketType::TX_LIDAR;
+  // Coping the packet type - 1 byte
+  const SendPacketType packet = TX_LIDAR;
+  memcpy(this->lidar_buffer + offset, &packet, sizeof(packet));
   offset += sizeof(SendPacketType);
 
+  // Coping the data size - 2 bytets
+  this->lidar_buffer_end -= Protocol::PrefixSize();
   memcpy(this->lidar_buffer + offset, &this->lidar_buffer_end, sizeof(this->lidar_buffer_end));
   offset += sizeof(this->lidar_buffer_end);
   assert(offset == Protocol::PrefixSize());
 
-  size_t written = this->wifi_client.write(this->lidar_buffer,  offset + this->lidar_buffer_end);
-  assert(written == offset + this->lidar_buffer_end);
+  log_i("Sending lidar packet with size %d", this->lidar_buffer_end);
+  size_t written = this->wifi_client.write(this->lidar_buffer, this->lidar_buffer_end + offset);
+  if (written != this->lidar_buffer_end + offset) {
+    sleep(2);
+    written = this->wifi_client.write(this->lidar_buffer + written, this->lidar_buffer_end + offset - written);
+  }
+  assert(written == this->lidar_buffer_end + offset);
 
-  this->lidar_buffer_end = Protocol::PrefixSize();
+  this->lidar_buffer_end = PrefixSize();
   this->buffer_start_millis = 0;
 
 }
 
 void Protocol::AddLidarPacket(uint8_t* packet, uint16_t length) {
   if (this->lidar_buffer_end + length > MAX_LIDAR_BUFFER_SIZE) {
-    log_d("Buffer is full, sending data");
+    log_i("Buffer is full, sending data");
     this->SendLidarPacket();
   }
 
@@ -132,6 +146,7 @@ void Protocol::AddLidarPacket(uint8_t* packet, uint16_t length) {
     this->buffer_start_millis = millis();
   }
 
+  // Add the packet to the buffer
   memcpy(this->lidar_buffer + this->lidar_buffer_end, packet, length);
   this->lidar_buffer_end = this->lidar_buffer_end + length;
 }

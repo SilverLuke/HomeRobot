@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 use std::io::{self, Read};
 use std::net::{TcpListener, TcpStream};
 use std::{f32, thread};
+use std::path::Prefix;
 use byteorder::{LittleEndian, ReadBytesExt}; // for reading data in Little Endian
 use num_enum::{TryFromPrimitive};
 
@@ -53,13 +54,16 @@ struct HomeRobotPacket {
     data: Vec<u8>
 }
 
+const PREFIX_SIZE: usize = 7;
 
 // Function to handle individual packets from the stream
 fn receive_header(mut stream: &TcpStream) -> io::Result<HomeRobotPacket> {
-    // Buffer to read the packet's header (4 bytes for millis, 1 byte for type, 2 bytes for size)
-    let mut header = [0u8; 7];
-    stream.read_exact(&mut header)?;
+    println!("Receive header");
 
+    // Buffer to read the packet's header (4 bytes for millis, 1 byte for type, 2 bytes for size)
+    let mut header = [0u8; PREFIX_SIZE];
+    stream.read_exact(&mut header)?;
+    println!("Read first {PREFIX_SIZE} bytes");
     // Read millis (u32, 4 bytes)
     let millis = (&header[0..4]).read_u32::<LittleEndian>()?;
     println!("Millis: {}", millis);
@@ -67,9 +71,11 @@ fn receive_header(mut stream: &TcpStream) -> io::Result<HomeRobotPacket> {
     // Read sensor type (u8, 1 byte)
     let packet_type_value_raw = header[4];
     let packet_type = ReceivePacketType::try_from(packet_type_value_raw).unwrap();
+    println!("Packet type {packet_type:?}");
 
     // Read the size of the data (u16, 2 bytes)
     let size = (&header[5..7]).read_u16::<LittleEndian>()?;
+    println!("Data size: {size}");
 
     // Read the actual data based on size
     let mut data = vec![0u8; size as usize];
@@ -134,7 +140,7 @@ fn parse_lidar_packet(size: u16, data: &Vec<u8>) {
         let distance_q2 = u16::from_le_bytes([data[3], data[4]]);
 
         // Perform the operations
-        let scan_completed = (sync_quality & 0b10000000) != 0; // Extract syncbit
+        let scan_completed = (sync_quality & (0x1<<0)) != 0; // Extract syncbit
         let distance_mm = (distance_q2 as f32) * 0.25;
         let angle_deg = ((angle_q6_check_bit >> 1) as f32) * 0.015625; // Shift and scale
         let quality = (sync_quality >> 2) & 0x3F; // Extract the 6-bit quality
@@ -146,10 +152,9 @@ fn parse_lidar_packet(size: u16, data: &Vec<u8>) {
         let y_pos = distance_meters * f32::sin(angle_rad);
 
         // Print the results
-        println!("Packet Type: Lidar");
-        println!("Scan Completed: {}", scan_completed);
-        println!("Distance (mm): {:.2} Angle (deg): {:.2} Quality {}", distance_mm, angle_deg, quality);
-        println!("Vector <{}, {}>", x_pos, y_pos);
+        println!("Packet Type: Lidar Completed: {scan_completed}, \
+Distance (mm): {distance_mm:.2} Angle (deg): {angle_deg:.2} Quality {quality}");
+        //println!("Vector <{}, {}>", x_pos, y_pos);
     }
 }
 

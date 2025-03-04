@@ -41,7 +41,7 @@
 
 // Maximum size of the packet use 1500 because it's the maximum size of the
 // packet MTU
-#define MAX_LIDAR_BUFFER_SIZE 1500
+#define MAX_LIDAR_BUFFER_SIZE 900
 #define MAX_PACKET_SIZE 128
 
 // Used from ESP32 -> PC
@@ -174,10 +174,11 @@ class Protocol {
      * @brief Lidar buffer used to store the data from the LiDAR.
      */
     unsigned long buffer_start_millis = 0;
-    uint8_t lidar_buffer_end = PrefixSize();
+    uint16_t lidar_buffer_end = Protocol::PrefixSize();
     uint8_t* lidar_buffer = new uint8_t[MAX_LIDAR_BUFFER_SIZE];
+
     /**
-     * @brief Buffer used to store the packet before sending it to the PC
+     * @brief Buffer used to store the non Lidar packets before sending it to the PC
      */
     uint8_t* packet_buffer = new uint8_t[MAX_PACKET_SIZE];
     uint8_t* receive_buffer = new uint8_t[MAX_PACKET_SIZE];
