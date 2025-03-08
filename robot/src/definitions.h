@@ -11,14 +11,16 @@
 
 // LED
 #define RGB_BRIGHTNESS 64
-#define MOTOR_PWM_LOWER_LIMIT 10  //full range 0 - 255
-#define MOTOR_PWM_UPPER_LIMIT 64  //full range 0 - 255
+
+// General motor settings
+#define MOTOR_PWM_LOWER_LIMIT 64  //full range 0 - 255
+#define MOTOR_PWM_UPPER_LIMIT 128  //full range 0 - 255
 
 // MOTOR SX
 #define ENCODER_SX_A 20  // YELLOW from NXT motor encoder
 #define ENCODER_SX_B 21  // WHITE from NXT motor encoder
-#define MOTOR_SX_FORWARD  12  // in2 from driver to control direction
-#define MOTOR_SX_BACKWARD 13   // in1 from driver to control direction
+#define MOTOR_SX_FORWARD  19  // in2 from driver to control direction
+#define MOTOR_SX_BACKWARD 18   // in1 from driver to control direction
 #define MOTOR_SX_PWM 0  // pwm to control speed pin 0 for full speed
 
 // MOTOR DX

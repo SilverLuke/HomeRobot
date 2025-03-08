@@ -12,7 +12,7 @@ int32_t oldPosition = -999;
 int32_t oldRead = -120;
 
 // 1/150 = 0.006 seconds -> 6 millis  150 is the number of points that the lidar can read
-#define FAST_REFRESH_HZ 6
+#define FAST_REFRESH_HZ 500
 #define SLOW_REFRESH_HZ 1000
 
 unsigned long old_millis = 0;
@@ -127,22 +127,43 @@ void serial_commands() {
   }
 }
 
-void motor_move(uint8_t *data) {
-  int8_t dx_power = data[0];
-  uint8_t dx_angle = data[1];
-  int8_t sx_power = data[2];
-  uint8_t sx_angle = data[3];
-  if (dx_power == 0) {
-    motor_dx.turn_off();
-  } else {
-    motor_dx.set_target(100 * dx_power);
-  }
-  if (sx_power == 0) {
-    motor_sx.turn_off();
-  } else {
-    motor_sx.set_target(100 * sx_power);
-  }
+#include <arpa/inet.h>
+// Helper function to convert network-endian float to little-endian
+float ntohf(uint32_t net_float) {
+    net_float = ntohl(net_float);  // Convert from big-endian to little-endian
+    float host_float;
+    memcpy(&host_float, &net_float, sizeof(float));
+    return host_float;
 }
+
+void motor_move(const uint8_t *data) {
+    const int8_t dx_power = static_cast<int8_t>(data[0]);
+
+    uint32_t raw_dx_angle;
+    memcpy(&raw_dx_angle, &data[1], sizeof(uint32_t));
+    float dx_angle = ntohf(raw_dx_angle);
+
+    const int8_t sx_power = static_cast<int8_t>(data[5]);
+
+    uint32_t raw_sx_angle;
+    memcpy(&raw_sx_angle, &data[6], sizeof(uint32_t));
+    float sx_angle = ntohf(raw_sx_angle);
+
+    if (dx_power == 0) {
+        motor_dx.turn_off();
+    } else {
+        motor_dx.set_target(100.0f * dx_power);
+    }
+
+    if (sx_power == 0) {
+        motor_sx.turn_off();
+    } else {
+        motor_sx.set_target(100.0f * sx_power);
+    }
+  log_d("DX: %d, %f   SX: %d, %f", dx_power, dx_angle, sx_power, sx_angle);
+}
+
+
 
 uint8_t extract_motor_config(const uint8_t * data,
   float * kp,

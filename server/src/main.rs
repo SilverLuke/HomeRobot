@@ -1,10 +1,13 @@
 use std::f32::consts::PI;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::{f32, thread};
 use std::path::Prefix;
-use byteorder::{LittleEndian, ReadBytesExt}; // for reading data in Little Endian
+use std::thread::sleep;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use byteorder::{BigEndian, LittleEndian, NetworkEndian, ReadBytesExt}; // for reading data in Little Endian
 use num_enum::{TryFromPrimitive};
+use crate::SendPacketType::TxMotorMove;
 
 // Enum for Sensors
 #[repr(u8)]
@@ -136,8 +139,8 @@ fn parse_lidar_packet(size: u16, data: &Vec<u8>) {
 
     fn parse_single(data: Vec<u8>) {
         let sync_quality = data[0];
-        let angle_q6_check_bit = u16::from_le_bytes([data[1], data[2]]);
-        let distance_q2 = u16::from_le_bytes([data[3], data[4]]);
+        let angle_q6_check_bit = (&data[1..3]).read_u16::<NetworkEndian>().unwrap();
+        let distance_q2 = (&data[3..5]).read_u16::<NetworkEndian>().unwrap();
 
         // Perform the operations
         let scan_completed = (sync_quality & (0x1<<0)) != 0; // Extract syncbit
@@ -183,17 +186,72 @@ fn parse_echo_packet(size: u16, data: &Vec<u8>) {
     unimplemented!("TODO")
 }
 
-// Function to handle a connection
-fn handle_connection(stream: TcpStream) {
-    println!("New connection from {}", stream.peer_addr().unwrap());
-
-    loop {
-        match receive_header(&stream) {
-            Ok(header_data) => {
-                parse_data(&header_data);
-            }
-            Err(e) => eprintln!("Error processing packet: {}", e),
+fn read_message(stream: &TcpStream) {
+    match receive_header(stream) {
+        Ok(header_data) => {
+            parse_data(&header_data);
         }
+        Err(e) => eprintln!("Error processing packet: {}", e),
+    }
+}
+
+
+fn craft_header(millis:u32, packet_type: SendPacketType, length: u16) -> Vec<u8> {
+    let mut header = vec![0u8; 7];
+    // In the firsts 4 bytes put millis
+    header[0..4].copy_from_slice(&(millis.to_be_bytes()));
+
+    // Then the type
+    header[4] = packet_type as u8;
+
+    // 2 bytes for the length
+    header[5..7].copy_from_slice(&(length.to_be_bytes()));
+    header
+}
+
+fn craft_motor_packet(right_power: i8, right_angle: f32, left_power:i8, left_angle: f32, millis:u32) -> Vec<u8> {
+    let header = craft_header(millis, TxMotorMove, 10);
+
+    // 17 is the length of the entire packet header 7 + 10 of the body
+    let mut motor_packet = vec![0u8; 10];
+
+    // Actual data
+    // Right motor
+    motor_packet[0] = right_power as u8;
+    motor_packet[1..5].copy_from_slice(&(right_angle.to_be_bytes()));
+    // Left motor
+    motor_packet[5] = left_power as u8;
+    motor_packet[6..10].copy_from_slice(&(left_angle.to_be_bytes()));
+
+    [header, motor_packet].concat()
+}
+
+fn send_message(stream: &mut TcpStream, millis: u32) {
+    let motor_packet =
+    // Every second change the robot motion
+    if (millis / 5000) % 2 == 0 {
+        // Go forward
+        println!("Sending motor packet, forward. {millis}");
+        craft_motor_packet(50, f32::INFINITY, 50, f32::INFINITY, millis)
+    } else {
+        // Go backward
+        println!("Sending motor packet, backward. {millis}");
+        craft_motor_packet(-50, f32::INFINITY, -50, f32::INFINITY, millis)
+    };
+
+    stream.write_all(&motor_packet).unwrap()
+}
+
+// Function to handle a connection
+fn handle_connection(mut stream: TcpStream) {
+    println!("New connection from {}", stream.peer_addr().unwrap());
+    let start_time = Instant::now();
+    loop {
+//      read_message(&stream);
+
+        let millis = start_time.elapsed().as_millis() as u32;
+        send_message(&mut stream, millis);
+        sleep(Duration::from_millis(250));
     }
 }
 

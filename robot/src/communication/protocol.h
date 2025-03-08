@@ -183,6 +183,8 @@ class Protocol {
     uint8_t* packet_buffer = new uint8_t[MAX_PACKET_SIZE];
     uint8_t* receive_buffer = new uint8_t[MAX_PACKET_SIZE];
 
+    unsigned long latest_rx_millis = 0;
+
    public:
     HomeRobotPacket receive_packet{};
 

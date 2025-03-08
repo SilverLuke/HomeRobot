@@ -151,19 +151,43 @@ void Protocol::AddLidarPacket(uint8_t* packet, uint16_t length) {
   this->lidar_buffer_end = this->lidar_buffer_end + length;
 }
 
+#include <arpa/inet.h>
 
 bool Protocol::ReceivePacket() {
   uint8_t prefix = this->wifi_client.read(this->receive_buffer, Protocol::PrefixSize());
   if (prefix > 0 && prefix != Protocol::PrefixSize()) {
-    log_e("Unable to read full prefix");
+    log_e("Unable to read full prefix, read %u byte", prefix);
     return false;
   }
+
+  uint32_t sequence_millis;
+  memcpy(&sequence_millis, this->receive_buffer, sizeof(sequence_millis));
+  this->receive_packet.sequence_millis = ntohl(sequence_millis);
+
+  memcpy(&this->receive_packet.type.receive, this->receive_buffer + 4, sizeof(this->receive_packet.type.receive));
+
+  uint16_t size;
+  memcpy(&size, this->receive_buffer + 5, sizeof(size));
+  this->receive_packet.size = ntohs(size);
+
+  log_d("Received packet. Millis %lu Type: %u Size: %u",
+    this->receive_packet.sequence_millis,
+    this->receive_packet.type.receive,
+    this->receive_packet.size);
 
   uint8_t data = this->wifi_client.read(this->receive_buffer, this->receive_packet.size);
   if (data != this->receive_packet.size) {
-    log_e("Unable to read full data");
+    log_e("Unable to read full data, read %u byte", data);
     return false;
   }
 
+  if (this->receive_packet.sequence_millis < this->latest_rx_millis) {
+    log_d("Old packet received, discarding. %lu < %lu",
+          this->receive_packet.sequence_millis, this->latest_rx_millis);
+    return false;
+  }
+
+  this->latest_rx_millis = this->receive_packet.sequence_millis;
   return true;
 }
+
