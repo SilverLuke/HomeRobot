@@ -1,17 +1,20 @@
+mod reader;
+
+use byteorder::{NetworkEndian, ReadBytesExt};
 use std::f32::consts::PI;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::{f32, thread};
-use std::path::Prefix;
 use std::thread::sleep;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use byteorder::{BigEndian, LittleEndian, NetworkEndian, ReadBytesExt}; // for reading data in Little Endian
-use num_enum::{TryFromPrimitive};
+use std::time::{Duration, Instant};
+use std::{f32, thread};
 use crate::SendPacketType::TxMotorMove;
+
+// for reading data in Little Endian
+use num_enum::TryFromPrimitive;
 
 // Enum for Sensors
 #[repr(u8)]
-#[derive(Debug, TryFromPrimitive)]
+#[derive(Debug, Copy, Clone, TryFromPrimitive)]
 enum ReceivePacketType {
     RxLidar = 0,
     RxImu = 1,
@@ -23,7 +26,7 @@ enum ReceivePacketType {
 
 // Enum for ActionTypes
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum SendPacketType {
     TxMotorMove = 0,
     TxMotorConfig = 1,
@@ -33,7 +36,7 @@ enum SendPacketType {
 }
 
 // Enum for PacketType which is a union of Sensors and ActionType
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 enum PacketType {
     Send(SendPacketType),
@@ -54,46 +57,11 @@ struct HomeRobotPacket {
     sequence_millis:u32,
     packet_type: PacketType,
     size: u16,
-    data: Vec<u8>
+    data: Box<Vec<u8>>
 }
 
 const PREFIX_SIZE: usize = 7;
-
-// Function to handle individual packets from the stream
-fn receive_header(mut stream: &TcpStream) -> io::Result<HomeRobotPacket> {
-    println!("Receive header");
-
-    // Buffer to read the packet's header (4 bytes for millis, 1 byte for type, 2 bytes for size)
-    let mut header = [0u8; PREFIX_SIZE];
-    stream.read_exact(&mut header)?;
-    println!("Read first {PREFIX_SIZE} bytes");
-    // Read millis (u32, 4 bytes)
-    let millis = (&header[0..4]).read_u32::<LittleEndian>()?;
-    println!("Millis: {}", millis);
-
-    // Read sensor type (u8, 1 byte)
-    let packet_type_value_raw = header[4];
-    let packet_type = ReceivePacketType::try_from(packet_type_value_raw).unwrap();
-    println!("Packet type {packet_type:?}");
-
-    // Read the size of the data (u16, 2 bytes)
-    let size = (&header[5..7]).read_u16::<LittleEndian>()?;
-    println!("Data size: {size}");
-
-    // Read the actual data based on size
-    let mut data = vec![0u8; size as usize];
-    stream.read_exact(&mut data)?;
-
-
-    let packet = HomeRobotPacket {
-        sequence_millis: millis,
-        packet_type: PacketType::Receive(packet_type),
-        size,
-        data,
-    };
-
-    Ok(packet)
-}
+const BUFFER_SIZE: usize = 1024;
 
 fn parse_data(packet: &HomeRobotPacket) {
     // Extract fields directly from the byte vector
@@ -155,8 +123,11 @@ fn parse_lidar_packet(size: u16, data: &Vec<u8>) {
         let y_pos = distance_meters * f32::sin(angle_rad);
 
         // Print the results
-        println!("Packet Type: Lidar Completed: {scan_completed}, \
-Distance (mm): {distance_mm:.2} Angle (deg): {angle_deg:.2} Quality {quality}");
+        println!("Packet Type: Lidar \
+        Completed: {scan_completed}, \
+Distance (mm): {distance_mm:.2} \
+Angle (deg): {angle_deg:.2} \
+Quality {quality}");
         //println!("Vector <{}, {}>", x_pos, y_pos);
     }
 }
@@ -184,15 +155,6 @@ fn parse_config_packet(size: u16, data: &Vec<u8>) {
 #[allow(unused_variables)]
 fn parse_echo_packet(size: u16, data: &Vec<u8>) {
     unimplemented!("TODO")
-}
-
-fn read_message(stream: &TcpStream) {
-    match receive_header(stream) {
-        Ok(header_data) => {
-            parse_data(&header_data);
-        }
-        Err(e) => eprintln!("Error processing packet: {}", e),
-    }
 }
 
 
@@ -226,31 +188,22 @@ fn craft_motor_packet(right_power: i8, right_angle: f32, left_power:i8, left_ang
     [header, motor_packet].concat()
 }
 
-fn send_message(stream: &mut TcpStream, millis: u32) {
-    let motor_packet =
-    // Every second change the robot motion
-    if (millis / 5000) % 2 == 0 {
-        // Go forward
-        println!("Sending motor packet, forward. {millis}");
-        craft_motor_packet(50, f32::INFINITY, 50, f32::INFINITY, millis)
-    } else {
-        // Go backward
-        println!("Sending motor packet, backward. {millis}");
-        craft_motor_packet(-50, f32::INFINITY, -50, f32::INFINITY, millis)
-    };
 
-    stream.write_all(&motor_packet).unwrap()
-}
+
 
 // Function to handle a connection
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(stream: TcpStream) {
     println!("New connection from {}", stream.peer_addr().unwrap());
+    stream.set_nonblocking(true).expect("set_nonblocking call failed");
+
+    let mut loc_reader = reader::ProtocolManager::new(stream);
+
     let start_time = Instant::now();
     loop {
-//      read_message(&stream);
+        let message = loc_reader.read_message();
 
         let millis = start_time.elapsed().as_millis() as u32;
-        send_message(&mut stream, millis);
+        loc_reader.send_message(millis);
         sleep(Duration::from_millis(250));
     }
 }

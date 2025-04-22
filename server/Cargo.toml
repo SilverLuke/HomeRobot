@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 byteorder = "1.4"
+circular-buffer = "1.1.0"
+mockall = "0.13.1"
 num_enum = "0.7.3"
 
 # [dependencies.gtk]
