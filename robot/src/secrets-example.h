@@ -1,7 +1,7 @@
 #pragma once
-#include <cstdint>
 #include <IPAddress.h>
 
+#include <cstdint>
 
 inline const char* wifi_ssid = "WiFi name";
 inline const char* wifi_password = "WiFi password";

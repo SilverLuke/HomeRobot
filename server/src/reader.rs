@@ -1,8 +1,11 @@
-use crate::{craft_motor_packet, HomeRobotPacket, PacketType, ReceivePacketType, BUFFER_SIZE, PREFIX_SIZE};
+use crate::{craft_motor_packet, parse_battery_packet, parse_config_packet, parse_echo_packet, parse_encoder_packet, parse_imu_packet, HomeRobotPacket, PacketType, ReceivePacketType, BUFFER_SIZE, PREFIX_SIZE};
 use byteorder::{NetworkEndian, ReadBytesExt};
 use circular_buffer::CircularBuffer;
 use std::io;
 use std::io::{Read, Write};
+use crate::sensors::{lidar, Sensor};
+use crate::sensors::imu::Imu;
+use crate::sensors::lidar::Lidar;
 
 const HEADER_SIZE: usize = 7;
 struct MessageHeader {
@@ -125,8 +128,38 @@ impl<S: Read + Write> ProtocolManager<S> {
 
         self.stream.write_all(&motor_packet).unwrap()
     }
+    
+    fn parse_data(packet: &HomeRobotPacket) {
+        assert_eq!(packet.size as usize, packet.data.len(), "Vector data and size must be equal");
+        // Extract fields directly from the byte vector
+        match &packet.packet_type {
+            PacketType::Send(_) => {}
+            PacketType::Receive(rx_type) => {
+                match rx_type {
+                    ReceivePacketType::RxLidar => {
+                        Lidar::parse(&packet.data);
+                    }
+                    ReceivePacketType::RxImu => {
+                        Imu::parse(&packet.data);
+                    }
+                    ReceivePacketType::RxBattery => {
+                        parse_battery_packet(packet.size, &packet.data);
+                    }
+                    ReceivePacketType::RxEncoderMotor => {
+                        parse_encoder_packet(packet.size, &packet.data);
+                    }
+                    ReceivePacketType::RxConfig => {
+                        parse_config_packet(packet.size, &packet.data);
+                    }
+                    ReceivePacketType::RxEcho => {
+                        parse_echo_packet(packet.size, &packet.data);
+                    }
+                }
+            }
+        }
+    }
 }
-// TODO tests
+
 #[cfg(test)]
 mod tests {
     use std::io::{self, Read, Write};

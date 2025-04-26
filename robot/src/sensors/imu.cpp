@@ -1,17 +1,10 @@
-#include "definitions.h"
 #include "imu.h"
 
-void init_i2c() {
-  log_d("INIT I2C");
+#include "../utils/utils.h"
+#include "Wire.h"
+#include "definitions.h"
 
-  Wire.begin(I2C_SDA, I2C_SCL);
-#ifdef WIRE_HAS_TIMEOUT
-  Wire.setWireTimeout(30000);
-  log_i("Timeout");
-#endif
-}
-
-void init_imu() {
+IMU::IMU() {
   log_i("\t - INIT IMU");
   int err = 1;
   int old_error = 0;
@@ -28,12 +21,13 @@ void init_imu() {
   log_i("\t OK");
 }
 
-void read_sensors() {
+void IMU::read() {
+  this->read_millis = millis();
   imu.update();
-  imu.getAccel(&IMUAccel);
-  imu.getGyro(&IMUGyro);
+  imu.getAccel(&accelData);
+  imu.getGyro(&gyroData);
   if (imu.hasMagnetometer()) {
-    imu.getMag(&IMUMag);
+    imu.getMag(&magData);
     // filter.update(IMUGyro.gyroX, IMUGyro.gyroY, IMUGyro.gyroZ,
     // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ, IMUMag.magX,
     // IMUMag.magY, IMUMag.magZ);
@@ -43,34 +37,38 @@ void read_sensors() {
   }
 }
 
+int32_t IMU::serialize(uint8_t* buffer, const size_t buffer_size) {
+  // Go to the first empty byte
+  auto* data = reinterpret_cast<uint32_t*>(buffer);
+  // Start serialize imu sensor
+  data[0] = host2netFloat(accelData.accelX);
+  data[1] = host2netFloat(accelData.accelY);
+  data[2] = host2netFloat(accelData.accelZ);
+  data[3] = host2netFloat(gyroData.gyroX);
+  data[4] = host2netFloat(gyroData.gyroY);
+  data[5] = host2netFloat(gyroData.gyroZ);
 
-void print_sensors() {
-  Serial.print("IMU Accel: ");
-  Serial.print(IMUAccel.accelX);
-  Serial.print(", ");
-  Serial.print(IMUAccel.accelY);
-  Serial.print(", ");
-  Serial.println(IMUAccel.accelZ);
+  if (imu.hasMagnetometer()) {
+    data[6] = host2netFloat(magData.magX);
+    data[7] = host2netFloat(magData.magY);
+    data[8] = host2netFloat(magData.magZ);
+  }
+  return this->getDataSize();
+}
 
-  Serial.print("IMU Gyro: ");
-  Serial.print(IMUGyro.gyroX);
-  Serial.print(", ");
-  Serial.print(IMUGyro.gyroY);
-  Serial.print(", ");
-  Serial.println(IMUGyro.gyroZ);
-  // Serial.print("\tMX: ");
-  // Serial.print(IMUMag.magX);
-  // Serial.print("\tMY: ");
-  // Serial.print(IMUMag.magY);
-  // Serial.print("\tMZ: ");
-  // log_i(IMUMag.magZ);
+void IMU::print() {
+  Serial.printf("IMU State (last read: %lu ms):\n", read_millis);
+  Serial.printf("Accelerometer (m/s²):\n");
+  Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", accelData.accelX,
+                accelData.accelY, accelData.accelZ);
 
-  // Serial.print("QW: ");
-  // Serial.print(filter.getQuatW());
-  // Serial.print("\tQX: ");
-  // Serial.print(filter.getQuatX());
-  // Serial.print("\tQY: ");
-  // Serial.print(filter.getQuatY());
-  // Serial.print("\tQZ: ");
-  // log_i(filter.getQuatZ());
+  Serial.printf("Gyroscope (rad/s):\n");
+  Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", gyroData.gyroX,
+                gyroData.gyroY, gyroData.gyroZ);
+
+  if (imu.hasMagnetometer()) {
+    Serial.printf("Magnetometer (µT):\n");
+    Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", magData.magX,
+                  magData.magY, magData.magZ);
+  }
 }

@@ -1,12 +1,12 @@
 mod reader;
+mod sensors;
 
 use byteorder::{NetworkEndian, ReadBytesExt};
 use std::f32::consts::PI;
-use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::{f32, thread};
+use std::{f32, io, thread};
 use crate::SendPacketType::TxMotorMove;
 
 // for reading data in Little Endian
@@ -63,74 +63,9 @@ struct HomeRobotPacket {
 const PREFIX_SIZE: usize = 7;
 const BUFFER_SIZE: usize = 1024;
 
-fn parse_data(packet: &HomeRobotPacket) {
-    // Extract fields directly from the byte vector
-    match &packet.packet_type {
-        PacketType::Send(_) => {}
-        PacketType::Receive(rx_type) => {
-            match rx_type {
-                ReceivePacketType::RxLidar => {
-                    parse_lidar_packet(packet.size, &packet.data);
-                }
-                ReceivePacketType::RxImu => {
-                    parse_imu_packet(packet.size, &packet.data);
-                }
-                ReceivePacketType::RxBattery => {
-                    parse_battery_packet(packet.size, &packet.data);
-                }
-                ReceivePacketType::RxEncoderMotor => {
-                    parse_encoder_packet(packet.size, &packet.data);
-                }
-                ReceivePacketType::RxConfig => {
-                    parse_config_packet(packet.size, &packet.data);
-                }
-                ReceivePacketType::RxEcho => {
-                    parse_echo_packet(packet.size, &packet.data);
-                }
-            }
-        }
-    }
-}
 
-fn parse_lidar_packet(size: u16, data: &Vec<u8>) {
-    // Size of a single lidar packet in bytes
-    const SINGLE_PACKET_SIZE: u16 = 5;
-    assert_eq!(size as usize, data.len(), "Vector data and size must be equal");
-    assert_eq!(size % SINGLE_PACKET_SIZE, 0, "Check if all packets are complete");
-    let packets = size / SINGLE_PACKET_SIZE;
 
-    for i in 0..packets {
-        let start: usize = (i as usize) * SINGLE_PACKET_SIZE as usize;
-        let end: usize = (i + 1) as usize * SINGLE_PACKET_SIZE as usize;
-        parse_single(data[start..end].to_owned());
-    }
 
-    fn parse_single(data: Vec<u8>) {
-        let sync_quality = data[0];
-        let angle_q6_check_bit = (&data[1..3]).read_u16::<NetworkEndian>().unwrap();
-        let distance_q2 = (&data[3..5]).read_u16::<NetworkEndian>().unwrap();
-
-        // Perform the operations
-        let scan_completed = (sync_quality & (0x1<<0)) != 0; // Extract syncbit
-        let distance_mm = (distance_q2 as f32) * 0.25;
-        let angle_deg = ((angle_q6_check_bit >> 1) as f32) * 0.015625; // Shift and scale
-        let quality = (sync_quality >> 2) & 0x3F; // Extract the 6-bit quality
-
-        // Calculate position: x, y based on angle and distance
-        let angle_rad = angle_deg * PI / 180.0;
-        let distance_meters = distance_mm / 1000.0;
-        let x_pos = distance_meters * f32::cos(angle_rad);
-        let y_pos = distance_meters * f32::sin(angle_rad);
-
-        // Print the results
-        println!("Packet Type: Lidar \
-        Completed: {scan_completed}, \
-Distance (mm): {distance_mm:.2} \
-Angle (deg): {angle_deg:.2} \
-Quality {quality}");
-        //println!("Vector <{}, {}>", x_pos, y_pos);
-    }
-}
 
 #[allow(unused_variables)]
 fn parse_imu_packet(size: u16, data: &Vec<u8>) {
