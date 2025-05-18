@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../utils/utils.h"
+#include "F_BMI160.hpp"
 #include "definitions.h"
 #include "sensor.h"
 
@@ -25,6 +26,8 @@ class IMU : public Sensor {
  public:
   IMU();
   ~IMU() override = default;
+
+  String name() override { return "IMU"; }
   void startReading() override {};
   void read() override;
 

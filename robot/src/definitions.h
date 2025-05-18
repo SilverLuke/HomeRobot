@@ -1,11 +1,7 @@
 #pragma once
 
 #include <Encoder.h>
-#include <FastIMU.h>
 #include <HardwareSerial.h>
-#include <LDS.h>
-#include <LDS_RPLIDAR_A1.h>
-#include <WiFi.h>
 #include <communication/protocol.h>
 
 #include "Motor_PID.h"
@@ -55,6 +51,7 @@ extern Motor motor_dx;
 extern Protocol *protocol;
 
 void init_wifi();
+void restart_wifi();
 void init_i2c();
 void init_server_connection();
 void init_motors();

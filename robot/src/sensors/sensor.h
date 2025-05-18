@@ -1,14 +1,20 @@
 #pragma once
 
+
 #include <cstddef>  // for size_t
 #include <cstdint>  // for uint8_t, uint16_t, int32_t
+#include <Arduino.h>
 
 #include "communication/packet_types.h"
 
 class Sensor {
  public:
   virtual ~Sensor() = default;
-
+  /**
+   * @brief
+   * @return String with name of the sensor.
+   */
+  virtual String name() = 0;
   /**
    * @brief The actual business logic for the sensor, read the data, update the
    * internal millis(), store the data in some internal buffer or stuff like
@@ -27,7 +33,7 @@ class Sensor {
    */
   virtual SendPacketType getPacketType() = 0;
   /**
-   * @brief The data for the serialization, probabilly useless function.
+   * @brief The data for the serialization, probably a useless function.
    * @return The internal data size in byte.
    */
   virtual uint16_t getDataSize() = 0;

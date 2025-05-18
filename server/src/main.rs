@@ -7,6 +7,7 @@ use std::net::{TcpListener, TcpStream};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::{f32, io, thread};
+use std::fmt::Formatter;
 use crate::SendPacketType::TxMotorMove;
 
 // for reading data in Little Endian
@@ -14,7 +15,7 @@ use num_enum::TryFromPrimitive;
 
 // Enum for Sensors
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, TryFromPrimitive)]
+#[derive(Debug, Copy, Clone, TryFromPrimitive, PartialEq)]
 enum ReceivePacketType {
     RxLidar = 0,
     RxImu = 1,
@@ -26,7 +27,7 @@ enum ReceivePacketType {
 
 // Enum for ActionTypes
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum SendPacketType {
     TxMotorMove = 0,
     TxMotorConfig = 1,
@@ -38,6 +39,7 @@ enum SendPacketType {
 // Enum for PacketType which is a union of Sensors and ActionType
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
+#[derive(PartialEq)]
 enum PacketType {
     Send(SendPacketType),
     Receive(ReceivePacketType),
@@ -60,11 +62,21 @@ struct HomeRobotPacket {
     data: Box<Vec<u8>>
 }
 
+impl std::fmt::Display for HomeRobotPacket {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "HomeRobotPacket {{ sequence_millis: {}, packet_type: {:?}, size: {}, data: {:?} }}",
+            self.sequence_millis,
+            self.packet_type,
+            self.size,
+            self.data.len()
+        )
+    }
+}
+
 const PREFIX_SIZE: usize = 7;
-const BUFFER_SIZE: usize = 1024;
-
-
-
+const BUFFER_SIZE: usize = 16384;
 
 
 #[allow(unused_variables)]
@@ -128,18 +140,30 @@ fn craft_motor_packet(right_power: i8, right_angle: f32, left_power:i8, left_ang
 
 // Function to handle a connection
 fn handle_connection(stream: TcpStream) {
+    println!();
     println!("New connection from {}", stream.peer_addr().unwrap());
     stream.set_nonblocking(true).expect("set_nonblocking call failed");
 
-    let mut loc_reader = reader::ProtocolManager::new(stream);
+    let mut protocol = reader::ProtocolManager::new(stream);
 
     let start_time = Instant::now();
     loop {
-        let message = loc_reader.read_message();
+        let message = protocol.read_message();
+        if message.is_err() {
+            eprintln!("Error reading message: {:?}", message.err());
+            eprintln!("Closing connection");
+            return;
+        } 
+        else {
+            message.unwrap().and_then(|msg| {
+                println!("Received {}", &msg); 
+                None::<HomeRobotPacket>
+            });
+        }
 
-        let millis = start_time.elapsed().as_millis() as u32;
-        loc_reader.send_message(millis);
-        sleep(Duration::from_millis(250));
+        //let millis = start_time.elapsed().as_millis() as u32;
+        // loc_reader.send_message(millis);
+        //sleep(Duration::from_millis(250));
     }
 }
 

@@ -1,67 +1,73 @@
 #include "protocol.h"
 
+#include <arpa/inet.h>
+#include <Esp.h>
 #include <WiFi.h>
 
 #include <cstdint>
 
+#include "definitions.h"
 #include "packet_types.h"
 #include "secrets.h"
 
 Protocol::Protocol() {
   // Initialize the Wi-Fi client
   if (WiFi.isConnected()) {
-    this->wifi_client = WiFiClient();
+    this->server_connection = WiFiClient();
     this->connect();
   }
-
-  this->receive_packet.data = this->rx_buffer;
-#ifdef SHOW_VAR_SIZE
-  Serial.print("bool: ");
-  Serial.println(sizeof(bool));
-  Serial.print("char: ");
-  Serial.println(sizeof(char));
-  Serial.print("short: ");
-  Serial.println(sizeof(short));
-  Serial.print("int: ");
-  Serial.println(sizeof(int));
-  Serial.print("long: ");
-  Serial.println(sizeof(long));
-  Serial.print("unsigned long: ");
-  Serial.println(sizeof(unsigned long));
-  Serial.print("long long: ");
-  Serial.println(sizeof(long long));
-  Serial.print("float: ");
-  Serial.println(sizeof(float));
-  Serial.print("double: ");
-  Serial.println(sizeof(double));
-  Serial.print("long double: ");
-  Serial.println(sizeof(long double));
-  Serial.print("void*: ");
-  Serial.println(sizeof(void*));
-  Serial.print("unit8_t*: ");
-  Serial.println(sizeof(uint8_t*));
-#endif
 }
 
 void Protocol::connect() {
   int attempts = 0;
-  while (!this->wifi_client.connect(wifi_server_host, wifi_server_port) &&
-         attempts < 5) {
-    Serial.println("Failed to connect to server");
-    attempts++;
+  while (!this->server_connection.connect(wifi_server_host, wifi_server_port) &&
+         attempts++ < 5) {
+    log_d("Failed to connect to server");
     delay(1000);
   }
-  Serial.println("Connected to server");
+  if (attempts >= 5) {
+    Serial.println("Failed to connect to server");
+  } else {
+    Serial.println("Connected to server");
+  }
 }
 
-bool Protocol::isConnected() { return this->wifi_client.connected(); }
+bool Protocol::isConnected() { return this->server_connection.connected(); }
 
-void Protocol::restart() {
-  if (this->wifi_client.connected()) {
-    this->wifi_client.stop();
+/**
+ * @brief This will reset the Wi-Fi and the server connection
+ */
+void Protocol::HardRestart() {
+  restart_wifi();
+  this->SoftRestart();
+  this->connect();
+}
+
+/**
+ * @brief This will reset the connection to the server and reset the
+ * variables in the protocol
+ */
+void Protocol::SoftRestart() {
+  if (!this->server_connection.connected()) {
+    this->server_connection = WiFiClient();
+    this->connect();
   }
-  connect();
+
   this->receive_packet = {};
+  this->rx_latest_millis = 0;
+  this->rx_used = 0;
+  this->read_header = false;
+}
+
+void Protocol::ShowStatus() {
+    Serial.printf("Wifi %d, Server: %d, Latest millis: %lu, Used: %d, Read header: %d, Sensors count: %d\n\r",
+              WiFi.isConnected(),
+              this->server_connection.connected(),
+              this->rx_latest_millis,
+              this->rx_used,
+              this->read_header,
+              this->sensors_count
+              );
 }
 
 size_t Protocol::HeaderSize() {
@@ -70,7 +76,7 @@ size_t Protocol::HeaderSize() {
 }
 
 size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
-  if (this->wifi_client.connected()) {
+  if (this->server_connection.connected()) {
     const size_t constant_offset = Protocol::HeaderSize();
 
     const size_t totalSize = constant_offset + packet.size;
@@ -84,7 +90,7 @@ size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
 
     // Send data
     const size_t bytesWritten =
-        this->wifi_client.write(this->tx_buffer, totalSize);
+        this->server_connection.write(this->tx_buffer, totalSize);
     if (bytesWritten != totalSize) {
       log_e("Error writing packet");
     } else {
@@ -97,68 +103,14 @@ size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
   return 0;
 }
 
-// void Protocol::SendLidarPacket() {
-//   /**
-//    * @brief Send the lidar buffer to the PC
-//    */
-//
-//   // HomeRobotPacket packet = {};
-//   // packet.sequence_millis = this->buffer_start_millis;
-//   // packet.type.send = SendPacketType::TX_LIDAR;
-//   // packet.size = this->lidar_buffer_end;
-//   // packet.data = this->lidar_buffer;
-//   size_t offset = 0;
-//
-//   // Coping the millis - 4 bytes
-//   memcpy(this->lidar_buffer, &this->buffer_start_millis,
-//   sizeof(this->buffer_start_millis)); offset +=
-//   sizeof(this->buffer_start_millis);
-//
-//   // Coping the packet type - 1 byte
-//   constexpr auto packet = SendPacketType::TX_LIDAR;
-//   memcpy(this->lidar_buffer + offset, &packet, sizeof(packet));
-//   offset += sizeof(SendPacketType);
-//
-//   // Coping the data size - 2 bytets
-//   this->lidar_buffer_end -= Protocol::HeaderSize();
-//   memcpy(this->lidar_buffer + offset, &this->lidar_buffer_end,
-//   sizeof(this->lidar_buffer_end)); offset += sizeof(this->lidar_buffer_end);
-//   assert(offset == Protocol::HeaderSize());
-//
-//   log_i("Sending lidar packet with size %d", this->lidar_buffer_end);
-//   size_t written = this->wifi_client.write(this->lidar_buffer,
-//   this->lidar_buffer_end + offset); if (written != this->lidar_buffer_end +
-//   offset) {
-//     sleep(2);
-//     written = this->wifi_client.write(this->lidar_buffer + written,
-//     this->lidar_buffer_end + offset - written);
-//   }
-//   assert(written == this->lidar_buffer_end + offset);
-//
-//   this->lidar_buffer_end = HeaderSize();
-//   this->buffer_start_millis = 0;
-//
-// }
 
-
-
-#include <arpa/inet.h>
-
-bool Protocol::ReceivePacket() {
-  uint8_t prefix =
-      this->wifi_client.read(this->rx_buffer, Protocol::HeaderSize());
-  if (prefix > 0 && prefix != Protocol::HeaderSize()) {
-    log_e("Unable to read full prefix, read %u byte", prefix);
-    return false;
-  }
-
+void Protocol::ParseHeader() {
   uint32_t sequence_millis;
   memcpy(&sequence_millis, this->rx_buffer, sizeof(sequence_millis));
   this->receive_packet.sequence_millis = ntohl(sequence_millis);
 
-  memcpy(&this->receive_packet.type.receive, this->rx_buffer + 4,
+  memcpy(&this->receive_packet.type.receive, this->rx_buffer + sizeof(uint32_t),
          sizeof(this->receive_packet.type.receive));
-
   uint16_t size;
   memcpy(&size, this->rx_buffer + 5, sizeof(size));
   this->receive_packet.size = ntohs(size);
@@ -166,20 +118,57 @@ bool Protocol::ReceivePacket() {
   log_d("Received packet. Millis %lu Type: %u Size: %u",
         this->receive_packet.sequence_millis, this->receive_packet.type.receive,
         this->receive_packet.size);
+  // Now it is ready to read
+  this->read_header = true;
+}
 
-  uint8_t data =
-      this->wifi_client.read(this->rx_buffer, this->receive_packet.size);
-  if (data != this->receive_packet.size) {
-    log_e("Unable to read full data, read %u byte", data);
+bool Protocol::ReceivePacket() {
+  // Read the TCP channel from wifi.
+  int16_t prefix = this->server_connection.read(
+    this->rx_buffer + this->rx_used,
+    RX_BUFFER_SIZE - this->rx_used
+  );
+
+  if (prefix < 0) {
+    log_e("Unable to read %d", prefix);
     return false;
   }
 
+  this->rx_used += prefix;
+  // Not enough data to parse the header
+  if (this-> rx_used < HeaderSize()) {
+    // if (this->rx_used != 0)
+    //   log_d("Waiting to read full prefix, read %d byte", this->rx_used);
+    return false;
+  }
+
+  // If header is read skip this part
+  if (this->read_header == false) {
+    this->ParseHeader();
+  }
+
+  size_t total_size = HeaderSize() + this->receive_packet.size;
+  if (total_size > RX_MAX_DATA) {
+    log_e("Received packet too large. Size: %d", total_size);
+  }
+  if (this->rx_used >= total_size) {
+    memcpy(this->rx_buffer + HeaderSize(), this->receive_packet.data, this->receive_packet.size);
+
+    // Copy the next packet at the beginning of the buffer, for the next cicle.
+    this->rx_used = this->rx_used - total_size;
+    memmove(this->rx_buffer, this->rx_buffer + total_size, this->rx_used);
+  } else {
+    return false;
+  }
+
+  // Check if the current packet is newer than the latest (error in transmission or in the server)
   if (this->receive_packet.sequence_millis < this->rx_latest_millis) {
     log_d("Old packet received, discarding. %lu < %lu",
           this->receive_packet.sequence_millis, this->rx_latest_millis);
     return false;
   }
 
+  this->read_header = false;
   this->rx_latest_millis = this->receive_packet.sequence_millis;
   return true;
 }
@@ -194,59 +183,92 @@ void Protocol::SendSensors() {
 
   for (size_t i = 0; i < this->sensors_count; i++) {
     Sensor* sensor = this->sensors[i];
-    size_t dataSize = sensor->getDataSize();
+    uint16_t dataSize = sensor->getDataSize();
 
     if (dataSize > 0) {
+      log_d("Creating packet for sensor %s with size %d", sensor->name(), dataSize);
       // Generate header for the sensor data
       int32_t headerSize = GenerateHeader(
-          this->tx_buffer + currentBufferOffset, currentBufferOffset,
-          RX_BUFFER_SIZE - currentBufferOffset, sensor->getMillis(),
-          sensor->getPacketType(), dataSize);
+          this->tx_buffer + currentBufferOffset,
+          TX_BUFFER_SIZE - currentBufferOffset,
+          sensor->getMillis(),
+          sensor->getPacketType(),
+          dataSize
+      );
 
-      if (headerSize < 0) {
-        log_e("Failed to generate header for sensor %d", i);
+      if (headerSize < 0 || headerSize != 7) {
+        log_e("Failed to generate header for sensor %s. Header size %d", sensor->name(), headerSize);
         continue;
       }
+      currentBufferOffset += headerSize;
 
       // Serialize the sensor data after the header
-      if (!sensor->serialize(
-              this->tx_buffer,
-              RX_BUFFER_SIZE - currentBufferOffset - headerSize)) {
-        log_e("Failed to serialize sensor %d", i);
+      int32_t serialization = sensor->serialize(
+              this->tx_buffer + currentBufferOffset,
+              TX_BUFFER_SIZE - currentBufferOffset
+              );
+      if (serialization < 0 || serialization != dataSize) {
+        log_e("Failed to serialize sensor %s", sensor[i].name());
         continue;
       }
+      // Todo handle roll back if a sensor was unable to serialize.
 
-      currentBufferOffset += headerSize + dataSize;
+      currentBufferOffset += serialization;
+      log_d("Current buffer offset %d", currentBufferOffset);
     }
   }
 
   // Send all accumulated data in a single write if we have any
   if (currentBufferOffset > 0) {
-    size_t bytesWritten =
-        this->wifi_client.write(this->tx_buffer, currentBufferOffset);
+    log_i("Sending %d bytes of sensors data", currentBufferOffset);
+    // log_i("Memory - Total: %d, Free: %d, Used: %d",
+    //       ESP.getHeapSize(),
+    //       ESP.getFreeHeap(),
+    //       ESP.getHeapSize() - ESP.getFreeHeap());
 
-    if (bytesWritten != currentBufferOffset) {
-      log_e("Failed to send complete sensors packet. Expected: %d, Sent: %d",
-            currentBufferOffset, bytesWritten);
+    size_t bytesWritten =
+        this->server_connection.write(this->tx_buffer, currentBufferOffset);
+    if (bytesWritten == 0) {
+      log_e("Failed to send complete sensors packet. Expected: %d, Sent: %d", currentBufferOffset, bytesWritten);
+      this->server_connection.stop();
+      this->HardRestart();
+    } else {
+      this->server_connection.flush();
     }
+  }
+  Serial.println("-----------------------------------------");
+}
+
+void Protocol::Loop() {
+  for (size_t i = 0; i < this->sensors_count; i++) {
+    this->sensors[i]->read();
+  }
+  if (this->server_connection.connected()) {
+    this->SendSensors();
   }
 }
 
-int32_t Protocol::GenerateHeader(uint8_t* buffer, size_t start_index,
-                                 size_t max_size, size_t millis,
-                                 SendPacketType type, uint16_t size) {
+int32_t Protocol::GenerateHeader(
+  uint8_t* buffer,
+  size_t buffer_size,
+  uint32_t millis,
+  SendPacketType type,
+  uint16_t size
+) {
   // Calculate the required size for the header
+  log_i("Generating header millis %d type %d size %d", millis, type, size);
   const size_t header_size = Protocol::HeaderSize();
 
   // Check if there's enough space in the buffer
-  if (start_index + header_size > max_size) {
+  if (header_size > buffer_size) {
     return -1;  // Not enough space
   }
 
-  size_t offset = start_index;
+  size_t offset = 0;
 
   // Copy millis (4 bytes)
-  memcpy(buffer + offset, &millis, sizeof(millis));
+  uint32_t millis_ntohl = htonl(millis);
+  memcpy(buffer, &millis_ntohl, sizeof(millis));
   offset += sizeof(millis);
 
   // Copy packet type (1 byte)
@@ -254,8 +276,9 @@ int32_t Protocol::GenerateHeader(uint8_t* buffer, size_t start_index,
   offset += sizeof(type);
 
   // Copy size (2 bytes)
-  memcpy(buffer + offset, &size, sizeof(size));
+  uint16_t size_ntohs = htons(size);
+  memcpy(buffer + offset, &size_ntohs, sizeof(size));
   offset += sizeof(size);
 
-  return offset - start_index;  // Return number of bytes written
+  return offset;  // Return number of bytes written
 }

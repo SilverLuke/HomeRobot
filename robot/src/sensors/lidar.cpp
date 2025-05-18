@@ -12,11 +12,14 @@ Lidar* Lidar::instance = nullptr;
 Lidar::Lidar() : LDS_RPLIDAR_A1() {
   instance = this;
 
+  // Actual readings from LiDAR
   buffer = new cppQueue(LIDAR_POINT_SIZE, MAX_LIDAR_BUFFER_SIZE, FIFO, false);
-  full_read_size = new cppQueue(sizeof(size_t), MAX_LIDAR_FULL_READINGS, FIFO, false);
-  read_millis = new cppQueue(sizeof(uint64_t), MAX_LIDAR_FULL_READINGS, FIFO, false);
+  // The total number of one full read had
+  full_read_size = new cppQueue(sizeof(uint32_t), MAX_LIDAR_FULL_READINGS, FIFO, false);
+  // When the new read it is started
+  read_millis = new cppQueue(sizeof(uint32_t), MAX_LIDAR_FULL_READINGS, FIFO, false);
 
-  uint64_t time = millis();
+  const uint32_t time = millis();
   read_millis->push(&time);
 
 
@@ -76,6 +79,13 @@ void Lidar::startReading() {
     }
   }
   this->setScanTargetFreqHz(1.0f);
+}
+
+void Lidar::stopReading() {
+  this->LDS_RPLIDAR_A1::stop();
+  this->buffer->clean();
+  this->full_read_size->clean();
+  this->read_millis->clean();
 }
 
 // Static callback implementations
@@ -153,22 +163,51 @@ void Lidar::scanPointCallback(float angle_deg, float distance_mm, float quality,
  */
 void Lidar::packetCallback(uint8_t* packet, const uint16_t length,
                            const bool scan_completed) {
-  static int total_size = 0;
+    // Use static with a class scope to make the relationship clearer
+    static uint16_t rpr = 0;  // Changed to uint16_t since that's what's used in full_read_size
+    static size_t byte_size = 0;
 
-  instance->buffer->push(packet);
+    // Validate packet size and handle packet
+    if (length != LIDAR_POINT_SIZE) {
+        Serial.println("Invalid packet size");
+        return;
+    }
 
-  total_size += 1;
+    if (!instance->buffer->isFull()) {
+        uint8_t packet_copy[LIDAR_POINT_SIZE];
+        memcpy(packet_copy, packet, LIDAR_POINT_SIZE);
 
-  if (scan_completed) {
-    instance->full_read_size->push(&total_size);
-    total_size = 0;
+        if (instance->buffer->push(packet_copy)) {
+            rpr++;
+            byte_size += LIDAR_POINT_SIZE;
+        } else {
+            Serial.println("Failed to push to buffer");
+        }
+    } else {
+        Serial.println("Buffer full, dropping packet");
+        instance->stopReading();
+    }
 
-    // Put the millis for the next read
-    uint32_t time = millis();
-    instance->read_millis->push(&time);
+    // Handle scan completion
+    if (scan_completed) {
+          const uint16_t rpr_copy = rpr;
+          if (!instance->full_read_size->push(&rpr_copy)) {
+              Serial.println("Failed to push read size");
+          }
 
-    Serial.println("Scan end: total size " + String(total_size));
-  }
+          const uint32_t time = millis();
+          if (!instance->read_millis->push(&time)) {
+              Serial.println("Failed to push timestamp");
+          }
+
+          Serial.println("Scan end. RpR: " + String(rpr) +
+            " BpR " + String(byte_size) +
+            " Used space: " + String(instance->buffer->getCount()) +
+            " Free space: " + String(MAX_LIDAR_BUFFER_SIZE - instance->buffer->getCount()));
+
+        // Reset for next scan
+        rpr = 0;byte_size = 0;
+    }
 }
 
 uint32_t Lidar::getMillis() {
@@ -179,23 +218,36 @@ uint32_t Lidar::getMillis() {
 
 uint16_t Lidar::getDataSize() {
   uint16_t data_size;
-  this->full_read_size->peek(&data_size);
-  return data_size * LIDAR_POINT_SIZE;
+  if (this->full_read_size->peek(&data_size)) {
+    return data_size * LIDAR_POINT_SIZE;
+  }
+  return 0;
 }
 
 int32_t Lidar::serialize(uint8_t* buffer, size_t max_size) {
-  uint16_t items;
-  this->full_read_size->pop(&items);
+  uint16_t rpr;
+  if (! this->full_read_size->pop(&rpr)) {
+    return 0;
+  }
   uint32_t time;
-  this->read_millis->pop(&time);
+  if (!this->read_millis->pop(&time)) {
+    return -3;
+  }
 
-  if (items * LIDAR_POINT_SIZE > max_size) {
+  if (rpr * LIDAR_POINT_SIZE > max_size) {
     return -1;
   }
 
-  for (uint8_t* i = buffer ; i < buffer + (items * LIDAR_POINT_SIZE); i += LIDAR_POINT_SIZE) {
-    this->buffer->pop(i);
+  uint8_t temp_buffer[LIDAR_POINT_SIZE];  // Stack allocation instead of heap
+  for (uint16_t i = 0 ; i < rpr; i++) {
+    if (this->buffer->pop(temp_buffer)) {
+      memcpy(buffer + (i * LIDAR_POINT_SIZE), temp_buffer, LIDAR_POINT_SIZE);
+    }
+    else {
+      // No data present;
+      return -2;
+    }
   }
 
-  return items * LIDAR_POINT_SIZE;
+  return rpr * LIDAR_POINT_SIZE;
 }

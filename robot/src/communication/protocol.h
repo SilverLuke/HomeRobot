@@ -43,7 +43,8 @@
 #include "sensors/sensor.h"
 
 #define RX_BUFFER_SIZE 128
-#define TX_BUFFER_SIZE 1024
+#define RX_MAX_DATA    128
+#define TX_BUFFER_SIZE 4096
 
 /**
  * @struct HomeRobotPacket
@@ -58,45 +59,63 @@ struct HomeRobotPacket {
   unsigned long sequence_millis;
   PacketType type;
   uint16_t size;
-  uint8_t* data;
-} __attribute__((packed));
+  uint8_t* data = new uint8_t[RX_MAX_DATA];
+};
 
 class Protocol {
  private:
-  WiFiClient wifi_client;
+  WiFiClient server_connection;
   // Transmission stuff
   uint8_t* tx_buffer = new uint8_t[TX_BUFFER_SIZE];
 
   // Reception
   uint32_t rx_latest_millis = 0;
+  size_t rx_used = 0;
   uint8_t* rx_buffer = new uint8_t[RX_BUFFER_SIZE];
 
   // 5 -> Lidar, 2 motors, imu, battery.
   Sensor* sensors[5];
   uint8_t sensors_count = 0;
+  bool read_header = false;
+
+  /**
+   * @brief Parse the rx_buffer to build the header.
+   */
+  void ParseHeader();
 
  public:
-  HomeRobotPacket receive_packet{};
+  HomeRobotPacket receive_packet;
 
   Protocol();
   // Utils
   void connect();
-  void restart();
+  void HardRestart();
+  void SoftRestart();
   bool isConnected();
+  void ShowStatus();
 
   // Send stuff
   size_t SendPacket(const HomeRobotPacket& packet);
 
-  // Receive stuff
+  /**
+   * @brief Should be called every cycle, read the wifi and allocate in a buffer.
+   * Receive_packet will be good for only one cycle.
+   * @return True if received a new packet from the server; false if no packet is ready.
+   */
   bool ReceivePacket();
 
   // Sensors
   void AddSensor(Sensor* sensor);
   void SendSensors();
+  void Loop();
 
   // Static functions
   static size_t HeaderSize();
-  static int32_t GenerateHeader(uint8_t* buffer, size_t start_index,
-                                size_t max_size, size_t millis,
-                                SendPacketType type, uint16_t size);
+  static int32_t GenerateHeader(
+    uint8_t* buffer,
+    size_t max_size,
+    uint32_t millis,
+    SendPacketType type,
+    uint16_t size
+  );
 };

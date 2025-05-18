@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cppQueue.h>
-
 #include "HardwareSerial.h"
 #include "LDS.h"
 #include "LDS_RPLIDAR_A1.h"
@@ -22,8 +20,8 @@ LIDAR
 #define LIDAR_SERIAL_TX_PIN 6
 #define LIDAR_MOTOR_PIN 15
 
-#define MAX_LIDAR_FULL_READINGS 5
 #define MAX_LIDAR_BUFFER_SIZE 900
+#define MAX_LIDAR_FULL_READINGS (5+1)   // A full read has 180 points in it. So 900 keep 5 full reads
 
 struct ArrayPoint {
   uint32_t read_millis;
@@ -36,8 +34,10 @@ public:
   Lidar();
   ~Lidar() override;
 
-  void read() override { this->loop(); };
+  String name() override { return "Lidar"; }
+  void read() override { this->loop(); }
   void startReading() override;
+  void stopReading() override;
   int32_t serialize(uint8_t* buffer, size_t max_size) override;
   uint32_t getMillis() override;
   SendPacketType getPacketType() override { return SendPacketType::TX_LIDAR; };

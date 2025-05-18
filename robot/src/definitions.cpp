@@ -1,6 +1,6 @@
+#include <Wire.h>
 #include "definitions.h"
 
-#include "LDS_RPLIDAR_A1.h"
 #include "communication/protocol.h"
 #include "secrets.h"
 
@@ -26,11 +26,27 @@ void init_wifi() {
   }
 
   WiFi.begin(wifi_ssid, wifi_password);
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Connecting to WiFi...");
+
+  int retries = 5;
+  while (WiFi.status() != WL_CONNECTED && retries-- > 0) {
+    Serial.println("Trying to connect to WiFi...");
     delay(2000);
   }
+  if (WiFi.status() != WL_CONNECTED) {
+    // TODO this could lead to boot loops
+    log_e("Unable to connect to WiFi restarting ESP");
+    ESP.restart();
+  }
+
   Serial.println("Connected to WiFi");
+}
+
+void restart_wifi() {
+  log_e("WiFi restart");
+  WiFi.disconnect();
+  WiFi.reconnect();
+  sleep(1);
+  init_wifi();
 }
 
 void init_i2c() {
