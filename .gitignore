@@ -3,8 +3,9 @@
 
 # Robot
 robot/.pio
-robot/lib/
 robot/src/secrets.h
+robot/lib/LDS
+robot/lib/FastIMU
 
 # Server
 server/target
