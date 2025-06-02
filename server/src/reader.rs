@@ -1,5 +1,5 @@
 use std::error::Error;
-use crate::{craft_motor_packet, parse_battery_packet, parse_config_packet, parse_echo_packet, parse_encoder_packet, parse_imu_packet, HomeRobotPacket, PacketType, ReceivePacketType, BUFFER_SIZE, PREFIX_SIZE};
+use crate::{craft_motor_packet, HomeRobotPacket, PacketType, ReceivePacketType, BUFFER_SIZE, PREFIX_SIZE};
 use byteorder::{NetworkEndian, ReadBytesExt};
 use circular_buffer::CircularBuffer;
 use std::io;
@@ -35,7 +35,6 @@ impl<S: Read + Write> ProtocolManager<S> {
 
     pub(crate) fn read_message(&mut self) -> io::Result<Option<HomeRobotPacket>> {
         match self.do_read() {
-            Ok(0) => Ok(None),
             Ok(_) => {
                 if self.current_header.is_none() {
                     if let Err(e) = self.parse_header() {
@@ -164,16 +163,16 @@ impl<S: Read + Write> ProtocolManager<S> {
                         Imu::parse(&packet.data);
                     }
                     ReceivePacketType::RxBattery => {
-                        parse_battery_packet(packet.size, &packet.data);
+                        //parse_battery_packet(packet.size, &packet.data);
                     }
                     ReceivePacketType::RxEncoderMotor => {
-                        parse_encoder_packet(packet.size, &packet.data);
+                        //parse_encoder_packet(packet.size, &packet.data);
                     }
                     ReceivePacketType::RxConfig => {
-                        parse_config_packet(packet.size, &packet.data);
+                        //parse_config_packet(packet.size, &packet.data);
                     }
                     ReceivePacketType::RxEcho => {
-                        parse_echo_packet(packet.size, &packet.data);
+                        //parse_echo_packet(packet.size, &packet.data);
                     }
                 }
             }

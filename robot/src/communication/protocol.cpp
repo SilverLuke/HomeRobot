@@ -71,21 +71,20 @@ void Protocol::ShowStatus() {
 }
 
 size_t Protocol::HeaderSize() {
-  return sizeof(HomeRobotPacket::sequence_millis) +
-         sizeof(HomeRobotPacket::type) + sizeof(HomeRobotPacket::size);
+  return sizeof(HomeRobotHeader);
 }
 
 size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
   if (this->server_connection.connected()) {
     const size_t constant_offset = Protocol::HeaderSize();
 
-    const size_t totalSize = constant_offset + packet.size;
+    const size_t totalSize = constant_offset + packet.header.size;
 
     memcpy(this->tx_buffer, &packet, constant_offset);
 
     // Copy the data array if it exists
-    if (packet.data && packet.size > 0) {
-      memcpy(this->tx_buffer + constant_offset, packet.data, packet.size);
+    if (packet.data && packet.header.size > 0) {
+      memcpy(this->tx_buffer + constant_offset, packet.data, packet.header.size);
     }
 
     // Send data
@@ -107,17 +106,17 @@ size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
 void Protocol::ParseHeader() {
   uint32_t sequence_millis;
   memcpy(&sequence_millis, this->rx_buffer, sizeof(sequence_millis));
-  this->receive_packet.sequence_millis = ntohl(sequence_millis);
+  this->receive_packet.header.sequence_millis = ntohl(sequence_millis);
 
-  memcpy(&this->receive_packet.type.receive, this->rx_buffer + sizeof(uint32_t),
-         sizeof(this->receive_packet.type.receive));
+  memcpy(&this->receive_packet.header.type.receive, this->rx_buffer + sizeof(uint32_t),
+         sizeof(this->receive_packet.header.type.receive));
   uint16_t size;
   memcpy(&size, this->rx_buffer + 5, sizeof(size));
-  this->receive_packet.size = ntohs(size);
+  this->receive_packet.header.size = ntohs(size);
 
   log_d("Received packet. Millis %lu Type: %u Size: %u",
-        this->receive_packet.sequence_millis, this->receive_packet.type.receive,
-        this->receive_packet.size);
+        this->receive_packet.header.sequence_millis, this->receive_packet.header.type.receive,
+        this->receive_packet.header.size);
   // Now it is ready to read
   this->read_header = true;
 }
@@ -147,12 +146,12 @@ bool Protocol::ReceivePacket() {
     this->ParseHeader();
   }
 
-  size_t total_size = HeaderSize() + this->receive_packet.size;
+  size_t total_size = HeaderSize() + this->receive_packet.header.size;
   if (total_size > RX_MAX_DATA) {
     log_e("Received packet too large. Size: %d", total_size);
   }
   if (this->rx_used >= total_size) {
-    memcpy(this->rx_buffer + HeaderSize(), this->receive_packet.data, this->receive_packet.size);
+    memcpy(this->rx_buffer + HeaderSize(), this->receive_packet.data, this->receive_packet.header.size);
 
     // Copy the next packet at the beginning of the buffer, for the next cicle.
     this->rx_used = this->rx_used - total_size;
@@ -162,14 +161,14 @@ bool Protocol::ReceivePacket() {
   }
 
   // Check if the current packet is newer than the latest (error in transmission or in the server)
-  if (this->receive_packet.sequence_millis < this->rx_latest_millis) {
+  if (this->receive_packet.header.sequence_millis < this->rx_latest_millis) {
     log_d("Old packet received, discarding. %lu < %lu",
-          this->receive_packet.sequence_millis, this->rx_latest_millis);
+          this->receive_packet.header.sequence_millis, this->rx_latest_millis);
     return false;
   }
 
   this->read_header = false;
-  this->rx_latest_millis = this->receive_packet.sequence_millis;
+  this->rx_latest_millis = this->receive_packet.header.sequence_millis;
   return true;
 }
 

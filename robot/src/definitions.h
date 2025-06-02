@@ -10,27 +10,28 @@
 #define RGB_BRIGHTNESS 64
 
 // General motor settings
-#define MOTOR_PWM_LOWER_LIMIT 64   // full range 0 - 255
-#define MOTOR_PWM_UPPER_LIMIT 128  // full range 0 - 255
+#define MOTOR_PWM_LOWER_LIMIT 63   // full range 0 - 255
+#define MOTOR_PWM_UPPER_LIMIT 255  // full range 0 - 255
 
+// NXT MOTOR: https://trivox.tripod.com/lego-nxt-motor-input-output.html
 // MOTOR SX
-#define ENCODER_SX_A 20       // YELLOW from NXT motor encoder
-#define ENCODER_SX_B 21       // WHITE from NXT motor encoder
-#define MOTOR_SX_FORWARD 19   // in2 from driver to control the direction
-#define MOTOR_SX_BACKWARD 18  // in1 from driver to control the direction
+#define ENCODER_SX_A 21       // BLUE from NXT motor encoder
+#define ENCODER_SX_B 20       // YELLOW from NXT motor encoder
+#define MOTOR_SX_BACKWARD 18   // in2 from driver to control the direction
+#define MOTOR_SX_FORWARD 19  // in1 from driver to control the direction
 #define MOTOR_SX_PWM 0        // pwm to control speed pin 0 for full speed
 
 // MOTOR DX
-#define ENCODER_DX_A 22       // YELLOW from NXT motor encoder
-#define ENCODER_DX_B 23       // WHITE from NXT motor encoder
-#define MOTOR_DX_FORWARD 10   // in2 from driver pins to control the direction
-#define MOTOR_DX_BACKWARD 11  // in1 from driver pins to control the direction
+#define ENCODER_DX_A 23       // BLUE from NXT motor encoder
+#define ENCODER_DX_B 22       // YELLOW from NXT motor encoder
+#define MOTOR_DX_FORWARD 11   // in2 from driver pins to control the direction
+#define MOTOR_DX_BACKWARD 10  // in1 from driver pins to control the direction
 #define MOTOR_DX_PWM 0        // pwm to control speed pin 0 for full speed
 
 // PID constants
-#define KP 10.0
-#define KI 0.1
-#define KD 0.3
+#define KP 1.0
+#define KI 0.01
+#define KD 0.1
 
 // I2C pins
 #define I2C_SDA 4
@@ -43,12 +44,12 @@
 extern int pwm_lower_limit;
 extern int pwm_upper_limit;
 
-extern Encoder encoder_sx;
-extern Motor motor_sx;
-extern Encoder encoder_dx;
-extern Motor motor_dx;
+extern Encoder* encoder_sx;
+extern Motor* motor_sx;
+extern Encoder* encoder_dx;
+extern Motor* motor_dx;
 
-extern Protocol *protocol;
+extern Protocol* protocol;
 
 void init_wifi();
 void restart_wifi();

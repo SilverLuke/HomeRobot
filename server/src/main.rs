@@ -79,32 +79,6 @@ const PREFIX_SIZE: usize = 7;
 const BUFFER_SIZE: usize = 16384;
 
 
-#[allow(unused_variables)]
-fn parse_imu_packet(size: u16, data: &Vec<u8>) {
-    unimplemented!("TODO")
-}
-
-#[allow(unused_variables)]
-fn parse_battery_packet(size: u16, data: &Vec<u8>) {
-    unimplemented!("TODO")
-}
-
-#[allow(unused_variables)]
-fn parse_encoder_packet(size: u16, data: &Vec<u8>) {
-    unimplemented!("TODO")
-}
-
-#[allow(unused_variables)]
-fn parse_config_packet(size: u16, data: &Vec<u8>) {
-    unimplemented!("TODO")
-}
-
-#[allow(unused_variables)]
-fn parse_echo_packet(size: u16, data: &Vec<u8>) {
-    unimplemented!("TODO")
-}
-
-
 fn craft_header(millis:u32, packet_type: SendPacketType, length: u16) -> Vec<u8> {
     let mut header = vec![0u8; 7];
     // In the firsts 4 bytes put millis

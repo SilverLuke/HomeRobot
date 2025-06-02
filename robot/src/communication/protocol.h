@@ -55,12 +55,16 @@
  * @var HomeRobotPacket::size: the size of the data in bytes
  * @var HomeRobotPacket::data: the data itself
  */
-struct HomeRobotPacket {
+struct HomeRobotHeader {
   unsigned long sequence_millis;
   PacketType type;
   uint16_t size;
+} __attribute__((packed));
+
+struct HomeRobotPacket {
+  HomeRobotHeader header;
   uint8_t* data = new uint8_t[RX_MAX_DATA];
-};
+} __attribute__((packed));
 
 class Protocol {
  private:
@@ -74,7 +78,7 @@ class Protocol {
   uint8_t* rx_buffer = new uint8_t[RX_BUFFER_SIZE];
 
   // 5 -> Lidar, 2 motors, imu, battery.
-  Sensor* sensors[5];
+  Sensor* sensors[5] = {};
   uint8_t sensors_count = 0;
   bool read_header = false;
 

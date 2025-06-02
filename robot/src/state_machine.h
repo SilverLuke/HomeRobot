@@ -23,6 +23,7 @@ enum ROBOT_STATE {
 // Function declarations
 void set_refresh(unsigned long refresh);
 void do_refresh();
+void print_esp_state();
 ROBOT_STATE serial_commands();
 ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu);
 void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu);

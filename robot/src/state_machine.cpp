@@ -1,19 +1,13 @@
 #include <cstdint>
 
 #include "Arduino.h"
+#include "Elog.h"
 #include "actuator/motor.h"
 #include "communication/protocol.h"
 #include "sensors/imu.h"
 #include "sensors/lidar.h"
 
-enum ROBOT_STATE {
-  IDLE = 0,
-  STOP,
-  LIDAR,
-  WIFI_SOFT,
-  WIFI_HARD,
-  MOTOR_GO
-};
+enum ROBOT_STATE { IDLE = 0, STOP, LIDAR, WIFI_SOFT, WIFI_HARD, MOTOR_GO };
 
 void print_esp_state() {
   Serial.println("\n=== Internal RAM Stats ===");
@@ -27,7 +21,8 @@ void print_esp_state() {
   Serial.printf("Total PSRAM Size: %u bytes\n", ESP.getPsramSize());
   Serial.printf("Free PSRAM: %u bytes\n", ESP.getFreePsram());
   Serial.printf("Lowest Free PSRAM: %u bytes\n", ESP.getMinFreePsram());
-  Serial.printf("Largest Allocatable PSRAM Block: %u bytes\n", ESP.getMaxAllocPsram());
+  Serial.printf("Largest Allocatable PSRAM Block: %u bytes\n",
+                ESP.getMaxAllocPsram());
 
   // Chip Information
   Serial.println("\n=== Chip Information ===");
@@ -72,6 +67,20 @@ void print_esp_state() {
   Serial.printf("long double: %d\n", sizeof(long double));
   Serial.printf("void*: %d\n", sizeof(void*));
   Serial.printf("unit8_t*: %d\n", sizeof(uint8_t*));
+  /*
+  *bool: 1
+  char: 1
+  short: 2
+  int: 4
+  long: 4
+  unsigned long: 4
+  long long: 8
+  float: 4
+  double: 8
+  long double: 16
+  void*: 4
+  unit8_t*: 4
+  */
 }
 ROBOT_STATE serial_commands() {
   ROBOT_STATE state = IDLE;
@@ -97,7 +106,7 @@ ROBOT_STATE serial_commands() {
     case 'l':
       // START LIDAR
       log_i("Serial cmd: Lidar start");
-state = LIDAR;
+      state = LIDAR;
       break;
     case 'w':
       log_i("Serial cmd: Reset wifi soft");
@@ -105,7 +114,7 @@ state = LIDAR;
       break;
     case 'W':
       log_i("Serial cmd: Reset wifi hard");
- state = WIFI_HARD;
+      state = WIFI_HARD;
       break;
     default:
       break;
@@ -118,7 +127,7 @@ ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
     return IDLE;
   }
 
-  switch (protocol->receive_packet.type.receive) {
+  switch (protocol->receive_packet.header.type.receive) {
     case RX_MOTOR_MOVE:
       motor_move(protocol->receive_packet.data);
       break;
@@ -131,12 +140,12 @@ ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
       lidar->setScanTargetFreqHz(hz);
       break;
     case RX_STOP_ALL:
-      motor_sx.turn_off();
-      motor_dx.turn_off();
+      motor_sx->turn_off();
+      motor_dx->turn_off();
       lidar->stopReading();
       break;
     case RX_REQUEST:
-      protocol->receive_packet.sequence_millis = millis();
+      protocol->receive_packet.header.sequence_millis = millis();
       protocol->SendPacket(protocol->receive_packet);
       break;
     default:
@@ -149,9 +158,9 @@ ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
 void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
   switch (state) {
     case STOP:
-      motor_sx.turn_off();
-      motor_dx.turn_off();
-      lidar->stopReading();
+      motor_sx->turn_off();
+      motor_dx->turn_off();
+      // lidar->stopReading();
       break;
     // case 2:
     //   imu->print();
@@ -165,15 +174,17 @@ void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
     //   set_refresh(FAST_REFRESH_HZ);
     //   break;
     case MOTOR_GO:
-      motor_sx.set_position(0);
-      motor_dx.set_position(0);
-      motor_sx.set_target(360);
-      motor_dx.set_target(360);
+      motor_sx->set_position(0);
+      motor_dx->set_position(0);
+      motor_sx->set_target(360);
+      motor_dx->set_target(360);
+      motor_sx->turn_on();
+      motor_dx->turn_on();
       break;
     case LIDAR:
       // START LIDAR
       log_i("Start LiDAR by serial command");
-      if (! lidar->isActive()) {
+      if (!lidar->isActive()) {
         lidar->startReading();
       }
       break;
@@ -190,6 +201,10 @@ void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
       }
       protocol->SoftRestart();
       break;
-
+    default:
+      // lidar->loop();
+      break;
   }
+  motor_sx->loop();
+  motor_dx->loop();
 }
