@@ -10,65 +10,64 @@
 enum ROBOT_STATE { IDLE = 0, STOP, LIDAR, WIFI_SOFT, WIFI_HARD, MOTOR_GO };
 
 void print_esp_state() {
-  Serial.println("\n=== Internal RAM Stats ===");
-  Serial.printf("Total Heap Size: %u bytes\n", ESP.getHeapSize());
-  Serial.printf("Free Heap: %u bytes\n", ESP.getFreeHeap());
-  Serial.printf("Lowest Free Heap: %u bytes\n", ESP.getMinFreeHeap());
-  Serial.printf("Largest Allocatable Block: %u bytes\n", ESP.getMaxAllocHeap());
+  Logger.info(MAIN_LOGGER, "\n=== Internal RAM Stats ===");
+  Logger.info(MAIN_LOGGER, "Total Heap Size: %u bytes", ESP.getHeapSize());
+  Logger.info(MAIN_LOGGER, "Free Heap: %u bytes", ESP.getFreeHeap());
+  Logger.info(MAIN_LOGGER, "Lowest Free Heap: %u bytes", ESP.getMinFreeHeap());
+  Logger.info(MAIN_LOGGER, "Largest Allocatable Block: %u bytes", ESP.getMaxAllocHeap());
 
   // Memory - PSRAM (if available)
-  Serial.println("\n=== PSRAM Stats ===");
-  Serial.printf("Total PSRAM Size: %u bytes\n", ESP.getPsramSize());
-  Serial.printf("Free PSRAM: %u bytes\n", ESP.getFreePsram());
-  Serial.printf("Lowest Free PSRAM: %u bytes\n", ESP.getMinFreePsram());
-  Serial.printf("Largest Allocatable PSRAM Block: %u bytes\n",
-                ESP.getMaxAllocPsram());
+  Logger.info(MAIN_LOGGER, "\n=== PSRAM Stats ===");
+  Logger.info(MAIN_LOGGER, "Total PSRAM Size: %u bytes", ESP.getPsramSize());
+  Logger.info(MAIN_LOGGER, "Free PSRAM: %u bytes", ESP.getFreePsram());
+  Logger.info(MAIN_LOGGER, "Lowest Free PSRAM: %u bytes", ESP.getMinFreePsram());
+  Logger.info(MAIN_LOGGER, "Largest Allocatable PSRAM Block: %u bytes", ESP.getMaxAllocPsram());
 
   // Chip Information
-  Serial.println("\n=== Chip Information ===");
-  Serial.printf("Chip Model: %s\n", ESP.getChipModel());
-  Serial.printf("Chip Revision: %d\n", ESP.getChipRevision());
-  Serial.printf("Number of Cores: %d\n", ESP.getChipCores());
-  Serial.printf("CPU Frequency: %u MHz\n", ESP.getCpuFreqMHz());
-  Serial.printf("Cycle Count: %u\n", ESP.getCycleCount());
+  Logger.info(MAIN_LOGGER, "\n=== Chip Information ===");
+  Logger.info(MAIN_LOGGER, "Chip Model: %s", ESP.getChipModel());
+  Logger.info(MAIN_LOGGER, "Chip Revision: %d", ESP.getChipRevision());
+  Logger.info(MAIN_LOGGER, "Number of Cores: %d", ESP.getChipCores());
+  Logger.info(MAIN_LOGGER, "CPU Frequency: %u MHz", ESP.getCpuFreqMHz());
+  Logger.info(MAIN_LOGGER, "Cycle Count: %u", ESP.getCycleCount());
 
   // Software Versions
-  Serial.println("\n=== Software Versions ===");
-  Serial.printf("SDK Version: %s\n", ESP.getSdkVersion());
-  Serial.printf("Core Version: %s\n", ESP.getCoreVersion());
+  Logger.info(MAIN_LOGGER, "\n=== Software Versions ===");
+  Logger.info(MAIN_LOGGER, "SDK Version: %s", ESP.getSdkVersion());
+  Logger.info(MAIN_LOGGER, "Core Version: %s", ESP.getCoreVersion());
 
   // Flash Information
-  Serial.println("\n=== Flash Information ===");
-  Serial.printf("Flash Chip Size: %u bytes\n", ESP.getFlashChipSize());
-  Serial.printf("Flash Chip Speed: %u Hz\n", ESP.getFlashChipSpeed());
-  Serial.printf("Flash Chip Mode: %d\n", ESP.getFlashChipMode());
+  Logger.info(MAIN_LOGGER, "\n=== Flash Information ===");
+  Logger.info(MAIN_LOGGER, "Flash Chip Size: %u bytes", ESP.getFlashChipSize());
+  Logger.info(MAIN_LOGGER, "Flash Chip Speed: %u Hz", ESP.getFlashChipSpeed());
+  Logger.info(MAIN_LOGGER, "Flash Chip Mode: %d", ESP.getFlashChipMode());
 
   // Sketch Information
-  Serial.println("\n=== Sketch Information ===");
-  Serial.printf("Sketch Size: %u bytes\n", ESP.getSketchSize());
-  Serial.printf("Free Sketch Space: %u bytes\n", ESP.getFreeSketchSpace());
-  Serial.printf("Sketch MD5: %s\n", ESP.getSketchMD5().c_str());
+  Logger.info(MAIN_LOGGER, "\n=== Sketch Information ===");
+  Logger.info(MAIN_LOGGER, "Sketch Size: %u bytes", ESP.getSketchSize());
+  Logger.info(MAIN_LOGGER, "Free Sketch Space: %u bytes", ESP.getFreeSketchSpace());
+  Logger.info(MAIN_LOGGER, "Sketch MD5: %s", ESP.getSketchMD5().c_str());
 
   // Hardware ID
-  Serial.println("\n=== Hardware Information ===");
+  Logger.info(MAIN_LOGGER, "\n=== Hardware Information ===");
   const uint64_t macAddress12 = ESP.getEfuseMac();
-  Serial.printf("MAC Address: %012llX\n", macAddress12);
+  Logger.info(MAIN_LOGGER, "MAC Address: %012llX", macAddress12);
 
-  Serial.println("\n=== Variable Sizes ===");
-  Serial.printf("bool: %d\n", sizeof(bool));
-  Serial.printf("char: %d\n", sizeof(char));
-  Serial.printf("short: %d\n", sizeof(short));
-  Serial.printf("int: %d\n", sizeof(int));
-  Serial.printf("long: %d\n", sizeof(long));
-  Serial.printf("unsigned long: %d\n", sizeof(unsigned long));
-  Serial.printf("long long: %d\n", sizeof(long long));
-  Serial.printf("float: %d\n", sizeof(float));
-  Serial.printf("double: %d\n", sizeof(double));
-  Serial.printf("long double: %d\n", sizeof(long double));
-  Serial.printf("void*: %d\n", sizeof(void*));
-  Serial.printf("unit8_t*: %d\n", sizeof(uint8_t*));
+  Logger.info(MAIN_LOGGER, "\n=== Variable Sizes ===");
+  Logger.info(MAIN_LOGGER, "bool: %d", sizeof(bool));
+  Logger.info(MAIN_LOGGER, "char: %d", sizeof(char));
+  Logger.info(MAIN_LOGGER, "short: %d", sizeof(short));
+  Logger.info(MAIN_LOGGER, "int: %d", sizeof(int));
+  Logger.info(MAIN_LOGGER, "long: %d", sizeof(long));
+  Logger.info(MAIN_LOGGER, "unsigned long: %d", sizeof(unsigned long));
+  Logger.info(MAIN_LOGGER, "long long: %d", sizeof(long long));
+  Logger.info(MAIN_LOGGER, "float: %d", sizeof(float));
+  Logger.info(MAIN_LOGGER, "double: %d", sizeof(double));
+  Logger.info(MAIN_LOGGER, "long double: %d", sizeof(long double));
+  Logger.info(MAIN_LOGGER, "void*: %d", sizeof(void*));
+  Logger.info(MAIN_LOGGER, "unit8_t*: %d", sizeof(uint8_t*));
   /*
-  *bool: 1
+  bool: 1
   char: 1
   short: 2
   int: 4
@@ -95,25 +94,25 @@ ROBOT_STATE serial_commands() {
       break;
     case 's':
       // case 'stop'
-      log_i("Serial cmd: Stop");
+      Logger.info(MAIN_LOGGER, "Serial cmd: Stop");
       state = STOP;
       break;
     case 'g':
       // case 'go'
-      log_i("Serial cmd: Motor go");
+      Logger.info(MAIN_LOGGER, "Serial cmd: Motor go");
       state = MOTOR_GO;
       break;
     case 'l':
       // START LIDAR
-      log_i("Serial cmd: Lidar start");
+      Logger.info(MAIN_LOGGER, "Serial cmd: Lidar start");
       state = LIDAR;
       break;
     case 'w':
-      log_i("Serial cmd: Reset wifi soft");
+      Logger.info(MAIN_LOGGER, "Serial cmd: Reset wifi soft");
       state = WIFI_SOFT;
       break;
     case 'W':
-      log_i("Serial cmd: Reset wifi hard");
+      Logger.info(MAIN_LOGGER, "Serial cmd: Reset wifi hard");
       state = WIFI_HARD;
       break;
     default:
@@ -149,7 +148,7 @@ ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
       protocol->SendPacket(protocol->receive_packet);
       break;
     default:
-      log_e("Unknown cmd");
+      Logger.error(MAIN_LOGGER, "Unknown cmd");
       break;
   }
   return IDLE;
@@ -167,10 +166,10 @@ void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
     //
     //   int32_t read_enc = encoder_sx.read();
     //   if (oldRead != read_enc) {
-    //     log_i("DX: %d", oldRead);
+    //     Logger.info(MAIN_LOGGER, "DX: %d", oldRead);
     //     oldRead = read_enc;
     //   }
-    //   log_i("SX: %d", encoder_sx.read());
+    //   Logger.info(MAIN_LOGGER, "SX: %d", encoder_sx.read());
     //   set_refresh(FAST_REFRESH_HZ);
     //   break;
     case MOTOR_GO:
@@ -183,7 +182,7 @@ void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
       break;
     case LIDAR:
       // START LIDAR
-      log_i("Start LiDAR by serial command");
+      Logger.info(MAIN_LOGGER, "Start LiDAR by serial command");
       if (!lidar->isActive()) {
         lidar->startReading();
       }
@@ -205,6 +204,6 @@ void apply_state(ROBOT_STATE state, Lidar* lidar, IMU* imu) {
       // lidar->loop();
       break;
   }
-  motor_sx->loop();
-  motor_dx->loop();
+  //motor_sx->loop();
+  //motor_dx->loop();
 }

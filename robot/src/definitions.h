@@ -4,7 +4,13 @@
 #include <HardwareSerial.h>
 #include <communication/protocol.h>
 
-#include "Motor_PID.h"
+#include "actuator/Motor_PID/Motor_PID.h"
+
+#define MAIN_LOGGER 0
+#define PROTO_LOGGER 1
+#define MOTOR_LOGGER 2
+#define LIDAR_LOGGER 3
+#define IMU_LOGGER 4
 
 // LED
 #define RGB_BRIGHTNESS 64

@@ -14,8 +14,8 @@
 #define SEND_BATTERY_STATUS_SERIAL 10000
 
 #include <Elog.h>
-#define MAIN_LOGGER 0
 
+#include "secrets-example.h"
 Lidar* lidar;
 IMU* imu;
 
@@ -45,7 +45,17 @@ void setup() {
   }
 
   // Logger setup
+  Logger.configureSyslog(wifi_server_host , 514, "esp32"); // syslog host, port and name of the esp32 device host name
   Logger.registerSerial(MAIN_LOGGER, ELOG_LEVEL_DEBUG, "Main");
+  Logger.registerSyslog(MAIN_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Main");
+  Logger.registerSerial(PROTO_LOGGER, ELOG_LEVEL_DEBUG, "Protocol");
+  Logger.registerSyslog(PROTO_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Protocol");
+  Logger.registerSerial(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, "Motor");
+  Logger.registerSyslog(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Motor");
+  Logger.registerSerial(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, "Lidar");
+  Logger.registerSyslog(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Lidar");
+  Logger.registerSerial(IMU_LOGGER, ELOG_LEVEL_DEBUG, "IMU");
+  Logger.registerSyslog(IMU_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "IMU");
 
   while (init_battery() != 0 || battery_level() < 5) {
     Logger.warning(
@@ -83,31 +93,30 @@ void setup() {
 
         // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS
         // using SPIFFS.end()
-        Serial.println("Start updating " + type);
+        Logger.info(MAIN_LOGGER, "Start updating %s", type.c_str());
       })
-      .onEnd([]() { Serial.println("\nEnd"); })
+      .onEnd([]() { Logger.info(MAIN_LOGGER, "End"); })
       .onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        Logger.debug(MAIN_LOGGER, "Progress: %u%%\r", (progress / (total / 100)));
       })
       .onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
+        Logger.error(MAIN_LOGGER, "Error[%u]: ", error);
         if (error == OTA_AUTH_ERROR) {
-          Serial.println("Auth Failed");
+          Logger.error(MAIN_LOGGER, "Auth Failed");
         } else if (error == OTA_BEGIN_ERROR) {
-          Serial.println("Begin Failed");
+          Logger.error(MAIN_LOGGER, "Begin Failed");
         } else if (error == OTA_CONNECT_ERROR) {
-          Serial.println("Connect Failed");
+          Logger.error(MAIN_LOGGER, "Connect Failed");
         } else if (error == OTA_RECEIVE_ERROR) {
-          Serial.println("Receive Failed");
+          Logger.error(MAIN_LOGGER, "Receive Failed");
         } else if (error == OTA_END_ERROR) {
-          Serial.println("End Failed");
+          Logger.error(MAIN_LOGGER, "End Failed");
         }
       });
 
   ArduinoOTA.begin();
 
   init_server_connection();
-
   init_motors();
   init_i2c();
   lidar = new Lidar();
@@ -132,8 +141,6 @@ void loop() {
   if (protocol->isConnected()) {
     wifi_commands(protocol, lidar, imu);
   }
-  Logger.debug(MAIN_LOGGER, "SX: %s", motor_sx->print_state().c_str());
-  Logger.debug(MAIN_LOGGER, "DX: %s", motor_dx->print_state().c_str());
 
   apply_state(state, lidar, imu);
 

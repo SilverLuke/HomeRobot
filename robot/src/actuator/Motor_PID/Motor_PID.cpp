@@ -1,10 +1,14 @@
 #include "Motor_PID.h"
 
+#include "definitions.h"
+
+#include <Elog.h>
 #include <Encoder.h>
 #include <sys/_intsup.h>
 
-Motor::Motor(Encoder* encoder, const uint8_t in1, const uint8_t in2,
+Motor::Motor(String name, Encoder* encoder, const uint8_t in1, const uint8_t in2,
              const uint8_t pwmPin, const uint8_t lowerLimit, const uint8_t upperLimit) {
+  this->name = name;
   this->encoder = encoder;
   this->in1 = in1;
   this->in2 = in2;
@@ -12,12 +16,6 @@ Motor::Motor(Encoder* encoder, const uint8_t in1, const uint8_t in2,
   this->lower_limit = lowerLimit;
   this->upper_limit = upperLimit;
   this->set_position(0);
-
-  // TODO delete this
-  int32_t val = this->encoder->read();
-  if (val != 0) {
-    Serial.println("NOOOOOOO");
-  }
 }
 
 void Motor::init(const double kp, const double ki, const double kd) {
@@ -41,7 +39,7 @@ void Motor::config_set_pid(const double kp, const double ki, const double kd) {
   this->previus_timestamp = 0;
 }
 
-void Motor::set_motor(const Direction dir, int pwmVal) const {
+void Motor::set_motor(const Direction dir, const uint8_t pwmVal) const {
 
   if (pwmpin != 0) {
     set_motor_with_pwm_pin(dir, pwmVal);
@@ -50,7 +48,7 @@ void Motor::set_motor(const Direction dir, int pwmVal) const {
   }
 }
 
-void Motor::set_motor_with_pwm_pin(const Direction dir, int pwmValue) const {
+void Motor::set_motor_with_pwm_pin(const Direction dir, const uint8_t pwmValue) const {
   analogWrite(pwmpin, pwmValue);
 
   switch (dir) {
@@ -70,7 +68,7 @@ void Motor::set_motor_with_pwm_pin(const Direction dir, int pwmValue) const {
 }
 
 void Motor::set_motor_without_pwm_pin(const Direction dir,
-                                      const int pwmValue) const {
+                                      const uint8_t pwmValue) const {
   switch (dir) {
     case FORWARD:
       analogWrite(in1, pwmValue);
@@ -111,10 +109,16 @@ void Motor::loop() {
   // Update motor state based on position error
   const long position_error = current_position - target;
 
+  if (current_time - this->last_debug_time >= 1000) {
+    this->last_debug_time = current_time;
+    Logger.debug(MOTOR_LOGGER, this->print_state().c_str());
+  }
+
   // If the direction is FREE, do nothing
   if (this->direction == FREE) {
-    this->power = 0;
-    this->set_motor(FREE, this->power);
+    // TODO refactor this, I don't know if this is needed
+    // this->power = 0;
+    //this->set_motor(FREE, this->power);
     return;
   }
 
@@ -175,10 +179,10 @@ void Motor::turn_on(const Direction dir) {
 
 void Motor::turn_off() {
   this->direction = FREE;
+  this->set_motor(FREE, 0);
 }
 
 void Motor::set_position(const int32_t pos) {
-  Serial.println("Set position ############################################");
   this->position = pos;
   this->encoder->write(this->position * 2);
 }
@@ -214,13 +218,14 @@ bool Motor::target_reached(const bool reset) {
 }
 
 String Motor::print_state() const {
-  return "Position: " + String(position) + \
-            " Target: " + String(target) + \
-            " Reached: " + String(target_is_reached) + \
-            " Error: " + String(previous_error) + \
-            " Ekp: " + String(ekp) + \
-            " Eki: " + String(eki) + \
-            " Ekd: " + String(ekd) + \
-            " Direction: " + DirectionToString(direction) + \
-            " Power: " + String(power);
+  return name +
+    " Position: " + String(position) + \
+    " Target: " + String(target) + \
+    " Reached: " + String(target_is_reached) + \
+    " Error: " + String(previous_error) + \
+    " Ekp: " + String(ekp) + \
+    " Eki: " + String(eki) + \
+    " Ekd: " + String(ekd) + \
+    " Direction: " + DirectionToString(direction) + \
+    " Power: " + String(power);
 }

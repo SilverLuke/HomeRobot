@@ -28,7 +28,7 @@ inline const char* DirectionToString(Direction dir) {
 class Motor {
  public:
   Motor() = default;
-  Motor(Encoder* encoder, uint8_t in1, uint8_t in2, uint8_t pwmPin = 0,
+  Motor(String name, Encoder* encoder, uint8_t in1, uint8_t in2, uint8_t pwmPin = 0,
         uint8_t lowerLimit = 50, uint8_t upperLimit = 255);
   ~Motor() = default;
 
@@ -69,7 +69,7 @@ class Motor {
    * @param dir Movement direction
    * @param pwmVal How fast to move
    */
-  void set_motor(Direction dir, int pwmVal) const;
+  void set_motor(Direction dir, uint8_t pwmVal) const;
 
   String print_state() const;
 
@@ -95,11 +95,13 @@ class Motor {
   // Debug variables
   double ekp = 0, eki = 0, ekd = 0;
   uint8_t power = 0;
+  String name;
+  unsigned long last_debug_time = 0;
 
   long read_encoder();
   double calculate_pid_signal(long current_position, unsigned long delta_time);
   uint8_t limit_power(double power) const;
 
-  void set_motor_with_pwm_pin(Direction dir, int pwmValue) const;
-  void set_motor_without_pwm_pin(Direction dir, int pwmValue) const;
+  void set_motor_with_pwm_pin(Direction dir, uint8_t pwmValue) const;
+  void set_motor_without_pwm_pin(Direction dir, uint8_t pwmValue) const;
 };

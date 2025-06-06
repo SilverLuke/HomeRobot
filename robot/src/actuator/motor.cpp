@@ -1,33 +1,42 @@
 #include "motor.h"
 
+#include <Elog.h>
+
 #include "../definitions.h"
 #include "../utils/utils.h"
 
 void motor_move(const uint8_t* data) {
-  const int8_t dx_power = static_cast<int8_t>(data[0]);
+  const uint8_t dx_power = data[0];
 
-  uint32_t raw_dx_angle;
-  memcpy(&raw_dx_angle, &data[1], sizeof(uint32_t));
-  float dx_angle = net2hostFloat(raw_dx_angle);
+  // Read 4 bytes for float in network byte order
+  uint32_t raw_dx_angle = (static_cast<uint32_t>(data[1]) << 24) |
+                          (static_cast<uint32_t>(data[2]) << 16) |
+                          (static_cast<uint32_t>(data[3]) << 8) |
+                          static_cast<uint32_t>(data[4]);
+  const float dx_angle = *reinterpret_cast<float*>(&raw_dx_angle);
 
-  const int8_t sx_power = static_cast<int8_t>(data[5]);
+  const uint8_t sx_power = data[5];
 
-  uint32_t raw_sx_angle;
-  memcpy(&raw_sx_angle, &data[6], sizeof(uint32_t));
-  float sx_angle = net2hostFloat(raw_sx_angle);
+  // Read next 4 bytes for float in network byte order
+  uint32_t raw_sx_angle = (static_cast<uint32_t>(data[6]) << 24) |
+                          (static_cast<uint32_t>(data[7]) << 16) |
+                          (static_cast<uint32_t>(data[8]) << 8) |
+                          static_cast<uint32_t>(data[9]);
+  const float sx_angle = *reinterpret_cast<float*>(&raw_sx_angle);
+
+  Logger.debug(PROTO_LOGGER, "Motor DX: %u %f, SX: %u %f", dx_power, dx_angle, sx_power, sx_angle);
 
   if (dx_power == 0) {
     motor_dx->turn_off();
   } else {
-    motor_dx->set_target(100.0f * dx_power);
+    motor_dx->set_motor(signbit(dx_angle) ? BACKWARD : FORWARD, 255);
   }
 
   if (sx_power == 0) {
     motor_sx->turn_off();
   } else {
-    motor_sx->set_target(100.0f * sx_power);
+    motor_sx->set_motor(signbit(sx_angle) ? BACKWARD : FORWARD, 255);
   }
-  log_d("DX: %d, %f   SX: %d, %f", dx_power, dx_angle, sx_power, sx_angle);
 }
 
 uint8_t extract_motor_config(const uint8_t* data, float* kp, float* ki,

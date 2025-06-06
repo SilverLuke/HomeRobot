@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <Esp.h>
 #include <WiFi.h>
+#include <Elog.h>
 
 #include <cstdint>
 
@@ -22,13 +23,13 @@ void Protocol::connect() {
   int attempts = 0;
   while (!this->server_connection.connect(wifi_server_host, wifi_server_port) &&
          attempts++ < 5) {
-    log_d("Failed to connect to server");
+    Logger.debug(PROTO_LOGGER, "Failed to connect to server");
     delay(1000);
   }
   if (attempts >= 5) {
-    Serial.println("Failed to connect to server");
+    Logger.error(PROTO_LOGGER, "Failed to connect to server");
   } else {
-    Serial.println("Connected to server");
+    Logger.info(PROTO_LOGGER, "Connected to server");
   }
 }
 
@@ -48,19 +49,20 @@ void Protocol::HardRestart() {
  * variables in the protocol
  */
 void Protocol::SoftRestart() {
-  if (!this->server_connection.connected()) {
-    this->server_connection = WiFiClient();
-    this->connect();
-  }
-
   this->receive_packet = {};
   this->rx_latest_millis = 0;
   this->rx_used = 0;
   this->read_header = false;
+
+  if (!this->server_connection.connected()) {
+    Logger.info(PROTO_LOGGER, "Server not connected, restarting");
+    this->server_connection = WiFiClient();
+    this->connect();
+  }
 }
 
 void Protocol::ShowStatus() {
-    Serial.printf("Wifi %d, Server: %d, Latest millis: %lu, Used: %d, Read header: %d, Sensors count: %d\n\r",
+    Logger.info(PROTO_LOGGER, "Wifi %d, Server: %d, Latest millis: %lu, Used: %d, Read header: %d, Sensors count: %d",
               WiFi.isConnected(),
               this->server_connection.connected(),
               this->rx_latest_millis,
@@ -91,13 +93,13 @@ size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
     const size_t bytesWritten =
         this->server_connection.write(this->tx_buffer, totalSize);
     if (bytesWritten != totalSize) {
-      log_e("Error writing packet");
+      Logger.error(PROTO_LOGGER, "Error writing packet");
     } else {
-      // Serial.println("Data sent");
+      // Logger.debug(PROTO_LOGGER, "Data sent");
     }
     return bytesWritten;
   } else {
-    log_e("Error client not connected");
+    Logger.error(PROTO_LOGGER, "Error client not connected");
   }
   return 0;
 }
@@ -114,7 +116,7 @@ void Protocol::ParseHeader() {
   memcpy(&size, this->rx_buffer + 5, sizeof(size));
   this->receive_packet.header.size = ntohs(size);
 
-  log_d("Received packet. Millis %lu Type: %u Size: %u",
+  Logger.debug(PROTO_LOGGER, "Received packet. Millis %lu Type: %u Size: %u",
         this->receive_packet.header.sequence_millis, this->receive_packet.header.type.receive,
         this->receive_packet.header.size);
   // Now it is ready to read
@@ -129,15 +131,13 @@ bool Protocol::ReceivePacket() {
   );
 
   if (prefix < 0) {
-    log_e("Unable to read %d", prefix);
+    Logger.error(PROTO_LOGGER, "Unable to read %d", prefix);
     return false;
   }
 
   this->rx_used += prefix;
   // Not enough data to parse the header
-  if (this-> rx_used < HeaderSize()) {
-    // if (this->rx_used != 0)
-    //   log_d("Waiting to read full prefix, read %d byte", this->rx_used);
+  if (this->rx_used < HeaderSize()) {
     return false;
   }
 
@@ -148,12 +148,20 @@ bool Protocol::ReceivePacket() {
 
   size_t total_size = HeaderSize() + this->receive_packet.header.size;
   if (total_size > RX_MAX_DATA) {
-    log_e("Received packet too large. Size: %d", total_size);
+    Logger.error(PROTO_LOGGER, "Received packet too large. Size: %d", total_size);
+    // Reset buffer and header state
+    this->rx_used = 0;
+    this->read_header = false;
+    return false;
   }
+  
   if (this->rx_used >= total_size) {
-    memcpy(this->rx_buffer + HeaderSize(), this->receive_packet.data, this->receive_packet.header.size);
+    // Copy data FROM buffer TO packet (corrected direction)
+    if (this->receive_packet.header.size > 0) {
+      memcpy(this->receive_packet.data, this->rx_buffer + HeaderSize(), this->receive_packet.header.size);
+    }
 
-    // Copy the next packet at the beginning of the buffer, for the next cicle.
+    // Copy the next packet at the beginning of the buffer, for the next cycle.
     this->rx_used = this->rx_used - total_size;
     memmove(this->rx_buffer, this->rx_buffer + total_size, this->rx_used);
   } else {
@@ -162,7 +170,7 @@ bool Protocol::ReceivePacket() {
 
   // Check if the current packet is newer than the latest (error in transmission or in the server)
   if (this->receive_packet.header.sequence_millis < this->rx_latest_millis) {
-    log_d("Old packet received, discarding. %lu < %lu",
+    Logger.debug(PROTO_LOGGER, "Old packet received, discarding. %lu < %lu",
           this->receive_packet.header.sequence_millis, this->rx_latest_millis);
     return false;
   }
@@ -185,7 +193,7 @@ void Protocol::SendSensors() {
     uint16_t dataSize = sensor->getDataSize();
 
     if (dataSize > 0) {
-      log_d("Creating packet for sensor %s with size %d", sensor->name(), dataSize);
+      Logger.debug(PROTO_LOGGER, "Creating packet for sensor %s with size %d", sensor->name(), dataSize);
       // Generate header for the sensor data
       int32_t headerSize = GenerateHeader(
           this->tx_buffer + currentBufferOffset,
@@ -196,7 +204,7 @@ void Protocol::SendSensors() {
       );
 
       if (headerSize < 0 || headerSize != 7) {
-        log_e("Failed to generate header for sensor %s. Header size %d", sensor->name(), headerSize);
+        Logger.error(PROTO_LOGGER, "Failed to generate header for sensor %s. Header size %d", sensor->name(), headerSize);
         continue;
       }
       currentBufferOffset += headerSize;
@@ -207,20 +215,20 @@ void Protocol::SendSensors() {
               TX_BUFFER_SIZE - currentBufferOffset
               );
       if (serialization < 0 || serialization != dataSize) {
-        log_e("Failed to serialize sensor %s", sensor[i].name());
+        Logger.error(PROTO_LOGGER, "Failed to serialize sensor %s", sensor[i].name());
         continue;
       }
       // Todo handle roll back if a sensor was unable to serialize.
 
       currentBufferOffset += serialization;
-      log_d("Current buffer offset %d", currentBufferOffset);
+      Logger.debug(PROTO_LOGGER, "Current buffer offset %d", currentBufferOffset);
     }
   }
 
   // Send all accumulated data in a single write if we have any
   if (currentBufferOffset > 0) {
-    log_i("Sending %d bytes of sensors data", currentBufferOffset);
-    // log_i("Memory - Total: %d, Free: %d, Used: %d",
+    Logger.info(PROTO_LOGGER, "Sending %d bytes of sensors data", currentBufferOffset);
+    // Logger.info(PROTO_LOGGER, "Memory - Total: %d, Free: %d, Used: %d",
     //       ESP.getHeapSize(),
     //       ESP.getFreeHeap(),
     //       ESP.getHeapSize() - ESP.getFreeHeap());
@@ -228,14 +236,13 @@ void Protocol::SendSensors() {
     size_t bytesWritten =
         this->server_connection.write(this->tx_buffer, currentBufferOffset);
     if (bytesWritten == 0) {
-      log_e("Failed to send complete sensors packet. Expected: %d, Sent: %d", currentBufferOffset, bytesWritten);
+      Logger.error(PROTO_LOGGER, "Failed to send complete sensors packet. Expected: %d, Sent: %d", currentBufferOffset, bytesWritten);
       this->server_connection.stop();
       this->HardRestart();
     } else {
       this->server_connection.flush();
     }
   }
-  Serial.println("-----------------------------------------");
 }
 
 void Protocol::Loop() {
@@ -255,7 +262,7 @@ int32_t Protocol::GenerateHeader(
   uint16_t size
 ) {
   // Calculate the required size for the header
-  log_i("Generating header millis %d type %d size %d", millis, type, size);
+  Logger.info(PROTO_LOGGER, "Generating header millis %d type %d size %d", millis, type, size);
   const size_t header_size = Protocol::HeaderSize();
 
   // Check if there's enough space in the buffer

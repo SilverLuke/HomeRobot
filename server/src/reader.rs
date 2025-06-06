@@ -51,6 +51,12 @@ impl<S: Read + Write> ProtocolManager<S> {
         }
     }
 
+    pub fn send_packet(&mut self, packet: &[u8]) -> Result<(), std::io::Error> {
+        self.stream.write_all(packet)?;
+        self.stream.flush()?;
+        Ok(())
+    }
+    
     fn parse_header(&mut self) -> Result<(), Box<dyn Error>>{
         if self.read_buffer.len() < HEADER_SIZE {
             return Ok(());
@@ -133,21 +139,21 @@ impl<S: Read + Write> ProtocolManager<S> {
     }
 
 
-    pub(crate) fn send_message(&mut self, millis: u32) {
-        let motor_packet =
-            // Every second changes the robot motion
-            if (millis / 5000) % 2 == 0 {
-                // Go forward
-                println!("Sending motor packet, forward. {millis}");
-                craft_motor_packet(50, f32::INFINITY, 50, f32::INFINITY, millis)
-            } else {
-                // Go backward
-                println!("Sending motor packet, backward. {millis}");
-                craft_motor_packet(-50, f32::INFINITY, -50, f32::INFINITY, millis)
-            };
-
-        self.stream.write_all(&motor_packet).unwrap()
-    }
+    // pub(crate) fn send_message(&mut self, millis: u32) {
+    //     let motor_packet =
+    //         // Every second changes the robot motion
+    //         if (millis / 5000) % 2 == 0 {
+    //             // Go forward
+    //             println!("Sending motor packet, forward. {millis}");
+    //             craft_motor_packet(50, f32::INFINITY, 50, f32::INFINITY, millis)
+    //         } else {
+    //             // Go backward
+    //             println!("Sending motor packet, backward. {millis}");
+    //             craft_motor_packet(50, f32::INFINITY, 50, f32::INFINITY, millis)
+    //         };
+    // 
+    //     self.stream.write_all(&motor_packet).unwrap()
+    // }
     
     fn parse_data(packet: &HomeRobotPacket) {
         assert_eq!(packet.size as usize, packet.data.len(), "Vector data and size must be equal");
