@@ -42,9 +42,9 @@
 
 #include "sensors/sensor.h"
 
-#define RX_BUFFER_SIZE 128
+#define RX_BUFFER_SIZE 256
 #define RX_MAX_DATA    128
-#define TX_BUFFER_SIZE 4096
+#define TX_BUFFER_SIZE 1024
 
 /**
  * @struct HomeRobotPacket
@@ -59,12 +59,12 @@ struct HomeRobotHeader {
   unsigned long sequence_millis;
   PacketType type;
   uint16_t size;
-} __attribute__((packed));
+};
 
 struct HomeRobotPacket {
   HomeRobotHeader header;
   uint8_t* data = new uint8_t[RX_MAX_DATA];
-} __attribute__((packed));
+};
 
 class Protocol {
  private:

@@ -24,18 +24,18 @@ void motor_move(const uint8_t* data) {
                           static_cast<uint32_t>(data[9]);
   const float sx_angle = *reinterpret_cast<float*>(&raw_sx_angle);
 
-  Logger.debug(PROTO_LOGGER, "Motor DX: %u %f, SX: %u %f", dx_power, dx_angle, sx_power, sx_angle);
+  Logger.info(PROTO_LOGGER, "Motor DX: %u %f, SX: %u %f", dx_power, dx_angle, sx_power, sx_angle);
 
   if (dx_power == 0) {
     motor_dx->turn_off();
   } else {
-    motor_dx->set_motor(signbit(dx_angle) ? BACKWARD : FORWARD, 255);
+    motor_dx->set_motor(signbit(dx_angle) ? BACKWARD : FORWARD, dx_power);
   }
 
   if (sx_power == 0) {
     motor_sx->turn_off();
   } else {
-    motor_sx->set_motor(signbit(sx_angle) ? BACKWARD : FORWARD, 255);
+    motor_sx->set_motor(signbit(sx_angle) ? BACKWARD : FORWARD, sx_power);
   }
 }
 

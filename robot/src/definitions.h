@@ -12,8 +12,7 @@
 #define LIDAR_LOGGER 3
 #define IMU_LOGGER 4
 
-// LED
-#define RGB_BRIGHTNESS 64
+
 
 // General motor settings
 #define MOTOR_PWM_LOWER_LIMIT 63   // full range 0 - 255

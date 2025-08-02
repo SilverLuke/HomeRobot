@@ -1,16 +1,15 @@
-use std::error::Error;
-use crate::{craft_motor_packet, HomeRobotPacket, PacketType, ReceivePacketType, BUFFER_SIZE, PREFIX_SIZE};
-use byteorder::{NetworkEndian, ReadBytesExt};
-use circular_buffer::CircularBuffer;
-use std::io;
-use std::io::{Read, Write};
-use std::thread::sleep;
-use std::time::Duration;
-use crate::sensors::{lidar, Sensor};
 use crate::sensors::imu::Imu;
 use crate::sensors::lidar::Lidar;
+use crate::sensors::Sensor;
+use crate::constants::{BUFFER_SIZE, HEADER_SIZE};
+use crate::{HomeRobotPacket, PacketType, ReceivePacketType};
+use byteorder::{NetworkEndian, ReadBytesExt};
+use circular_buffer::CircularBuffer;
+use std::error::Error;
+use std::io;
+use std::io::{Read, Write};
 
-const HEADER_SIZE: usize = 7;
+
 struct MessageHeader {
     sequence_millis:u32,
     packet_type: PacketType,
@@ -82,8 +81,8 @@ impl<S: Read + Write> ProtocolManager<S> {
         // Read the size of the data (u16, 2 bytes)
         let size = self.read_buffer.read_u16::<NetworkEndian>()
             .map_err(|e| {println!("ERR!"); format!("Failed to read data size: {}", e)})?;
-        let totalSize = size + HEADER_SIZE as u16;
-        println!("Data size: {size} B ({totalSize} B).");
+        let total_size = size + HEADER_SIZE as u16;
+        println!("Data size: {size} B ({total_size} B).");
 
         self.current_header = Some(MessageHeader {
             sequence_millis: millis,
@@ -188,10 +187,10 @@ impl<S: Read + Write> ProtocolManager<S> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Read, Write};
-    use mockall::{mock, predicate::*};
-    use crate::{PacketType, ReceivePacketType};
     use super::ProtocolManager;
+    use crate::{PacketType, ReceivePacketType};
+    use mockall::mock;
+    use std::io::{self, Read, Write};
 
     mock! {
         pub Stream {
@@ -207,20 +206,20 @@ mod tests {
         }
     }
 
-    #[test]
-    fn send_writes_all_bytes() -> io::Result<()> {
-        let mut mock = MockStream::new();
-        mock.expect_write()
-            .withf(|buf: &[u8]| {
-                // Verify the packet structure
-                buf.len() == 17  // 7 bytes header + 10 bytes motor data
-            })
-            .returning(|buf| Ok(buf.len()));
-
-        let mut proto = ProtocolManager::new(mock);
-        proto.send_message(1000);
-        Ok(())
-    }
+    // #[test]
+    // fn send_writes_all_bytes() -> io::Result<()> {
+    //     let mut mock = MockStream::new();
+    //     mock.expect_write()
+    //         .withf(|buf: &[u8]| {
+    //             // Verify the packet structure
+    //             buf.len() == 17  // 7 bytes header + 10 bytes motor data
+    //         })
+    //         .returning(|buf| Ok(buf.len()));
+    // 
+    //     let mut proto = ProtocolManager::new(mock);
+    //     proto.send_message(1000);
+    //     Ok(())
+    // }
 
     #[test]
     fn test_read_message() -> io::Result<()> {

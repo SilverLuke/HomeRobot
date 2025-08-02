@@ -1,6 +1,11 @@
-#include <Arduino.h>
-#include <cstdint>
 #include "sensors/battery.h"
+
+#include <Arduino.h>
+#include <Elog.h>
+
+#include <cstdint>
+
+#include "definitions.h"
 
 #define ADC_BATTERY_PIN 2
 // Values in the ADC range 0-4095
@@ -35,11 +40,6 @@ uint8_t init_battery() {
   
 }
 
-void serial_show_battery() {
-  Serial.print("Battery: ");
-  Serial.print(battery_level());
-  Serial.print("%, ");
-  Serial.print(battery_voltage());
-  Serial.print("mV, ");
-  Serial.println(battery_raw());
+void show_battery() {
+  Logger.info(MAIN_LOGGER, "Battery: %i \%, %d mV, %i raw", battery_level(), battery_voltage(), battery_raw());
 }

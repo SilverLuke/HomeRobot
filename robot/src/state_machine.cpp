@@ -122,28 +122,34 @@ ROBOT_STATE serial_commands() {
 }
 
 ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
+  Serial.println("Waiting for commands");
   if (!protocol->ReceivePacket()) {
     return IDLE;
   }
 
   switch (protocol->receive_packet.header.type.receive) {
     case RX_MOTOR_MOVE:
+      Logger.info(MAIN_LOGGER, "Received motor move");
       motor_move(protocol->receive_packet.data);
       break;
     case RX_MOTOR_CONFIG:
+      Logger.info(MAIN_LOGGER, "Received motor config");
       motor_config(protocol->receive_packet.data);
       break;
     case RX_LIDAR_MOTOR:
+      Logger.info(MAIN_LOGGER, "Received Lidar start");
       float hz;
       memcpy(&hz, protocol->receive_packet.data, sizeof(float));
       lidar->setScanTargetFreqHz(hz);
       break;
     case RX_STOP_ALL:
+      Logger.info(MAIN_LOGGER, "Received stop all");
       motor_sx->turn_off();
       motor_dx->turn_off();
       lidar->stopReading();
       break;
     case RX_REQUEST:
+      Logger.info(MAIN_LOGGER, "Received request");
       protocol->receive_packet.header.sequence_millis = millis();
       protocol->SendPacket(protocol->receive_packet);
       break;

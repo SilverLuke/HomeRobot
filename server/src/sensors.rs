@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 pub mod lidar;
 pub mod imu;
 

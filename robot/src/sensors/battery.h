@@ -25,4 +25,4 @@ uint8_t init_battery();
 /**
  * @brief Send to serial the battery level, battery voltage, and the battery raw value
  */
-void serial_show_battery();
+void show_battery();

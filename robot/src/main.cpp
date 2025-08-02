@@ -24,7 +24,7 @@ void show_status() {
   static unsigned long lastStatusRead = 0;
   if (millis() - lastStatusRead >= SEND_BATTERY_STATUS_SERIAL) {
     lastStatusRead = millis();
-    serial_show_battery();
+    show_battery();
     protocol->ShowStatus();
   }
 }
@@ -45,23 +45,27 @@ void setup() {
   }
 
   // Logger setup
-  Logger.configureSyslog(wifi_server_host , 514, "esp32"); // syslog host, port and name of the esp32 device host name
-  Logger.registerSerial(MAIN_LOGGER, ELOG_LEVEL_DEBUG, "Main");
-  Logger.registerSyslog(MAIN_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Main");
-  Logger.registerSerial(PROTO_LOGGER, ELOG_LEVEL_DEBUG, "Protocol");
-  Logger.registerSyslog(PROTO_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Protocol");
-  Logger.registerSerial(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, "Motor");
-  Logger.registerSyslog(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Motor");
-  Logger.registerSerial(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, "Lidar");
-  Logger.registerSyslog(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Lidar");
-  Logger.registerSerial(IMU_LOGGER, ELOG_LEVEL_DEBUG, "IMU");
-  Logger.registerSyslog(IMU_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "IMU");
+  if (Serial) {
+    Serial.print("Serial available, no Rsyslog...");
+    Logger.registerSerial(MAIN_LOGGER, ELOG_LEVEL_DEBUG, "Main");
+    Logger.registerSerial(PROTO_LOGGER, ELOG_LEVEL_DEBUG, "Protocol");
+    Logger.registerSerial(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, "Motor");
+    Logger.registerSerial(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, "Lidar");
+    Logger.registerSerial(IMU_LOGGER, ELOG_LEVEL_DEBUG, "IMU");
+  } else {
+    Logger.configureSyslog(wifi_server_host , 514, "esp32"); // syslog host, port and name of the esp32 device host name
+    Logger.registerSyslog(MAIN_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Main");
+    Logger.registerSyslog(PROTO_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Protocol");
+    Logger.registerSyslog(MOTOR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Motor");
+    Logger.registerSyslog(LIDAR_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "Lidar");
+    Logger.registerSyslog(IMU_LOGGER, ELOG_LEVEL_DEBUG, ELOG_FAC_LOCAL0, "IMU");
+  }
 
   while (init_battery() != 0 || battery_level() < 5) {
     Logger.warning(
         MAIN_LOGGER,
         "Battery not connected or battery level is low. Waiting 5 seconds");
-    serial_show_battery();
+    show_battery();
     led_blink("-", LED_PURPLE);
     delay(5000);
   }
@@ -69,8 +73,8 @@ void setup() {
   init_wifi();
 
   // Port defaults to 3232
-  ArduinoOTA.setPort(54321);
-  ArduinoOTA.setTimeout(10000);
+  // ArduinoOTA.setPort(54321);
+  // ArduinoOTA.setTimeout(10000);
 
   // Hostname defaults to esp3232-[MAC]
   // ArduinoOTA.setHostname("robot.luca.home.arpa");
@@ -82,7 +86,7 @@ void setup() {
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
   // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
 
-  ArduinoOTA
+  /*ArduinoOTA
       .onStart([]() {
         String type;
         if (ArduinoOTA.getCommand() == U_FLASH) {
@@ -112,13 +116,14 @@ void setup() {
         } else if (error == OTA_END_ERROR) {
           Logger.error(MAIN_LOGGER, "End Failed");
         }
-      });
+      });*/
 
-  ArduinoOTA.begin();
+  // ArduinoOTA.begin();
 
   init_server_connection();
   init_motors();
   init_i2c();
+
   lidar = new Lidar();
   imu = new IMU();
 
@@ -142,10 +147,9 @@ void loop() {
     wifi_commands(protocol, lidar, imu);
   }
 
-  apply_state(state, lidar, imu);
+  // apply_state(state, lidar, imu);
 
-  protocol->Loop();
+  // protocol->Loop();
 
-  ArduinoOTA.handle();
-  delay(100);
+  // ArduinoOTA.handle();
 }

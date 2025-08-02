@@ -1,15 +1,17 @@
 #include "protocol.h"
 
-#include <arpa/inet.h>
+#include <Elog.h>
 #include <Esp.h>
 #include <WiFi.h>
-#include <Elog.h>
+#include <arpa/inet.h>
+#include <sys/unistd.h>
 
 #include <cstdint>
 
 #include "definitions.h"
 #include "packet_types.h"
 #include "secrets.h"
+#include "utils/utils.h"
 
 Protocol::Protocol() {
   // Initialize the Wi-Fi client
@@ -24,7 +26,7 @@ void Protocol::connect() {
   while (!this->server_connection.connect(wifi_server_host, wifi_server_port) &&
          attempts++ < 5) {
     Logger.debug(PROTO_LOGGER, "Failed to connect to server");
-    delay(1000);
+    delay(2000);
   }
   if (attempts >= 5) {
     Logger.error(PROTO_LOGGER, "Failed to connect to server");
@@ -70,6 +72,13 @@ void Protocol::ShowStatus() {
               this->read_header,
               this->sensors_count
               );
+  if (this->server_connection.connected()) {
+    neopixelWrite(RGB_BUILTIN, LED_GREEN);
+  } else if (WiFi.isConnected()) {
+    neopixelWrite(RGB_BUILTIN, LED_ORANGE);
+  } else {
+    neopixelWrite(RGB_BUILTIN, LED_RED);
+  }
 }
 
 size_t Protocol::HeaderSize() {
@@ -123,13 +132,19 @@ void Protocol::ParseHeader() {
   this->read_header = true;
 }
 
+#include <errno.h>
+
 bool Protocol::ReceivePacket() {
+  errno = 0;
   // Read the TCP channel from wifi.
   int16_t prefix = this->server_connection.read(
     this->rx_buffer + this->rx_used,
     RX_BUFFER_SIZE - this->rx_used
   );
-
+  if (errno > 0) {
+    Logger.error(PROTO_LOGGER, "Error reading from server: %s", strerror(errno));
+    return false;
+  }
   if (prefix < 0) {
     Logger.error(PROTO_LOGGER, "Unable to read %d", prefix);
     return false;
