@@ -8,21 +8,27 @@ use crate::SendPacketType::TxMotorMove;
 
 
 // Motor command structure
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MotorCommand {
-    pub(crate) right_power: u8,
-    pub(crate) right_angle: f32,
-    pub(crate) left_power: u8,
-    pub(crate) left_angle: f32,
+#[derive(Debug, Clone, PartialEq)]
+pub enum MotorCommand {
+    Direct { 
+        left_speed: i16,
+        right_speed: i16,
+    }, // Motor speed directly from -255 to 255
+    Angle { 
+        left_power: u8, 
+        left_angle: f32,
+        right_power: u8,
+        right_angle: f32,
+    }, // Existing angle-based movement
 }
 
 impl Default for MotorCommand {
     fn default() -> Self {
-        Self {
-            right_power: 0,
-            right_angle: 0.0,
+        Self::Angle {
             left_power: 0,
             left_angle: 0.0,
+            right_power: 0,
+            right_angle: 0.0,
         }
     }
 }
@@ -31,7 +37,7 @@ impl Default for MotorCommand {
 pub fn send_manual_command(motor_command: Arc<Mutex<MotorCommand>>, protocol: &mut ProtocolManager<TcpStream>, start_time: Instant, last_sent_command: &mut MotorCommand) {
     let mut new_command = None;
     if let Ok(current_command) = motor_command.lock() {
-        new_command = Some(*current_command);
+        new_command = Some(current_command.clone());
     }
 
     // Send motor commands periodically, but only if they've changed
@@ -39,17 +45,30 @@ pub fn send_manual_command(motor_command: Arc<Mutex<MotorCommand>>, protocol: &m
         // Only send it if the command is different from the last one sent
         if current_command != *last_sent_command {
             let millis = start_time.elapsed().as_millis() as u32;
-            let packet = craft_motor_packet(
-                current_command.right_power,
-                current_command.right_angle,
-                current_command.left_power,
-                current_command.left_angle,
-                millis
-            );
 
-            println!("Sending motor command: Left power: {}, Right power: {}",
-                     current_command.left_power as f32 * current_command.left_angle, 
-                     current_command.right_power as f32 * current_command.right_angle);
+            let packet = match current_command {
+                MotorCommand::Direct { right_speed, left_speed } => {
+                    // Normalize direct command speeds to power and angles
+                    let left_power = left_speed.abs() as u8;
+                    let left_angle = if left_speed >= 0 { 1.0 } else { -1.0 };
+                    let right_power = right_speed.abs() as u8;
+                    let right_angle = if right_speed >= 0 { 1.0 } else { -1.0 };
+                    craft_motor_packet(right_power, right_angle, left_power, left_angle, millis)
+                }
+                MotorCommand::Angle {
+                    right_power,
+                    right_angle,
+                    left_power,
+                    left_angle,
+                } => {
+                    craft_motor_packet(right_power, right_angle, left_power, left_angle, millis)
+                }
+            };
+
+            println!(
+                "Sending motor command: {:?}",
+                current_command
+            );
 
             if let Err(e) = protocol.send_packet(&packet) {
                 eprintln!("Error sending motor command: {:?}", e);
@@ -71,7 +90,7 @@ fn craft_header(millis:u32, packet_type: SendPacketType, length: u16) -> Vec<u8>
     header[5..7].copy_from_slice(&(length.to_be_bytes()));
     header
 }
-fn craft_motor_packet(right_power: u8, right_angle: f32, left_power:u8, left_angle: f32, millis:u32) -> Vec<u8> {
+fn craft_motor_packet(left_power:u8, left_angle: f32, right_power: u8, right_angle: f32, millis:u32) -> Vec<u8> {
     let header = craft_header(millis, TxMotorMove, 10);
 
     // 17 is the length of the entire packet header 7 + 10 of the body

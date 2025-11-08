@@ -8,7 +8,7 @@ use circular_buffer::CircularBuffer;
 use std::error::Error;
 use std::io;
 use std::io::{Read, Write};
-
+use std::sync::atomic::AtomicUsize;
 
 struct MessageHeader {
     sequence_millis:u32,
@@ -21,6 +21,9 @@ pub struct ProtocolManager<S: Read + Write>{
     read_buffer: Box<CircularBuffer<BUFFER_SIZE, u8>>,
 
     current_header: Option<MessageHeader>,
+
+    rx_bytes: AtomicUsize,
+    tx_bytes: AtomicUsize,
 }
 
 impl<S: Read + Write> ProtocolManager<S> {
@@ -29,6 +32,8 @@ impl<S: Read + Write> ProtocolManager<S> {
             stream,
             read_buffer: CircularBuffer::<BUFFER_SIZE, u8>::boxed(),
             current_header: None,
+            rx_bytes: AtomicUsize::new(0),
+            tx_bytes: AtomicUsize::new(0),
         }
     }
 
@@ -40,6 +45,12 @@ impl<S: Read + Write> ProtocolManager<S> {
                         return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
                     }                }
                 if let Some(packet) = self.fetch_body() {
+                    println!("Received command! H {} RX {} TX {}",
+                             packet.sequence_millis,
+                             self.rx_bytes.load(std::sync::atomic::Ordering::Relaxed),
+                             self.tx_bytes.load(std::sync::atomic::Ordering::Relaxed)
+                    );
+
                     self.current_header = None;
                     Ok(Some(packet))
                 } else { 
@@ -51,8 +62,13 @@ impl<S: Read + Write> ProtocolManager<S> {
     }
 
     pub fn send_packet(&mut self, packet: &[u8]) -> Result<(), std::io::Error> {
-        self.stream.write_all(packet)?;
+        let bytes_written = self.stream.write(packet)?;
         self.stream.flush()?;
+
+        let total_bytes = self.tx_bytes.fetch_add(bytes_written, std::sync::atomic::Ordering::Relaxed);
+
+        println!("Sent {} bytes", bytes_written+total_bytes);
+
         Ok(())
     }
     
@@ -120,6 +136,7 @@ impl<S: Read + Write> ProtocolManager<S> {
         match self.stream.read(&mut buffer) {
             Ok(0) => Ok(0),
             Ok(read_bytes) => {
+                self.rx_bytes.fetch_add(read_bytes, std::sync::atomic::Ordering::Relaxed);
                 let free_space = BUFFER_SIZE - self.read_buffer.len();
                 println!("Read: {} B, Buffer used {} free space {}", read_bytes, self.read_buffer.len(), free_space);
                 if  free_space >= read_bytes {

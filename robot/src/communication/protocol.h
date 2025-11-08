@@ -88,6 +88,7 @@ class Protocol {
   void ParseHeader();
 
  public:
+  uint16_t tx_bytes, rx_bytes;
   HomeRobotPacket receive_packet;
 
   Protocol();

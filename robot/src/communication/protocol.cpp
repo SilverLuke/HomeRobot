@@ -56,6 +56,9 @@ void Protocol::SoftRestart() {
   this->rx_used = 0;
   this->read_header = false;
 
+  this->tx_bytes = 0;
+  this->rx_bytes = 0;
+
   if (!this->server_connection.connected()) {
     Logger.info(PROTO_LOGGER, "Server not connected, restarting");
     this->server_connection = WiFiClient();
@@ -141,16 +144,14 @@ bool Protocol::ReceivePacket() {
     this->rx_buffer + this->rx_used,
     RX_BUFFER_SIZE - this->rx_used
   );
-  if (errno > 0) {
+  if (errno > 0 || prefix < 0) {
     Logger.error(PROTO_LOGGER, "Error reading from server: %s", strerror(errno));
-    return false;
-  }
-  if (prefix < 0) {
-    Logger.error(PROTO_LOGGER, "Unable to read %d", prefix);
     return false;
   }
 
   this->rx_used += prefix;
+  this->rx_bytes += prefix;
+
   // Not enough data to parse the header
   if (this->rx_used < HeaderSize()) {
     return false;
@@ -206,9 +207,10 @@ void Protocol::SendSensors() {
   for (size_t i = 0; i < this->sensors_count; i++) {
     Sensor* sensor = this->sensors[i];
     uint16_t dataSize = sensor->getDataSize();
+    const char* sensor_name = sensor->name().c_str();
 
     if (dataSize > 0) {
-      Logger.debug(PROTO_LOGGER, "Creating packet for sensor %s with size %d", sensor->name(), dataSize);
+      Logger.debug(PROTO_LOGGER, "Creating packet for sensor %s with size %d", sensor_name, dataSize);
       // Generate header for the sensor data
       int32_t headerSize = GenerateHeader(
           this->tx_buffer + currentBufferOffset,
@@ -219,18 +221,19 @@ void Protocol::SendSensors() {
       );
 
       if (headerSize < 0 || headerSize != 7) {
-        Logger.error(PROTO_LOGGER, "Failed to generate header for sensor %s. Header size %d", sensor->name(), headerSize);
+        Logger.error(PROTO_LOGGER, "Failed to generate header for sensor %s. Header size %d", sensor_name, headerSize);
         continue;
       }
       currentBufferOffset += headerSize;
 
       // Serialize the sensor data after the header
       int32_t serialization = sensor->serialize(
-              this->tx_buffer + currentBufferOffset,
-              TX_BUFFER_SIZE - currentBufferOffset
-              );
+        this->tx_buffer + currentBufferOffset,
+        TX_BUFFER_SIZE - currentBufferOffset
+        );
+
       if (serialization < 0 || serialization != dataSize) {
-        Logger.error(PROTO_LOGGER, "Failed to serialize sensor %s", sensor[i].name());
+        Logger.error(PROTO_LOGGER, "Failed to serialize sensor %s", sensor_name);
         continue;
       }
       // Todo handle roll back if a sensor was unable to serialize.
@@ -250,11 +253,13 @@ void Protocol::SendSensors() {
 
     size_t bytesWritten =
         this->server_connection.write(this->tx_buffer, currentBufferOffset);
+
     if (bytesWritten == 0) {
       Logger.error(PROTO_LOGGER, "Failed to send complete sensors packet. Expected: %d, Sent: %d", currentBufferOffset, bytesWritten);
       this->server_connection.stop();
       this->HardRestart();
     } else {
+      this->tx_bytes += bytesWritten;
       this->server_connection.flush();
     }
   }

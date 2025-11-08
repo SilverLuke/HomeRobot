@@ -188,7 +188,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 && inputs.pressed_keys.contains(&Keycode::D)
             {
                 // Forward and turn right
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: POWER / 2,
@@ -198,7 +198,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 && inputs.pressed_keys.contains(&Keycode::A)
             {
                 // Forward and turn left
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: POWER / 2,
                     left_angle: 1.0,
                     right_power: POWER,
@@ -206,7 +206,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::W) {
                 // Forward
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: POWER,
@@ -214,7 +214,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::S) {
                 // Backward
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: POWER,
                     left_angle: -1.0,
                     right_power: POWER,
@@ -222,7 +222,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::A) {
                 // Turn left
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: 0,
                     left_angle: 0.0,
                     right_power: POWER,
@@ -230,7 +230,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::D) {
                 // Turn right
-                Some(MotorCommand {
+                Some(MotorCommand::Angle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: 0,
@@ -238,8 +238,9 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
                 Some(MotorCommand::default())
-            } else if inputs.pressed_keys.contains(&Keycode::Escape) ||
-                inputs.pressed_keys.contains(&Keycode::Q) {
+            } else if inputs.pressed_keys.contains(&Keycode::Escape)
+                || inputs.pressed_keys.contains(&Keycode::Q)
+            {
                 println!("Exiting...");
                 std::process::exit(0);
             } else {
@@ -249,32 +250,32 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
         }
         TYPE::Joystick => {
             if inputs.b {
-                return Some(MotorCommand {
-                    left_power: 0,
-                    left_angle: 0.0,
-                    right_power: 0,
-                    right_angle: 0.0,
-                });
+                return Some(MotorCommand::default());
             }
-
+            // X and Y give the left/right direction and forward/backward direction
             let x_norm = inputs.left_stick_x as f32 / i16::MAX as f32;
             let y_norm = inputs.left_stick_y as f32 / i16::MAX as f32;
-            let r = y_norm + x_norm;
-            let l = y_norm - x_norm;
-            let x = f32::abs(-0.2349).clamp(0.0, 3.4);
-            return Some(MotorCommand {
-                right_power: (r.abs() * u8::MAX as f32) as u8,
-                right_angle: if f32::is_sign_positive(r) { -1. } else { 1. },
-                left_power: (l.abs() * u8::MAX as f32) as u8,  
-                left_angle: if f32::is_sign_positive(l) { -1. } else { 1. },
+            // Stick x, y -> motor left, right
+            // (0, 0) -> (0, 0)
+            // (0, 1) -> (1, 1)
+            // (1, 0) -> (1, -1)
+            // (0, -1) -> (-1, -1)
+            // (0, -1) -> (-1, 1)
+            // A = [ 1 , 1 ]
+            //     [ -1 , 1 ]   = A(x, y) = (y+x, y-x)
+
+            let left_motor_speed = (y_norm + x_norm) * u8::MAX as f32;
+            let right_motor_speed = (y_norm - x_norm) * u8::MAX as f32;
+
+            return Some(MotorCommand::Direct {
+                left_speed: left_motor_speed as i16,
+                right_speed: right_motor_speed as i16,
             });
         }
         TYPE::Trigger => {
-            return Some(MotorCommand {
-                left_power: inputs.left_trigger,
-                left_angle: 1.0,
-                right_power: inputs.right_trigger,
-                right_angle: 1.0,
+            return Some(MotorCommand::Direct {
+                left_speed: inputs.left_trigger as i16,
+                right_speed: inputs.right_trigger as i16,
             });
         }
     }
@@ -310,7 +311,7 @@ mod tests {
         let command = elaborate_input(&mut inputs, TYPE::Keyboard);
         assert_eq!(command.is_some(), false);
     }
-    
+
     #[test]
     fn test_elaborate_input_keyboard_w() {
         let mut set = HashSet::new();
@@ -329,64 +330,32 @@ mod tests {
 
         let command = elaborate_input(&mut inputs, TYPE::Keyboard);
         assert_eq!(command.is_some(), true);
-        
-        let command = command.unwrap();
-        assert_eq!(command.left_power, POWER);
-        assert_eq!(command.left_angle, 1.0);
-        assert_eq!(command.right_power, POWER);
-        assert_eq!(command.right_angle, 1.0);
-    }
 
-    // #[test]
-    // fn test_elaborate_input_keyboard_escape() {
-    //     let mut set = HashSet::new();
-    //     set.insert(Keycode::Escape);
-    //     let mut inputs = Input {
-    //         left_stick_x: 0,
-    //         left_stick_y: 0,
-    //         right_trigger: 0,
-    //         left_trigger: 0,
-    //         a: false,
-    //         b: false,
-    //         x: false,
-    //         y: false,
-    //         pressed_keys: set,
-    //     };
-    // 
-    //     // Exiting the program is not possible to test as it terminates the process, so we omit actual behavior here
-    //     let command = elaborate_input(&mut inputs, TYPE::Keyboard);
-    //     assert_eq!(command.is_some(), true);
-    // }
+        let command = command.unwrap();
+        match command {
+            MotorCommand::Angle {
+                left_power,
+                left_angle,
+                right_power,
+                right_angle,
+            } => {
+                assert_eq!(left_power, POWER);
+                assert_eq!(left_angle, 1.0);
+                assert_eq!(right_power, POWER);
+                assert_eq!(right_angle, 1.0);
+            }
+            _ => panic!("Expected MotorCommand::Angle variant."),
+        }
+    }
 
     #[test]
     fn test_elaborate_input_joystick_forward() {
+        // (0, 1) -> (1, 1)
         let mut inputs = Input {
-            left_stick_x: i16::MAX,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-        let result = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(result.is_some(), true);
-        
-        let mc = result.unwrap();
-        assert_eq!(mc.left_power, 255); // (MAX - MAX normalized to 0)
-        assert_eq!(mc.right_power, 127); // Maximum combined power
-    }
-
-    #[test]
-    fn test_elaborate_input_joystick_forward_right() {
-        let mut inputs = Input {
-            left_stick_x: i16::MAX,
+            left_stick_x: 0,
             left_stick_y: i16::MAX,
-            right_trigger: 0,
             left_trigger: 0,
+            right_trigger: 0,
             a: false,
             b: false,
             x: false,
@@ -394,21 +363,30 @@ mod tests {
             pressed_keys: HashSet::new(),
         };
 
-        let result = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(result.is_some(), true);
-        
-        let mc = result.unwrap();
-        assert_eq!(mc.left_power, 255); // (MAX - MAX normalized to 0)
-        assert_eq!(mc.right_power, 127); // Maximum combined power
+        let command = elaborate_input(&mut inputs, TYPE::Joystick);
+        assert_eq!(command.is_some(), true);
+
+        let command = command.unwrap();
+        match command {
+            MotorCommand::Direct {
+                right_speed,
+                left_speed,
+            } => {
+                assert_eq!(right_speed, 255);
+                assert_eq!(left_speed, 255);
+            }
+            _ => panic!("Expected MotorCommand::Direct variant."),
+        }
     }
 
     #[test]
     fn test_elaborate_input_joystick_right() {
+        // (1, 0) -> (1, -1)
         let mut inputs = Input {
             left_stick_x: i16::MAX,
-            left_stick_y: i16::MAX,
-            right_trigger: 0,
+            left_stick_y: 0,
             left_trigger: 0,
+            right_trigger: 0,
             a: false,
             b: false,
             x: false,
@@ -416,12 +394,55 @@ mod tests {
             pressed_keys: HashSet::new(),
         };
 
-        let result = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(result.is_some(), true);
-        
-        let mc = result.unwrap();
-        assert_eq!(mc.left_power, 255); // (MAX - MAX normalized to 0)
-        assert_eq!(mc.right_power, 127); // Maximum combined power
+        let command = elaborate_input(&mut inputs, TYPE::Joystick);
+        assert_eq!(command.is_some(), true);
+
+
+        let command = command.unwrap();
+        match command {
+            MotorCommand::Direct {
+                left_speed,
+                right_speed,
+            } => {
+                assert_eq!(left_speed, u8::MAX as i16);
+                assert_eq!(right_speed, -(u8::MAX as i16));
+            }
+            _ => panic!("Expected MotorCommand::Direct variant."),
+        }
+    }
+
+
+    #[test]
+    fn test_elaborate_input_joystick_left() {
+        // (-1, 0) -> (-1, 1)
+        let mut inputs = Input {
+            left_stick_x: i16::MIN,
+            left_stick_y: 0,
+            left_trigger: 0,
+            right_trigger: 0,
+            a: false,
+            b: false,
+            x: false,
+            y: false,
+            pressed_keys: HashSet::new(),
+        };
+
+
+        let command = elaborate_input(&mut inputs, TYPE::Joystick);
+        assert_eq!(command.is_some(), true);
+
+
+        let command = command.unwrap();
+        match command {
+            MotorCommand::Direct {
+                left_speed,
+                right_speed,
+            } => {
+                assert_eq!(left_speed, -255);
+                assert_eq!(right_speed, 255);
+            }
+            _ => panic!("Expected MotorCommand::Direct variant."),
+        }
     }
 
     #[test]
@@ -430,8 +451,8 @@ mod tests {
         let mut inputs = Input {
             left_stick_x: 0,
             left_stick_y: 0,
-            right_trigger: 127,
             left_trigger: 255,
+            right_trigger: 127,
             a: false,
             b: false,
             x: false,
@@ -439,14 +460,21 @@ mod tests {
             pressed_keys: HashSet::new(),
         };
 
-        let result = elaborate_input(&mut inputs, TYPE::Trigger);
-        assert_eq!(result.is_some(), true);
-        
-        let mc = result.unwrap();
-        assert_eq!(mc.left_power, 255);
-        assert_eq!(mc.right_power, 127);
-        assert_eq!(mc.left_angle, 1.0);
-        assert_eq!(mc.right_angle, 1.0);
+        let command = elaborate_input(&mut inputs, TYPE::Trigger);
+        assert_eq!(command.is_some(), true);
+
+
+        let command = command.unwrap();
+        match command {
+            MotorCommand::Direct {
+                left_speed,
+                right_speed,
+            } => {
+                assert_eq!(left_speed, 255);
+                assert_eq!(right_speed, 127);
+            }
+            _ => panic!("Expected MotorCommand::Arc variant."),
+        }
     }
 
     /*
