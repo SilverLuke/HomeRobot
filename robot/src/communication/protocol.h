@@ -36,15 +36,14 @@
  * unit8_t*: 4
  */
 #pragma once
-#include <WiFi.h>
-
 #include <cstdint>
 
 #include "sensors/sensor.h"
+#include "communication/net_client.h"
 
-#define RX_BUFFER_SIZE 256
-#define RX_MAX_DATA    128
-#define TX_BUFFER_SIZE 1024
+#define RX_MAX_PACKET_SIZE    (128)
+#define RX_BUFFER_SIZE    (RX_MAX_PACKET_SIZE * 8)
+#define TX_BUFFER_SIZE (1024)
 
 /**
  * @struct HomeRobotPacket
@@ -63,18 +62,28 @@ struct HomeRobotHeader {
 
 struct HomeRobotPacket {
   HomeRobotHeader header;
-  uint8_t* data = new uint8_t[RX_MAX_DATA];
+  uint8_t* data = new uint8_t[RX_MAX_PACKET_SIZE];
 };
+
+class ProtocolStats {
+  public:
+  uint32_t rx_packets;
+  uint32_t tx_packets;
+  uint32_t rx_bytes;
+  uint32_t tx_bytes;
+
+};
+
 
 class Protocol {
  private:
-  WiFiClient server_connection;
+  NetClient* server_connection = nullptr;
   // Transmission stuff
   uint8_t* tx_buffer = new uint8_t[TX_BUFFER_SIZE];
 
   // Reception
   uint32_t rx_latest_millis = 0;
-  size_t rx_used = 0;
+  size_t rx_buffer_index = 0;
   uint8_t* rx_buffer = new uint8_t[RX_BUFFER_SIZE];
 
   // 5 -> Lidar, 2 motors, imu, battery.
@@ -86,17 +95,22 @@ class Protocol {
    * @brief Parse the rx_buffer to build the header.
    */
   void ParseHeader();
+  bool process_next_packet();
+  void read_raw_data();
 
  public:
-  uint16_t tx_bytes, rx_bytes;
-  HomeRobotPacket receive_packet;
+  ProtocolStats* stats;
+
+  HomeRobotPacket receive_packet = {};
 
   Protocol();
+  Protocol(NetClient* client);
+
   // Utils
-  void connect();
+  void connect() const;
   void HardRestart();
   void SoftRestart();
-  bool isConnected();
+  bool isConnected() const;
   void ShowStatus();
 
   // Send stuff

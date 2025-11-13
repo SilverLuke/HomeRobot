@@ -103,7 +103,7 @@ fn handle_connection(stream: TcpStream, motor_command: Arc<Mutex<MotorCommand>>)
 
         send_manual_command(motor_command.clone(), &mut protocol, start_time, &mut last_sent_command);
 
-        sleep(Duration::from_millis(10)); // Small delay to prevent busy waiting
+        sleep(Duration::from_millis(100)); // Small delay to prevent busy waiting
     }
 }
 
@@ -115,7 +115,7 @@ fn start_server(address: &str) -> io::Result<()> {
     println!("Server listening on {}", address);
 
     // Shared motor command state
-    let motor_command = Arc::new(Mutex::new(MotorCommand::default()));
+    let motor_command = Arc::new(Mutex::new(MotorCommand::Stop));
 
     // Start keyboard input handler in a separate thread
     let motor_command_clone = Arc::clone(&motor_command);

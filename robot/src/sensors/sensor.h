@@ -1,9 +1,9 @@
 #pragma once
 
 
+#include <Arduino.h>
 #include <cstddef>  // for size_t
 #include <cstdint>  // for uint8_t, uint16_t, int32_t
-#include <Arduino.h>
 
 #include "communication/packet_types.h"
 

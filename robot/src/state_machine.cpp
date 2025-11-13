@@ -126,7 +126,6 @@ ROBOT_STATE wifi_commands(Protocol* protocol, Lidar* lidar, IMU* imu) {
     return IDLE;
   }
 
-  Serial.println("Received command!. H " + String(protocol->receive_packet.header.sequence_millis) + " Rx " + String(protocol->rx_bytes) + " TX " + String(protocol->tx_bytes));
   switch (protocol->receive_packet.header.type.receive) {
     case RX_MOTOR_MOVE:
       Logger.info(MAIN_LOGGER, "Received motor move");

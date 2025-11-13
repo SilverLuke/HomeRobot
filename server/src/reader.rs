@@ -5,7 +5,6 @@ use crate::constants::{BUFFER_SIZE, HEADER_SIZE};
 use crate::{HomeRobotPacket, PacketType, ReceivePacketType};
 use byteorder::{NetworkEndian, ReadBytesExt};
 use circular_buffer::CircularBuffer;
-use std::error::Error;
 use std::io;
 use std::io::{Read, Write};
 use std::sync::atomic::AtomicUsize;
@@ -42,18 +41,22 @@ impl<S: Read + Write> ProtocolManager<S> {
             Ok(_) => {
                 if self.current_header.is_none() {
                     if let Err(e) = self.parse_header() {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
-                    }                }
+                        return Err(e);
+                    }
+                }
                 if let Some(packet) = self.fetch_body() {
-                    println!("Received command! H {} RX {} TX {}",
-                             packet.sequence_millis,
-                             self.rx_bytes.load(std::sync::atomic::Ordering::Relaxed),
-                             self.tx_bytes.load(std::sync::atomic::Ordering::Relaxed)
+                    println!(
+                        "Received command! H {} RX {} TX {}",
+                        packet.sequence_millis,
+                        self.rx_bytes
+                            .load(std::sync::atomic::Ordering::SeqCst),
+                        self.tx_bytes
+                            .load(std::sync::atomic::Ordering::SeqCst)
                     );
 
                     self.current_header = None;
                     Ok(Some(packet))
-                } else { 
+                } else {
                     Ok(None)
                 }
             }
@@ -65,40 +68,35 @@ impl<S: Read + Write> ProtocolManager<S> {
         let bytes_written = self.stream.write(packet)?;
         self.stream.flush()?;
 
-        let total_bytes = self.tx_bytes.fetch_add(bytes_written, std::sync::atomic::Ordering::Relaxed);
+        let prev_total = self
+            .tx_bytes
+            .fetch_add(bytes_written, std::sync::atomic::Ordering::SeqCst);
+        let new_total = prev_total + bytes_written;
 
-        println!("Sent {} bytes", bytes_written+total_bytes);
+        println!("Sent {} bytes (total tx {})", bytes_written, new_total);
 
         Ok(())
     }
     
-    fn parse_header(&mut self) -> Result<(), Box<dyn Error>>{
+    fn parse_header(&mut self) -> io::Result<()> {
         if self.read_buffer.len() < HEADER_SIZE {
             return Ok(());
         }
-        
-        // Buffer to read the packet's header (4 bytes for millis, 1 byte for type, 2 bytes for size)
-        print!("Parsing header: ");
 
         // Read millis (u32, 4 bytes)
-        let millis = self.read_buffer.read_u32::<NetworkEndian>()
-            .map_err(|e| {println!("ERR!"); format!("Failed to read milliseconds: {}", e)})?;
-        print!("Millis: {}. ", millis);
+        let millis = self.read_buffer.read_u32::<NetworkEndian>()?;
 
         // Read sensor type (u8, 1 byte)
-        let packet_type_value_raw = self.read_buffer.read_u8()
-            .map_err(|e| {println!("ERR!"); format!("Failed to read packet type: {}", e)})?;
-        print!("Packet type value: {packet_type_value_raw}. ");
-
-        let packet_type = ReceivePacketType::try_from(packet_type_value_raw)
-            .map_err(|_| {println!("ERR!"); format!("Invalid packet type value: {}", packet_type_value_raw)})?;
-        print!("({packet_type:?}). ");
+        let packet_type_value_raw = self.read_buffer.read_u8()?;
+        let packet_type = ReceivePacketType::try_from(packet_type_value_raw).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid packet type value: {}", packet_type_value_raw),
+            )
+        })?;
 
         // Read the size of the data (u16, 2 bytes)
-        let size = self.read_buffer.read_u16::<NetworkEndian>()
-            .map_err(|e| {println!("ERR!"); format!("Failed to read data size: {}", e)})?;
-        let total_size = size + HEADER_SIZE as u16;
-        println!("Data size: {size} B ({total_size} B).");
+        let size = self.read_buffer.read_u16::<NetworkEndian>()?;
 
         self.current_header = Some(MessageHeader {
             sequence_millis: millis,
@@ -111,14 +109,13 @@ impl<S: Read + Write> ProtocolManager<S> {
     fn fetch_body(&mut self) -> Option<HomeRobotPacket> {
         if let Some(header) = &self.current_header {
             if self.read_buffer.len() >= header.size as usize {
-                // Read the bytes from read_buffer into a temporary array first
-                let mut temp_buffer = vec![0u8; header.size as usize];
-                self.read_buffer.read_exact(&mut temp_buffer).expect("This should not occur");
+                let mut data = vec![0u8; header.size as usize];
+                self
+                    .read_buffer
+                    .read_exact(&mut data)
+                    .expect("Failed to read expected packet body from buffer");
 
-                //data.extend_from_slice(&temp_buffer);
-                let data = Vec::from(temp_buffer);
-                
-                return Some(HomeRobotPacket{
+                return Some(HomeRobotPacket {
                     sequence_millis: header.sequence_millis,
                     packet_type: header.packet_type,
                     size: header.size,
@@ -132,17 +129,23 @@ impl<S: Read + Write> ProtocolManager<S> {
 
     // Function to handle individual packets from the stream
     fn do_read(&mut self) -> io::Result<usize> {
-        let mut buffer: Box<[u8]> = Box::new([0u8; BUFFER_SIZE]);
+        let mut buffer = [0u8; BUFFER_SIZE];
         match self.stream.read(&mut buffer) {
             Ok(0) => Ok(0),
             Ok(read_bytes) => {
-                self.rx_bytes.fetch_add(read_bytes, std::sync::atomic::Ordering::Relaxed);
+                self.rx_bytes
+                    .fetch_add(read_bytes, std::sync::atomic::Ordering::SeqCst);
                 let free_space = BUFFER_SIZE - self.read_buffer.len();
-                println!("Read: {} B, Buffer used {} free space {}", read_bytes, self.read_buffer.len(), free_space);
-                if  free_space >= read_bytes {
+                println!(
+                    "Read: {} B, Buffer used {} free space {}",
+                    read_bytes,
+                    self.read_buffer.len(),
+                    free_space
+                );
+                if free_space >= read_bytes {
                     self.read_buffer.extend(&buffer[..read_bytes]);
                     Ok(read_bytes)
-                } else { 
+                } else {
                     Err(io::Error::new(io::ErrorKind::Other, "Buffer overflow"))
                 }
             }
@@ -150,7 +153,7 @@ impl<S: Read + Write> ProtocolManager<S> {
                 // No data is available right now, but this is not a real error
                 Ok(0)
             }
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 

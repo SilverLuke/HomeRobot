@@ -19,12 +19,12 @@ enum TYPE {
 
 #[repr(u8)]
 enum JoystickButton {
-    A = 10,
-    B = 0,
-    X,
-    Y,
-    LB,
-    RB,
+    A = 0,
+    B = 1,
+    X = 2,
+    Y = 3,
+    LB = 4,
+    RB = 5,
     Back,
     Start,
     Home,
@@ -250,7 +250,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
         }
         TYPE::Joystick => {
             if inputs.b {
-                return Some(MotorCommand::default());
+                return Some(MotorCommand::Stop);
             }
             // X and Y give the left/right direction and forward/backward direction
             let x_norm = inputs.left_stick_x as f32 / i16::MAX as f32;

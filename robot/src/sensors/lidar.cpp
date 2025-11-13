@@ -1,8 +1,8 @@
 #include "sensors/lidar.h"
 
+#include "../communication/protocol.h"
 #include "../utils/utils.h"
 #include "LDS_RPLIDAR_A1.h"
-#include "communication/protocol.h"
 #include "definitions.h"
 
 Lidar* Lidar::instance = nullptr;
