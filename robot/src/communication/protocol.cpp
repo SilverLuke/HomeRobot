@@ -20,6 +20,7 @@ Protocol::Protocol(NetClient* client) {
   this->stats = new ProtocolStats();
   this->server_connection = client;
   this->receive_packet = {};
+  this->read_header = false;
   this->connect();
 }
 
@@ -100,7 +101,7 @@ void Protocol::ShowStatus() {
  */
 size_t Protocol::HeaderSize() {
   // Network header is fixed: 4 bytes millis, 1 byte type, 2 bytes size
-  return sizeof(HomeRobotHeader);
+  return 7;
 }
 
 size_t Protocol::SendPacket(const HomeRobotPacket& packet) {
@@ -140,7 +141,7 @@ void Protocol::ParseHeader() {
   memcpy(&this->receive_packet.header.type.receive, this->rx_buffer + sizeof(uint32_t),
          sizeof(this->receive_packet.header.type.receive));
   uint16_t size;
-  memcpy(&size, this->rx_buffer + 5, sizeof(size));
+  memcpy(&size, this->rx_buffer + 4 + 1, sizeof(size));
   this->receive_packet.header.size = ntohs(size);
 
   Logger.debug(PROTO_LOGGER,
@@ -160,15 +161,15 @@ bool Protocol::process_next_packet() {
   }
 
   // If header is read skip this part
-  if (this->read_header == false) {
+  if (!this->read_header) {
     this->ParseHeader();
     this->stats->rx_packets++;
   }
 
   const size_t total_packet_size = HeaderSize() + this->receive_packet.header.size;
   // Packet not fully read
-  if (total_packet_size < this->rx_buffer_index) {
-    return false;
+  if (this->rx_buffer_index < total_packet_size) {
+     return false;
   }
 
   if (total_packet_size > RX_MAX_PACKET_SIZE) {
@@ -182,13 +183,11 @@ bool Protocol::process_next_packet() {
 
   if (this->rx_buffer_index >= total_packet_size) {
     // Copy data FROM buffer TO packet (corrected direction)
-    if (this->receive_packet.header.size > 0) {
-      memcpy(
-        this->receive_packet.data,
-        this->rx_buffer + HeaderSize(),
-        this->receive_packet.header.size
-      );
-    }
+    memcpy(
+      this->receive_packet.data,
+      this->rx_buffer + HeaderSize(),
+      this->receive_packet.header.size
+    );
 
     // Copy the next packet at the beginning of the buffer, for the next cycle.
     // TODO improve this with ring buffer

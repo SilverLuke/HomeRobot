@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use std::cmp;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use byteorder::{NetworkEndian, WriteBytesExt};
@@ -34,6 +35,16 @@ impl Default for MotorCommand {
     }
 }
 
+// impl fmt::Debug for MotorCommand {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match (self) {
+//             MotorCommand::Stop => {},
+//             MotorCommand::Direct { right_speed, left_speed } => {
+//
+//                 write!(f, "
+//
+//     }
+// }
 
 pub fn send_manual_command(
     motor_command: Arc<Mutex<MotorCommand>>,
@@ -76,9 +87,9 @@ fn serialize_command(current_command: &MotorCommand, millis: u32) -> Vec<u8> {
         }
         MotorCommand::Direct { right_speed, left_speed } => {
             // Normalize direct command speeds to power and angles
-            let left_power = left_speed.abs() as u8;
+            let left_power = cmp::min(left_speed.abs(), u8::MAX as i16) as u8;
             let left_angle = if *left_speed >= 0 { 1.0 } else { -1.0 };
-            let right_power = right_speed.abs() as u8;
+            let right_power = cmp::min(right_speed.abs(), u8::MAX as i16) as u8;
             let right_angle = if *right_speed >= 0 { 1.0 } else { -1.0 };
             craft_motor_packet(left_power, left_angle, right_power, right_angle, millis)
         }

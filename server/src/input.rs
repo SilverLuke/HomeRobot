@@ -139,12 +139,14 @@ fn read_input(
                 match axis_idx {
                     0 => {
                         // Left/Right
-                        controller.left_stick_x = value;
+                        // TODO this +1 is shit
+                        controller.left_stick_x = value.checked_neg().unwrap_or(i16::MAX);
                         last_read = TYPE::Joystick;
                     }
                     1 => {
                         // Forward/Backward
-                        controller.left_stick_y = value;
+                        // TODO this +1 is shit
+                        controller.left_stick_y = value.checked_neg().unwrap_or(i16::MAX);
                         last_read = TYPE::Joystick;
                     }
                     2 => {

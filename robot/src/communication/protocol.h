@@ -128,6 +128,10 @@ class Protocol {
   void SendSensors();
   void Loop();
 
+  size_t getUsedBuffer() const { return this->rx_buffer_index; }
+  bool hasReadHeader() const { return this->read_header; }
+  HomeRobotHeader getParsedHeder() const { return this->receive_packet.header; }
+
   // Static functions
   static size_t HeaderSize();
   static int32_t GenerateHeader(
