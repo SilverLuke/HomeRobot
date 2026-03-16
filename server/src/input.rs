@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::input::TYPE::{Keyboard, NoEvent};
-use crate::sender::MotorCommand;
+use crate::sender::RobotCommand;
 use sdl2::{event::Event, keyboard::Keycode, EventPump, JoystickSubsystem, Sdl};
 
 const POWER: u8 = 127;
@@ -77,7 +77,7 @@ pub fn print_summary() {
     println!("Unified input control started. Press ESC to quit.");
 }
 
-pub fn handle_input(motor_command: Arc<Mutex<MotorCommand>>, sdl_context: &Sdl) {
+pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl) {
     let joystick_subsystem = sdl_context.joystick().unwrap();
     let _controller = joystick_subsystem.open(0).ok();
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -99,8 +99,8 @@ pub fn handle_input(motor_command: Arc<Mutex<MotorCommand>>, sdl_context: &Sdl) 
         //}
         
         if let Some(cmd) = command_to_send {
-            if let Ok(mut mc) = motor_command.lock() {
-                *mc = cmd;
+            if let Ok(mut rc) = robot_command.lock() {
+                *rc = cmd;
             }
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -182,7 +182,7 @@ fn read_input(
     last_read
 }
 
-fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand> {
+fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand> {
     match input_type {
         TYPE::NoEvent => {}
         TYPE::Keyboard => {
@@ -190,7 +190,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 && inputs.pressed_keys.contains(&Keycode::D)
             {
                 // Forward and turn right
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: POWER / 2,
@@ -200,7 +200,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 && inputs.pressed_keys.contains(&Keycode::A)
             {
                 // Forward and turn left
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: POWER / 2,
                     left_angle: 1.0,
                     right_power: POWER,
@@ -208,7 +208,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::W) {
                 // Forward
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: POWER,
@@ -216,7 +216,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::S) {
                 // Backward
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: POWER,
                     left_angle: -1.0,
                     right_power: POWER,
@@ -224,7 +224,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::A) {
                 // Turn left
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: 0,
                     left_angle: 0.0,
                     right_power: POWER,
@@ -232,14 +232,14 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::D) {
                 // Turn right
-                Some(MotorCommand::Angle {
+                Some(RobotCommand::MotorAngle {
                     left_power: POWER,
                     left_angle: 1.0,
                     right_power: 0,
                     right_angle: 0.0,
                 })
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
-                Some(MotorCommand::default())
+                Some(RobotCommand::default())
             } else if inputs.pressed_keys.contains(&Keycode::Escape)
                 || inputs.pressed_keys.contains(&Keycode::Q)
             {
@@ -252,7 +252,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
         }
         TYPE::Joystick => {
             if inputs.b {
-                return Some(MotorCommand::Stop);
+                return Some(RobotCommand::StopAll);
             }
             // X and Y give the left/right direction and forward/backward direction
             let x_norm = inputs.left_stick_x as f32 / i16::MAX as f32;
@@ -269,13 +269,13 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<MotorCommand>
             let left_motor_speed = (y_norm + x_norm) * u8::MAX as f32;
             let right_motor_speed = (y_norm - x_norm) * u8::MAX as f32;
 
-            return Some(MotorCommand::Direct {
+            return Some(RobotCommand::MotorDirect {
                 left_speed: left_motor_speed as i16,
                 right_speed: right_motor_speed as i16,
             });
         }
         TYPE::Trigger => {
-            return Some(MotorCommand::Direct {
+            return Some(RobotCommand::MotorDirect {
                 left_speed: inputs.left_trigger as i16,
                 right_speed: inputs.right_trigger as i16,
             });
@@ -291,9 +291,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use sdl2::keyboard::Keycode;
 
-    // Helper function to create an empty MotorCommand instance
-    fn create_motor_command() -> Arc<Mutex<MotorCommand>> {
-        Arc::new(Mutex::new(MotorCommand::default()))
+    // Helper function to create an empty RobotCommand instance
+    fn create_robot_command() -> Arc<Mutex<RobotCommand>> {
+        Arc::new(Mutex::new(RobotCommand::default()))
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
 
         let command = command.unwrap();
         match command {
-            MotorCommand::Angle {
+            RobotCommand::MotorAngle {
                 left_power,
                 left_angle,
                 right_power,
@@ -346,7 +346,7 @@ mod tests {
                 assert_eq!(right_power, POWER);
                 assert_eq!(right_angle, 1.0);
             }
-            _ => panic!("Expected MotorCommand::Angle variant."),
+            _ => panic!("Expected RobotCommand::MotorAngle variant."),
         }
     }
 
@@ -370,14 +370,14 @@ mod tests {
 
         let command = command.unwrap();
         match command {
-            MotorCommand::Direct {
+            RobotCommand::MotorDirect {
                 right_speed,
                 left_speed,
             } => {
                 assert_eq!(right_speed, 255);
                 assert_eq!(left_speed, 255);
             }
-            _ => panic!("Expected MotorCommand::Direct variant."),
+            _ => panic!("Expected RobotCommand::MotorDirect variant."),
         }
     }
 
@@ -402,14 +402,14 @@ mod tests {
 
         let command = command.unwrap();
         match command {
-            MotorCommand::Direct {
+            RobotCommand::MotorDirect {
                 left_speed,
                 right_speed,
             } => {
                 assert_eq!(left_speed, u8::MAX as i16);
                 assert_eq!(right_speed, -(u8::MAX as i16));
             }
-            _ => panic!("Expected MotorCommand::Direct variant."),
+            _ => panic!("Expected RobotCommand::MotorDirect variant."),
         }
     }
 
@@ -436,20 +436,20 @@ mod tests {
 
         let command = command.unwrap();
         match command {
-            MotorCommand::Direct {
+            RobotCommand::MotorDirect {
                 left_speed,
                 right_speed,
             } => {
                 assert_eq!(left_speed, -255);
                 assert_eq!(right_speed, 255);
             }
-            _ => panic!("Expected MotorCommand::Direct variant."),
+            _ => panic!("Expected RobotCommand::MotorDirect variant."),
         }
     }
 
     #[test]
     fn test_elaborate_input_trigger() {
-        let motor_command = create_motor_command();
+        let _robot_command = create_robot_command();
         let mut inputs = Input {
             left_stick_x: 0,
             left_stick_y: 0,
@@ -468,14 +468,14 @@ mod tests {
 
         let command = command.unwrap();
         match command {
-            MotorCommand::Direct {
+            RobotCommand::MotorDirect {
                 left_speed,
                 right_speed,
             } => {
                 assert_eq!(left_speed, 255);
                 assert_eq!(right_speed, 127);
             }
-            _ => panic!("Expected MotorCommand::Arc variant."),
+            _ => panic!("Expected RobotCommand::MotorDirect variant."),
         }
     }
 

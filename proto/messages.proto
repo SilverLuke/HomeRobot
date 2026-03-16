@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package homerobot;
+
+// Represents a single point from a Lidar scan
+message LidarPoint {
+  float distance_mm = 1;
+  float angle_deg = 2;
+  uint32 quality = 3;
+  bool scan_completed = 4;
+}
+
+// A collection of Lidar points
+message LidarScan {
+  repeated LidarPoint points = 1;
+}
+
+// Standard 3D vector for IMU data
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+// IMU sensor data including acceleration, gyroscope, and optionally magnetometer
+message ImuData {
+  Vector3 acceleration = 1;
+  Vector3 gyroscope = 2;
+  optional Vector3 magnetometer = 3;
+}
+
+// Battery status information
+message BatteryStatus {
+  uint32 percentage = 1;
+  uint32 voltage_mv = 2;
+  uint32 raw_value = 3;
+}
+
+// Encoder values from both motors
+message MotorEncoders {
+  int32 left_encoder = 1;
+  int32 right_encoder = 2;
+}
+
+// PID configuration for a single motor
+message MotorPidConfig {
+  float kp = 1;
+  float ki = 2;
+  float kd = 3;
+  uint32 max_speed = 4;
+}
+
+// Full robot configuration state
+message RobotConfig {
+  MotorPidConfig left_motor = 1;
+  MotorPidConfig right_motor = 2;
+  float lidar_frequency = 3;
+}
+
+// Command to move the motors
+message MotorMoveCommand {
+  uint32 left_power = 1;
+  float left_angle = 2;
+  uint32 right_power = 3;
+  float right_angle = 4;
+}
+
+// Command to control the Lidar
+message LidarControlCommand {
+  float target_frequency_hz = 1;
+  bool active = 2;
+}
+
+// Wrapper message for data sent from the Robot (ESP32) to the Server
+message RobotToServerMessage {
+  uint32 sequence_millis = 1;
+  oneof payload {
+    LidarScan lidar = 2;
+    ImuData imu = 3;
+    BatteryStatus battery = 4;
+    MotorEncoders encoders = 5;
+    RobotConfig config = 6;
+    bool heartbeat = 7;
+  }
+}
+
+// Wrapper message for data sent from the Server to the Robot (ESP32)
+message ServerToRobotMessage {
+  uint32 sequence_millis = 1;
+  oneof payload {
+    MotorMoveCommand motor_move = 2;
+    RobotConfig motor_config = 3;
+    LidarControlCommand lidar_control = 4;
+    bool stop_all = 5;
+    bool request_data = 6;
+  }
+}

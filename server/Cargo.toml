@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-byteorder = "1.4"
 circular-buffer = "1.2.0"
 mockall = "0.13.1"
-num_enum = "0.7.3"
 sdl2 = "0.38.0"
+prost = "0.13"
+
+[build-dependencies]
+prost-build = "0.13"
 
 # [dependencies.gtk]
 # package = "gtk4"
