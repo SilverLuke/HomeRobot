@@ -11,6 +11,7 @@ robot/lib/FastIMU
 
 # Server
 server/target
+target
 
 # Zephyr
 zephyr-port/zephyr_led_app/build

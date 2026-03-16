@@ -1,0 +1,188 @@
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <zephyr/dt-bindings/pinctrl/esp32c6-pinctrl.h>
+#include <zephyr/dt-bindings/pinctrl/esp32c6-gpio-sigmap.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+
+/ {
+    chosen {
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
+
+    /* Aliases for easy access in code */
+    aliases {
+        lidar-uart = &uart1;
+        imu = &i2c0_bmi160;
+        lidar-pwm = &pwm_motor_lidar;
+        motor-sx-fwd-pwm = &pwm_motor_sx_fwd_label;
+        motor-sx-bwd-pwm = &pwm_motor_sx_bwd_label;
+        motor-dx-fwd-pwm = &pwm_motor_dx_fwd_label;
+        motor-dx-bwd-pwm = &pwm_motor_dx_bwd_label;
+        encoder-sx = &pcnt0;
+        encoder-dx = &pcnt1;
+    };
+
+    pwm_motors {
+        compatible = "pwm-leds"; /* Using pwm-leds as a generic PWM consumer */
+        pwm_motor_sx_fwd_label: motor_sx_fwd {
+            pwms = <&ledc0 0 50000 PWM_POLARITY_NORMAL>;
+        };
+        pwm_motor_sx_bwd_label: motor_sx_bwd {
+            pwms = <&ledc0 1 50000 PWM_POLARITY_NORMAL>;
+        };
+        pwm_motor_dx_fwd_label: motor_dx_fwd {
+            pwms = <&ledc0 2 50000 PWM_POLARITY_NORMAL>;
+        };
+        pwm_motor_dx_bwd_label: motor_dx_bwd {
+            pwms = <&ledc0 3 50000 PWM_POLARITY_NORMAL>;
+        };
+        pwm_motor_lidar: lidar {
+            pwms = <&ledc0 4 50000 PWM_POLARITY_NORMAL>;
+        };
+    };
+};
+
+&pinctrl {
+    i2c0_default: i2c0_default {
+        group1 {
+            pinmux = <I2C0_SDA_GPIO4>,
+                     <I2C0_SCL_GPIO5>;
+            bias-pull-up;
+            drive-open-drain;
+            output-enable;
+        };
+    };
+
+    uart1_default: uart1_default {
+        group1 {
+            pinmux = <UART1_TX_GPIO6>,
+                     <UART1_RX_GPIO7>;
+        };
+    };
+
+    ledc0_default: ledc0_default {
+        group1 {
+            pinmux = <LEDC_CH0_GPIO19>, /* SX FWD */
+                     <LEDC_CH1_GPIO18>, /* SX BWD */
+                     <LEDC_CH2_GPIO11>, /* DX FWD */
+                     <LEDC_CH3_GPIO10>, /* DX BWD */
+                     <LEDC_CH4_GPIO15>; /* LIDAR */
+            output-enable;
+        };
+    };
+
+    pcnt_default: pcnt_default {
+        group1 {
+            pinmux = <PCNT0_CH0SIG_GPIO21>,
+                     <PCNT0_CH0CTRL_GPIO20>,
+                     <PCNT1_CH0SIG_GPIO23>,
+                     <PCNT1_CH0CTRL_GPIO22>;
+            bias-pull-up;
+        };
+    };
+};
+
+&i2c0 {
+    status = "okay";
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-names = "default";
+    clock-frequency = <I2C_BITRATE_STANDARD>;
+
+    i2c0_bmi160: bmi160@68 {
+        compatible = "bosch,bmi160";
+        reg = <0x68>;
+        status = "okay";
+    };
+};
+
+&uart1 {
+    status = "okay";
+    pinctrl-0 = <&uart1_default>;
+    pinctrl-names = "default";
+    current-speed = <115200>;
+};
+
+&ledc0 {
+    status = "okay";
+    pinctrl-0 = <&ledc0_default>;
+    pinctrl-names = "default";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    pwm_motor_sx_fwd: channel@0 {
+        reg = <0>;
+        timer = <0>;
+    };
+
+    pwm_motor_sx_bwd: channel@1 {
+        reg = <1>;
+        timer = <0>;
+    };
+
+    pwm_motor_dx_fwd: channel@2 {
+        reg = <2>;
+        timer = <0>;
+    };
+
+    pwm_motor_dx_bwd: channel@3 {
+        reg = <3>;
+        timer = <0>;
+    };
+
+    pwm_lidar: channel@4 {
+        reg = <4>;
+        timer = <1>;
+    };
+};
+
+&pcnt {
+    pinctrl-0 = <&pcnt_default>;
+    pinctrl-names = "default";
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    pcnt0: unit@0 {
+        reg = <0>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        filter = <100>;
+        channelA@0 {
+            reg = <0>;
+            sig-pos-mode = <2>;
+            sig-neg-mode = <1>;
+            ctrl-h-mode = <0>;
+            ctrl-l-mode = <1>;
+        };
+    };
+    pcnt1: unit@1 {
+        reg = <1>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        filter = <100>;
+        channelA@0 {
+            reg = <0>;
+            sig-pos-mode = <2>;
+            sig-neg-mode = <1>;
+            ctrl-h-mode = <0>;
+            ctrl-l-mode = <1>;
+        };
+    };
+};
+
+&adc0 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    channel@2 {
+        reg = <2>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&usb_serial {
+    status = "okay";
+};
