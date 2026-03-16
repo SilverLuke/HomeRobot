@@ -1,5 +1,7 @@
 # Generic
 **/.idea/
+build
+build-zephyr
 
 # Robot
 robot/.pio
@@ -9,3 +11,9 @@ robot/lib/FastIMU
 
 # Server
 server/target
+
+# Zephyr
+zephyr-port/zephyr_led_app/build
+zephyr-port/zephyr-sdk-1.0.0
+zephyrproject
+

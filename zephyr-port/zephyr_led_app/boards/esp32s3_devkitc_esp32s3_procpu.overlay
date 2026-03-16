@@ -1,0 +1,45 @@
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <zephyr/dt-bindings/pinctrl/esp32s3-pinctrl.h>
+#include <zephyr/dt-bindings/pinctrl/esp32s3-gpio-sigmap.h>
+
+/ {
+    chosen {
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
+
+    soc {
+        rmt: rmt@60016000 {
+            compatible = "espressif,esp32-rmt-tx";
+            reg = <0x60016000 0x1000>;
+            interrupts = <45 0 0>;
+            interrupt-parent = <&intc>;
+            clocks = <&clock 18>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+            pinctrl-0 = <&rmt_default>;
+            pinctrl-names = "default";
+
+            rmt_led: channel@0 {
+                reg = <0>;
+                label = "rmt_led";
+                // Pick a default GPIO, it doesn't matter because the main program will scan them all.
+                gpios = <&gpio1 16 GPIO_ACTIVE_HIGH>;
+            };
+        };
+    };
+};
+
+&pinctrl {
+    rmt_default: rmt_default {
+        group1 {
+            pinmux = <ESP32_PINMUX(48, ESP_NOSIG, ESP_RMT_SIG_OUT0)>;
+            output-enable;
+        };
+    };
+};
+
+&usb_serial {
+    status = "okay";
+};

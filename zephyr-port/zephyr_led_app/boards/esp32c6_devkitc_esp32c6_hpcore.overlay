@@ -1,0 +1,44 @@
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <zephyr/dt-bindings/pinctrl/esp32c6-pinctrl.h>
+#include <zephyr/dt-bindings/pinctrl/esp32c6-gpio-sigmap.h>
+
+/ {
+    chosen {
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
+
+    soc {
+        rmt: rmt@60006000 {
+            compatible = "espressif,esp32-rmt-tx";
+            reg = <0x60006000 0x1000>;
+            interrupts = <10 0 0>;
+            interrupt-parent = <&intc>;
+            clocks = <&clock 9>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+            pinctrl-0 = <&rmt_default>;
+            pinctrl-names = "default";
+
+            rmt_led: channel@0 {
+                reg = <0>;
+                label = "rmt_led";
+                gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
+            };
+        };
+    };
+};
+
+&pinctrl {
+    rmt_default: rmt_default {
+        group1 {
+            pinmux = <ESP32_PINMUX(8, ESP_NOSIG, ESP_RMT_SIG_OUT0)>;
+            output-enable;
+        };
+    };
+};
+
+&usb_serial {
+    status = "okay";
+};

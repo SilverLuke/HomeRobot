@@ -1,0 +1,6 @@
+tests:
+  testing.ws2812:
+    tags: ws2812 led
+    platform_allow: native_posix
+    integration_platforms:
+      - native_posix
