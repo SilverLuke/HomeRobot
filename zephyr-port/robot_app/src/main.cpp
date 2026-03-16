@@ -1,12 +1,16 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/mgmt/mcumgr/transport/smp_udp.h>
 
 #include "communication/wifi_manager.h"
 #include "communication/zephyr_net_client.h"
 #include "communication/protobuf_handler.h"
 #include "actuator/motor.h"
 #include "sensors/lidar.h"
+#include "sensors/imu.h"
+#include "sensors/battery.h"
+#include "sensors/encoders.h"
 #include "secrets.h"
 
 LOG_MODULE_REGISTER(robot_app, LOG_LEVEL_DBG);
@@ -32,22 +36,39 @@ int main(void)
 		LOG_ERR("Wi-Fi connection timeout");
 	} else {
 		LOG_INF("Wi-Fi connected!");
+		/* Start MCUmgr SMP UDP service for OTA */
+		int err = smp_udp_open();
+		if (err) {
+			LOG_ERR("Failed to start MCUmgr SMP UDP service (err %d)", err);
+		} else {
+			LOG_INF("MCUmgr SMP UDP service started!");
+		}
 	}
 
 	ZephyrNetClient client;
 	ProtobufHandler proto_handler(client);
 	bool server_connected = false;
 
-	const struct device *const imu = DEVICE_DT_GET(DT_ALIAS(imu));
-	if (!device_is_ready(imu)) {
-		LOG_ERR("IMU device not ready!");
+	const struct device *const imu_dev = DEVICE_DT_GET(DT_ALIAS(imu));
+	Imu imu(imu_dev);
+	if (!imu.init()) {
+		LOG_ERR("IMU initialization failed!");
+	}
+
+	const struct device *const adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc0));
+	Battery battery(adc_dev, 2); // Channel 2 from overlay
+	if (!battery.init()) {
+		LOG_ERR("Battery initialization failed!");
 	}
 
 	/* PCNT device (the peripheral) */
 	const struct device *const pcnt = DEVICE_DT_GET(DT_INST(0, espressif_esp32_pcnt));
 
-	Motor motor_sx("SX", &motor_sx_fwd, &motor_sx_bwd, pcnt, 0); // Unit 0
-	Motor motor_dx("DX", &motor_dx_fwd, &motor_dx_bwd, pcnt, 1); // Unit 1
+	Encoders encoder_sx(pcnt, 0);
+	Encoders encoder_dx(pcnt, 1);
+
+	Motor motor_sx("SX", &motor_sx_fwd, &motor_sx_bwd, &encoder_sx);
+	Motor motor_dx("DX", &motor_dx_fwd, &motor_dx_bwd, &encoder_dx);
 
 	motor_sx.init(1.0, 0.0, 0.0);
 	motor_dx.init(1.0, 0.0, 0.0);
@@ -56,6 +77,8 @@ int main(void)
 	Lidar lidar(lidar_uart, &lidar_motor_pwm);
 	lidar.init();
 	lidar.start();
+
+	uint32_t last_slow_telemetry = 0;
 
 	while (1) {
 		if (wifi.is_connected()) {
@@ -67,31 +90,25 @@ int main(void)
 					k_msleep(5000);
 				}
 			} else {
-				// We are connected to server, send some dummy telemetry or read sensors
-				struct sensor_value acc[3];
-				struct sensor_value gyro[3];
+				uint32_t now = k_uptime_get_32();
 
-				if (sensor_sample_fetch(imu) == 0) {
-					sensor_channel_get(imu, SENSOR_CHAN_ACCEL_XYZ, acc);
-					sensor_channel_get(imu, SENSOR_CHAN_GYRO_XYZ, gyro);
+				// IMU Telemetry (High frequency)
+				if (imu.update()) {
+					float ax, ay, az, gx, gy, gz;
+					imu.get_accel(ax, ay, az);
+					imu.get_gyro(gx, gy, gz);
 
-					LOG_DBG("Accel: X=%f Y=%f Z=%f", 
-							sensor_value_to_double(&acc[0]),
-							sensor_value_to_double(&acc[1]),
-							sensor_value_to_double(&acc[2]));
+					proto_handler.send_imu_data(now, ax, ay, az, gx, gy, gz);
+				}
+
+				// Slow telemetry (1Hz)
+				if (now - last_slow_telemetry >= 1000) {
+					proto_handler.send_battery_status(now, battery.get_percentage(), 
+													  battery.get_voltage_mv(), battery.read_raw());
 					
-					proto_handler.send_imu_data(
-						k_uptime_get_32(),
-						(float)sensor_value_to_double(&acc[0]),
-						(float)sensor_value_to_double(&acc[1]),
-						(float)sensor_value_to_double(&acc[2]),
-						(float)sensor_value_to_double(&gyro[0]),
-						(float)sensor_value_to_double(&gyro[1]),
-						(float)sensor_value_to_double(&gyro[2])
-					);
-				} else {
-					// Even if IMU fails, send a heartbeat
-					proto_handler.send_heartbeat(k_uptime_get_32());
+					proto_handler.send_encoders_data(now, encoder_sx.get_ticks(), encoder_dx.get_ticks());
+					
+					last_slow_telemetry = now;
 				}
 
 				lidar.loop(proto_handler);
@@ -109,6 +126,25 @@ int main(void)
 							motor_dx.set_motor(rx_msg.payload.motor_move.right_power > 0 ? FORWARD : BRAKE, 
 											   (uint8_t)rx_msg.payload.motor_move.right_power);
 							// Note: Simplified logic, should handle direction from angle or power sign
+							break;
+						case homerobot_ServerToRobotMessage_motor_config_tag:
+							LOG_INF("Applying new PID configuration");
+							if (rx_msg.payload.motor_config.has_left_motor) {
+								motor_sx.config_set_pid(rx_msg.payload.motor_config.left_motor.kp,
+														rx_msg.payload.motor_config.left_motor.ki,
+														rx_msg.payload.motor_config.left_motor.kd);
+								if (rx_msg.payload.motor_config.left_motor.max_speed > 0) {
+									motor_sx.config_set_limit(50, (uint8_t)rx_msg.payload.motor_config.left_motor.max_speed);
+								}
+							}
+							if (rx_msg.payload.motor_config.has_right_motor) {
+								motor_dx.config_set_pid(rx_msg.payload.motor_config.right_motor.kp,
+														rx_msg.payload.motor_config.right_motor.ki,
+														rx_msg.payload.motor_config.right_motor.kd);
+								if (rx_msg.payload.motor_config.right_motor.max_speed > 0) {
+									motor_dx.config_set_limit(50, (uint8_t)rx_msg.payload.motor_config.right_motor.max_speed);
+								}
+							}
 							break;
 						case homerobot_ServerToRobotMessage_stop_all_tag:
 							motor_sx.turn_off();

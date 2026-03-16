@@ -13,6 +13,8 @@ public:
     
     bool send_battery_status(uint32_t millis, uint32_t percentage, uint32_t voltage_mv, uint32_t raw_value);
 
+    bool send_encoders_data(uint32_t millis, int32_t left, int32_t right);
+
     bool send_heartbeat(uint32_t millis);
 
     bool send_lidar_point(uint32_t millis, float distance_mm, float angle_deg, uint32_t quality, bool scan_completed);

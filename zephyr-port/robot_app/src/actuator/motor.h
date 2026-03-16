@@ -1,8 +1,8 @@
 #pragma once
 
 #include <zephyr/drivers/pwm.h>
-#include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
+#include "../sensors/encoders.h"
 
 enum Direction : uint8_t {
   FORWARD = 1,
@@ -16,8 +16,7 @@ class Motor {
   Motor(const char* name, 
         const struct pwm_dt_spec* fwd_pwm, 
         const struct pwm_dt_spec* bwd_pwm,
-        const struct device* encoder_dev,
-        uint8_t unit_idx,
+        Encoders* encoder,
         uint8_t lower_limit = 50, 
         uint8_t upper_limit = 255);
 
@@ -42,8 +41,7 @@ private:
   const char* name_;
   const struct pwm_dt_spec* fwd_pwm_;
   const struct pwm_dt_spec* bwd_pwm_;
-  const struct device* encoder_dev_;
-  uint8_t unit_idx_;
+  Encoders* encoder_;
 
   uint8_t upper_limit_;
   uint8_t lower_limit_;

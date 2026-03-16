@@ -8,15 +8,13 @@ LOG_MODULE_REGISTER(motor, LOG_LEVEL_DBG);
 Motor::Motor(const char* name, 
              const struct pwm_dt_spec* fwd_pwm, 
              const struct pwm_dt_spec* bwd_pwm,
-             const struct device* encoder_dev,
-             uint8_t unit_idx,
+             Encoders* encoder,
              uint8_t lower_limit, 
              uint8_t upper_limit)
     : name_(name), 
       fwd_pwm_(fwd_pwm), 
       bwd_pwm_(bwd_pwm), 
-      encoder_dev_(encoder_dev),
-      unit_idx_(unit_idx),
+      encoder_(encoder),
       upper_limit_(upper_limit), 
       lower_limit_(lower_limit) {}
 
@@ -31,8 +29,8 @@ void Motor::init(double kp, double ki, double kd) {
     if (!pwm_is_ready_dt(bwd_pwm_)) {
         LOG_ERR("BWD PWM device %s not ready", bwd_pwm_->dev->name);
     }
-    if (encoder_dev_ && !device_is_ready(encoder_dev_)) {
-        LOG_ERR("Encoder peripheral device %s not ready", encoder_dev_->name);
+    if (encoder_ && !encoder_->init()) {
+        LOG_ERR("Encoder initialization failed");
     }
 
     set_motor(BRAKE, 0);
@@ -128,12 +126,9 @@ uint8_t Motor::limit_power(double power) const {
 }
 
 int32_t Motor::read_encoder() {
-    if (!encoder_dev_) return position_;
+    if (!encoder_) return position_;
 
-    // Directly read from the PCNT hardware registers for the specific unit.
-    // This bypasses the Zephyr sensor driver limitation which only returns the first unit.
-    // The Zephyr sensor driver must still be initialized to enable the PCNT peripheral.
-    position_ = (int16_t)PCNT.cnt_unit[unit_idx_].pulse_cnt;
+    position_ = encoder_->get_ticks();
     return position_;
 }
 
@@ -147,12 +142,8 @@ void Motor::turn_off() {
 
 void Motor::set_position(int32_t pos) {
     position_ = pos;
-    // Clearing/setting the counter value directly is harder via registers 
-    // without triggering a reset. Zephyr driver has a hack for this but it's internal.
-    // For now we just reset it to zero if needed by resetting the unit.
-    if (pos == 0) {
-        PCNT.ctrl.val |= (1 << (unit_idx_ * 2)); // pulse_cnt_rst_ux
-        PCNT.ctrl.val &= ~(1 << (unit_idx_ * 2));
+    if (pos == 0 && encoder_) {
+        encoder_->reset();
     }
 }
 

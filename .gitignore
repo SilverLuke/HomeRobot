@@ -14,6 +14,7 @@ server/target
 target
 
 # Zephyr
+zephyr-port/robot_app/src/secrets.h
 zephyr-port/zephyr_led_app/build
 zephyr-port/zephyr-sdk-1.0.0
 zephyrproject

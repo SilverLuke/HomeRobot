@@ -34,6 +34,16 @@ bool ProtobufHandler::send_battery_status(uint32_t millis, uint32_t percentage, 
     return encode_and_send(message);
 }
 
+bool ProtobufHandler::send_encoders_data(uint32_t millis, int32_t left, int32_t right) {
+    homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
+    message.sequence_millis = millis;
+    message.which_payload = homerobot_RobotToServerMessage_encoders_tag;
+    message.payload.encoders.left_encoder = left;
+    message.payload.encoders.right_encoder = right;
+
+    return encode_and_send(message);
+}
+
 bool ProtobufHandler::send_heartbeat(uint32_t millis) {
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;
