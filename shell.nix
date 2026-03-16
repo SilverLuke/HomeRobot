@@ -56,6 +56,7 @@ let
       mypy
       junitparser
       python-dotenv
+      protobuf
       # Runtime/Test requirements
       pyocd
       tabulate
@@ -72,7 +73,10 @@ let
 in
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
-    # System dependencies for Zephyr
+    # System dependencies for Zephyr and Server
+    SDL2
+    cargo
+    rustc
     ccache
     cmake
     dfu-util
@@ -87,6 +91,7 @@ pkgs.mkShell {
     ncurses
     ninja
     pkg-config
+    protobuf
     unzip
     wget
     which
