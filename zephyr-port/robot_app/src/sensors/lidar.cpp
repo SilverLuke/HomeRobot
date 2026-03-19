@@ -9,7 +9,7 @@ LOG_MODULE_REGISTER(lidar, LOG_LEVEL_DBG);
 #define RESP_MEAS_ANGLE_SHIFT 1
 
 Lidar::Lidar(const struct device* uart_dev, const struct pwm_dt_spec* motor_pwm)
-    : uart_dev_(uart_dev), motor_pwm_(motor_pwm), state_(IDLE), rx_idx_(0) {}
+    : uart_dev_(uart_dev), motor_pwm_(motor_pwm), state_(IDLE), rx_idx_(0), points_count_(0) {}
 
 bool Lidar::init() {
     if (!device_is_ready(uart_dev_)) {
@@ -110,5 +110,16 @@ void Lidar::handle_point(const node_info_t& node, ProtobufHandler& proto_handler
     uint8_t quality = (node.sync_quality >> RESP_MEAS_QUALITY_SHIFT);
     bool scan_completed = (node.sync_quality & RESP_MEAS_SYNCBIT);
 
-    proto_handler.send_lidar_point(k_uptime_get_32(), distance_mm, angle_deg, quality, scan_completed);
+    // Buffer the point
+    points_buffer_[points_count_].distance_mm = distance_mm;
+    points_buffer_[points_count_].angle_deg = angle_deg;
+    points_buffer_[points_count_].quality = quality;
+    points_buffer_[points_count_].scan_completed = scan_completed;
+    points_count_++;
+
+    // Send batch if full or scan completed
+    if (points_count_ >= BATCH_SIZE || scan_completed) {
+        proto_handler.send_lidar_scan(k_uptime_get_32(), points_buffer_, points_count_);
+        points_count_ = 0;
+    }
 }

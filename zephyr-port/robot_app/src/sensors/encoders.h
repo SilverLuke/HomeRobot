@@ -5,7 +5,7 @@
 
 class Encoders {
 public:
-    Encoders(const struct device* pcnt_dev, uint8_t unit_idx);
+    Encoders(const struct device* pcnt_unit_dev, uint8_t unit_idx);
 
     bool init();
     

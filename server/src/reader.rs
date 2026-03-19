@@ -1,25 +1,25 @@
 use crate::homerobot::RobotToServerMessage;
 use crate::constants::BUFFER_SIZE;
+use crate::stats::Stats;
 use circular_buffer::CircularBuffer;
 use std::io;
 use std::io::{Read, Write};
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use prost::Message;
 
 pub struct ProtocolManager<S: Read + Write>{
     stream: S,
     read_buffer: Box<CircularBuffer<BUFFER_SIZE, u8>>,
-    rx_bytes: AtomicUsize,
-    tx_bytes: AtomicUsize,
+    stats: Arc<Stats>,
 }
 
 impl<S: Read + Write> ProtocolManager<S> {
-    pub(crate) fn new(stream: S) -> ProtocolManager<S> {
+    pub(crate) fn new(stream: S, stats: Arc<Stats>) -> ProtocolManager<S> {
         ProtocolManager {
             stream,
             read_buffer: CircularBuffer::<BUFFER_SIZE, u8>::boxed(),
-            rx_bytes: AtomicUsize::new(0),
-            tx_bytes: AtomicUsize::new(0),
+            stats,
         }
     }
 
@@ -50,12 +50,10 @@ impl<S: Read + Write> ProtocolManager<S> {
 
         match RobotToServerMessage::decode(&msg_bytes[..]) {
             Ok(msg) => {
-                let rx = self.rx_bytes.load(std::sync::atomic::Ordering::SeqCst);
-                let tx = self.tx_bytes.load(std::sync::atomic::Ordering::SeqCst);
-                println!(
-                    "Received Protobuf message! Seq: {} RX: {} TX: {}",
-                    msg.sequence_millis, rx, tx
-                );
+                // println!(
+                //     "Received Protobuf message! Seq: {}",
+                //     msg.sequence_millis
+                // );
                 Ok(Some(msg))
             }
             Err(e) => {
@@ -71,12 +69,7 @@ impl<S: Read + Write> ProtocolManager<S> {
         let bytes_written = self.stream.write(packet)?;
         self.stream.flush()?;
 
-        let prev_total = self
-            .tx_bytes
-            .fetch_add(bytes_written, std::sync::atomic::Ordering::SeqCst);
-        let _new_total = prev_total + bytes_written;
-
-        // println!("Sent {} bytes (total tx {})", bytes_written, _new_total);
+        self.stats.total_tx.fetch_add(bytes_written, Ordering::SeqCst);
 
         Ok(())
     }
@@ -84,10 +77,9 @@ impl<S: Read + Write> ProtocolManager<S> {
     fn do_read(&mut self) -> io::Result<usize> {
         let mut buffer = [0u8; 1024];
         match self.stream.read(&mut buffer) {
-            Ok(0) => Ok(0),
+            Ok(0) => Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Connection closed")),
             Ok(read_bytes) => {
-                self.rx_bytes
-                    .fetch_add(read_bytes, std::sync::atomic::Ordering::SeqCst);
+                self.stats.total_rx.fetch_add(read_bytes, Ordering::SeqCst);
                 let free_space = BUFFER_SIZE - self.read_buffer.len();
                 if free_space >= read_bytes {
                     self.read_buffer.extend(&buffer[..read_bytes]);

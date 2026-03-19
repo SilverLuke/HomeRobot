@@ -19,6 +19,14 @@ public:
 
     bool send_lidar_point(uint32_t millis, float distance_mm, float angle_deg, uint32_t quality, bool scan_completed);
 
+    struct LidarPointData {
+        float distance_mm;
+        float angle_deg;
+        uint32_t quality;
+        bool scan_completed;
+    };
+    bool send_lidar_scan(uint32_t millis, const LidarPointData* points, size_t count);
+
     bool receive_and_decode(homerobot_ServerToRobotMessage& message);
 
     // TODO: Add more telemetry types (Encoders, etc.)

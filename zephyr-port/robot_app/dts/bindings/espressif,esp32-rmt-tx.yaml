@@ -1,0 +1,30 @@
+description: Espressif ESP32 RMT TX peripheral
+
+compatible: "espressif,esp32-rmt-tx"
+
+include: [base.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+  interrupts:
+    required: true
+  clocks:
+    required: true
+
+child-binding:
+  description: RMT TX channel
+  properties:
+    reg:
+      required: true
+      type: int
+      description: Channel index
+    label:
+      type: string
+      description: Human readable name
+    gpios:
+      required: true
+      type: phandle-array
+    invert_out:
+      type: boolean
+      description: Invert the output signal

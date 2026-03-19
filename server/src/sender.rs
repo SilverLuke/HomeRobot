@@ -122,7 +122,7 @@ pub fn send_manual_command(
             final_packet.extend(buf);
 
             if let Err(e) = protocol.send_packet(&final_packet) {
-                eprintln!("Error sending motor command: {:?}", e);
+                eprintln!("Error sending motor command: {:?}\r", e);
             }
 
             *last_sent_command = current_command;

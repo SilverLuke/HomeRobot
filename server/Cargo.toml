@@ -8,6 +8,11 @@ circular-buffer = "1.2.0"
 mockall = "0.13.1"
 sdl2 = "0.38.0"
 prost = "0.13"
+ctrlc = "3.4"
+indicatif = "0.17"
+signal-hook = "0.4.3"
+libc = "0.2.183"
+crossterm = "0.29.0"
 
 [build-dependencies]
 prost-build = "0.13"

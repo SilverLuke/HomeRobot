@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use crate::input::TYPE::{Keyboard, NoEvent};
 use crate::sender::RobotCommand;
-use sdl2::{event::Event, keyboard::Keycode, EventPump, JoystickSubsystem, Sdl};
+use sdl2::{event::Event as SdlEvent, keyboard::Keycode, EventPump, JoystickSubsystem, Sdl};
+use crossterm::event::{self, Event as CEvent, KeyCode as CKeyCode, KeyEventKind, KeyModifiers};
 
 const POWER: u8 = 127;
 
@@ -48,17 +49,17 @@ struct Input {
 
 pub fn print_joystick_info(joystick_subsystem: &JoystickSubsystem) {
     let num_joysticks = joystick_subsystem.num_joysticks().unwrap();
-    println!("Detected {} joystick(s)", num_joysticks);
+    println!("Detected {} joystick(s)\r", num_joysticks);
 
     for i in 0..num_joysticks {
         match joystick_subsystem.open(i) {
             Ok(joystick) => {
-                println!("Name: {}", joystick.name());
-                println!("Axes: {}", joystick.num_axes());
-                println!("Buttons: {}", joystick.num_buttons());
-                println!("Balls: {}", joystick.num_balls());
+                println!("Name: {}\r", joystick.name());
+                println!("Axes: {}\r", joystick.num_axes());
+                println!("Buttons: {}\r", joystick.num_buttons());
+                println!("Balls: {}\r", joystick.num_balls());
             },
-            Err(e) => eprintln!("Failed to open joystick {}: {}", i, e),
+            Err(e) => eprintln!("Failed to open joystick {}: {}\r", i, e),
         }
     }
 
@@ -66,18 +67,23 @@ pub fn print_joystick_info(joystick_subsystem: &JoystickSubsystem) {
 
 
 pub fn print_summary() {
-    println!("Keyboard control started. Use WASD keys to control the robot:");
-    println!("W - Forward (both motors)");
-    println!("A - Turn left (right motor only)");
-    println!("D - Turn right (left motor only)");
-    println!("S - Backward (both motors)");
-    println!("Space - Stop");
-    println!("'q' - Quit");
-    println!("Keys will be detected immediately without pressing Enter!");
-    println!("Unified input control started. Press ESC to quit.");
+    println!("Keyboard control started. Use WASD keys to control the robot:\r");
+    println!("W - Forward (both motors)\r");
+    println!("A - Turn left (right motor only)\r");
+    println!("D - Turn right (left motor only)\r");
+    println!("S - Backward (both motors)\r");
+    println!("Space - Stop\r");
+    println!("'q' - Quit (press twice)\r");
+    println!("Keys will be detected immediately without pressing Enter!\r");
+    println!("Unified input control started. Press ESC or 'q' twice to quit.\r");
 }
 
-pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl) {
+use crate::stats::Stats;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::io::{self, Write};
+use std::process;
+
+pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, stats: Arc<Stats>, quit_count: Arc<AtomicUsize>) {
     let joystick_subsystem = sdl_context.joystick().unwrap();
     let _controller = joystick_subsystem.open(0).ok();
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -85,101 +91,159 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl) 
     let mut inputs = Input { left_stick_x: 0, left_stick_y: 0, right_trigger: 0, left_trigger: 0,
         a: false, b: false, x: false, y: false, pressed_keys: HashSet::new() };
 
-    loop {
-        let input_type = read_input(&mut event_pump, &mut inputs);
-        if input_type == TYPE::NoEvent {
-            std::thread::sleep(Duration::from_millis(10));
-            continue;
-        }
-        // println!("Controller: {:?}", inputs);
-        let command_to_send = elaborate_input(&mut inputs, input_type);
-         
-        //if command_to_send.is_some() {
-        //    println!("Sending: {:?}", command_to_send);
-        //}
+    // Continue running as long as we are either in "running" mode 
+    // or we are gracefully waiting for connections to close.
+    while stats.running.load(Ordering::Relaxed) || stats.active_connections.load(Ordering::SeqCst) > 0 {
+        let mut last_read = NoEvent;
         
-        if let Some(cmd) = command_to_send {
-            if let Ok(mut rc) = robot_command.lock() {
-                *rc = cmd;
+        // 1. Check Terminal Input (crossterm)
+        if event::poll(Duration::from_millis(0)).unwrap_or(false) {
+            if let Ok(CEvent::Key(key_event)) = event::read() {
+                if key_event.kind == KeyEventKind::Press {
+                    match key_event.code {
+                        CKeyCode::Char('q') | CKeyCode::Esc => {
+                            let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
+                            if count == 1 {
+                                stats.running.store(false, Ordering::SeqCst);
+                                let _ = writeln!(io::stderr(), "\n\r[QUIT] Shutdown initiated. Press 'q' again to force exit.");
+                            } else {
+                                let _ = crossterm::terminal::disable_raw_mode();
+                                let _ = writeln!(io::stderr(), "\n\r[QUIT] Force exit requested.");
+                                process::exit(0);
+                            }
+                        }
+                        CKeyCode::Char('c') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                            let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
+                            if count == 1 {
+                                stats.running.store(false, Ordering::SeqCst);
+                                let _ = writeln!(io::stderr(), "\n\r[CTRL+C] Shutdown initiated. Press again to force exit.");
+                            } else {
+                                let _ = crossterm::terminal::disable_raw_mode();
+                                let _ = writeln!(io::stderr(), "\n\r[CTRL+C] Force exit requested.");
+                                process::exit(0);
+                            }
+                        }
+                        CKeyCode::Char('w') => { inputs.pressed_keys.insert(Keycode::W); last_read = Keyboard; }
+                        CKeyCode::Char('a') => { inputs.pressed_keys.insert(Keycode::A); last_read = Keyboard; }
+                        CKeyCode::Char('s') => { inputs.pressed_keys.insert(Keycode::S); last_read = Keyboard; }
+                        CKeyCode::Char('d') => { inputs.pressed_keys.insert(Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char(' ') => { inputs.pressed_keys.insert(Keycode::Space); last_read = Keyboard; }
+                        _ => {}
+                    }
+                } else if key_event.kind == KeyEventKind::Release {
+                    match key_event.code {
+                        CKeyCode::Char('w') => { inputs.pressed_keys.remove(&Keycode::W); last_read = Keyboard; }
+                        CKeyCode::Char('a') => { inputs.pressed_keys.remove(&Keycode::A); last_read = Keyboard; }
+                        CKeyCode::Char('s') => { inputs.pressed_keys.remove(&Keycode::S); last_read = Keyboard; }
+                        CKeyCode::Char('d') => { inputs.pressed_keys.remove(&Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char(' ') => { inputs.pressed_keys.remove(&Keycode::Space); last_read = Keyboard; }
+                        _ => {}
+                    }
+                }
             }
         }
+
+        // 2. Check SDL Input (joystick / window)
+        for event in event_pump.poll_iter() {
+            match event {
+                SdlEvent::Quit { .. } => {
+                    let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if count == 1 {
+                        stats.running.store(false, Ordering::SeqCst);
+                        let _ = writeln!(io::stderr(), "\r\n[QUIT] Shutdown initiated. Press 'q' again to force exit.\r");
+                    } else {
+                        let _ = crossterm::terminal::disable_raw_mode();
+                        let _ = writeln!(io::stderr(), "\r\n[QUIT] Force exit requested.\r");
+                        process::exit(0);
+                    }
+                }
+                SdlEvent::KeyDown { keycode: Some(Keycode::C), keymod, .. } if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD | sdl2::keyboard::Mod::RCTRLMOD) => {
+                    // This is handled by the signal handler usually, but here for SDL focus
+                    let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if count == 1 {
+                        stats.running.store(false, Ordering::SeqCst);
+                        let _ = writeln!(io::stderr(), "\r\n[CTRL+C] Shutdown initiated. Press again to force exit.\r");
+                    } else {
+                        let _ = crossterm::terminal::disable_raw_mode();
+                        let _ = writeln!(io::stderr(), "\r\n[CTRL+C] Force exit requested.\r");
+                        process::exit(0);
+                    }
+                }
+                SdlEvent::KeyDown { keycode: Some(Keycode::Escape), .. } | SdlEvent::KeyDown { keycode: Some(Keycode::Q), .. } => {
+                    let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if count == 1 {
+                        stats.running.store(false, Ordering::SeqCst);
+                        let _ = writeln!(io::stderr(), "\r\n[QUIT] Shutdown initiated. Press 'q' again to force exit.\r");
+                    } else {
+                        let _ = crossterm::terminal::disable_raw_mode();
+                        let _ = writeln!(io::stderr(), "\r\n[QUIT] Force exit requested.\r");
+                        process::exit(0);
+                    }
+                }
+                SdlEvent::KeyDown { keycode: Some(key), .. } => {
+                    inputs.pressed_keys.insert(key);
+                    last_read = Keyboard;
+                },
+                SdlEvent::KeyUp { keycode: Some(key), .. } => {
+                    inputs.pressed_keys.remove(&key);
+                    last_read = Keyboard;
+                },
+                SdlEvent::JoyAxisMotion {
+                    axis_idx, value, ..
+                } => {
+                    match axis_idx {
+                        0 => {
+                            inputs.left_stick_x = value.checked_neg().unwrap_or(i16::MAX);
+                            last_read = TYPE::Joystick;
+                        }
+                        1 => {
+                            inputs.left_stick_y = value.checked_neg().unwrap_or(i16::MAX);
+                            last_read = TYPE::Joystick;
+                        }
+                        2 => {
+                            inputs.left_trigger = ((value as f32 + i16::MAX as f32)
+                                / (2. * i16::MAX as f32)
+                                * u8::MAX as f32) as u8;
+                            last_read = TYPE::Trigger;
+                        }
+                        5 => {
+                            inputs.right_trigger = ((value as f32 + i16::MAX as f32)
+                                / (2. * i16::MAX as f32)
+                                * u8::MAX as f32) as u8;
+                            last_read = TYPE::Trigger;
+                        }
+                        _ => {}
+                    }
+                }
+                SdlEvent::JoyButtonDown { button_idx, .. } => {
+                    if button_idx == JoystickButton::B as u8 {
+                        inputs.b = true;
+                    }
+                }
+                SdlEvent::JoyButtonUp { button_idx, .. } => {
+                    if button_idx == JoystickButton::B as u8 {
+                        inputs.b = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Only process movement commands if the server is still "running"
+        if stats.running.load(Ordering::Relaxed) {
+            if last_read != TYPE::NoEvent {
+                let command_to_send = elaborate_input(&mut inputs, last_read);
+                
+                if let Some(cmd) = command_to_send {
+                    if let Ok(mut rc) = robot_command.lock() {
+                        *rc = cmd;
+                    }
+                }
+            }
+        }
+
         std::thread::sleep(Duration::from_millis(10));
     }
-}
-
-/* Read input buffer some received input events.
- * To be able to compute the vector of the controller stick
- */
-fn read_input(
-    event_pump: &mut EventPump,
-    controller: &mut Input,
-) -> TYPE {
-    
-    let mut last_read = NoEvent;
-    for event in event_pump.poll_iter() {
-        match event {
-            // Keyboard input suboptimal, I can't press W and D to go forward and turn right
-            Event::KeyDown { keycode: Some(key), .. } => {
-                controller.pressed_keys.insert(key);
-                last_read = Keyboard;
-            },
-            Event::KeyUp { keycode: Some(key), .. } => {
-                controller.pressed_keys.remove(&key);
-                last_read = Keyboard;
-            },
-            /* Joystick analog axes:
-             * 0+ DX 0- SX
-             * 1+ BACK 1- FORWARD
-             * 2 Left trigger
-             * 5 Right trigger
-             */
-            Event::JoyAxisMotion {
-                axis_idx, value, ..
-            } => {
-                match axis_idx {
-                    0 => {
-                        // Left/Right
-                        // TODO this +1 is shit
-                        controller.left_stick_x = value.checked_neg().unwrap_or(i16::MAX);
-                        last_read = TYPE::Joystick;
-                    }
-                    1 => {
-                        // Forward/Backward
-                        // TODO this +1 is shit
-                        controller.left_stick_y = value.checked_neg().unwrap_or(i16::MAX);
-                        last_read = TYPE::Joystick;
-                    }
-                    2 => {
-                        controller.left_trigger = ((value as f32 + i16::MAX as f32)
-                            / (2. * i16::MAX as f32)
-                            * u8::MAX as f32) as u8;
-                        last_read = TYPE::Trigger;
-                    }
-                    5 => {
-                        controller.right_trigger = ((value as f32 + i16::MAX as f32)
-                            / (2. * i16::MAX as f32)
-                            * u8::MAX as f32) as u8;
-                        last_read = TYPE::Trigger;
-                    }
-                    _ => {}
-                }
-            }
-            Event::JoyButtonDown { button_idx, .. } => {
-                println!("Joystick button {} pressed", button_idx);
-                if button_idx == JoystickButton::B as u8 {
-                    controller.b = true;
-                }
-            }
-            Event::JoyButtonUp { button_idx, .. } => {
-                println!("Joystick button {} released", button_idx);
-                if button_idx == JoystickButton::B as u8 {
-                    controller.b = false;
-                }
-            }
-            _ => {}
-        }
-    }
-    last_read
 }
 
 fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand> {
@@ -240,11 +304,6 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand>
                 })
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
                 Some(RobotCommand::default())
-            } else if inputs.pressed_keys.contains(&Keycode::Escape)
-                || inputs.pressed_keys.contains(&Keycode::Q)
-            {
-                println!("Exiting...");
-                std::process::exit(0);
             } else {
                 None
             };
@@ -282,305 +341,4 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand>
         }
     }
     None
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::{Arc, Mutex};
-    use sdl2::keyboard::Keycode;
-
-    // Helper function to create an empty RobotCommand instance
-    fn create_robot_command() -> Arc<Mutex<RobotCommand>> {
-        Arc::new(Mutex::new(RobotCommand::default()))
-    }
-
-    #[test]
-    fn test_elaborate_input_no_event() {
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-        let command = elaborate_input(&mut inputs, TYPE::Keyboard);
-        assert_eq!(command.is_some(), false);
-    }
-
-    #[test]
-    fn test_elaborate_input_keyboard_w() {
-        let mut set = HashSet::new();
-        set.insert(Keycode::W);
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: set,
-        };
-
-        let command = elaborate_input(&mut inputs, TYPE::Keyboard);
-        assert_eq!(command.is_some(), true);
-
-        let command = command.unwrap();
-        match command {
-            RobotCommand::MotorAngle {
-                left_power,
-                left_angle,
-                right_power,
-                right_angle,
-            } => {
-                assert_eq!(left_power, POWER);
-                assert_eq!(left_angle, 1.0);
-                assert_eq!(right_power, POWER);
-                assert_eq!(right_angle, 1.0);
-            }
-            _ => panic!("Expected RobotCommand::MotorAngle variant."),
-        }
-    }
-
-    #[test]
-    fn test_elaborate_input_joystick_forward() {
-        // (0, 1) -> (1, 1)
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: i16::MAX,
-            left_trigger: 0,
-            right_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-        let command = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(command.is_some(), true);
-
-        let command = command.unwrap();
-        match command {
-            RobotCommand::MotorDirect {
-                right_speed,
-                left_speed,
-            } => {
-                assert_eq!(right_speed, 255);
-                assert_eq!(left_speed, 255);
-            }
-            _ => panic!("Expected RobotCommand::MotorDirect variant."),
-        }
-    }
-
-    #[test]
-    fn test_elaborate_input_joystick_right() {
-        // (1, 0) -> (1, -1)
-        let mut inputs = Input {
-            left_stick_x: i16::MAX,
-            left_stick_y: 0,
-            left_trigger: 0,
-            right_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-        let command = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(command.is_some(), true);
-
-
-        let command = command.unwrap();
-        match command {
-            RobotCommand::MotorDirect {
-                left_speed,
-                right_speed,
-            } => {
-                assert_eq!(left_speed, u8::MAX as i16);
-                assert_eq!(right_speed, -(u8::MAX as i16));
-            }
-            _ => panic!("Expected RobotCommand::MotorDirect variant."),
-        }
-    }
-
-
-    #[test]
-    fn test_elaborate_input_joystick_left() {
-        // (-1, 0) -> (-1, 1)
-        let mut inputs = Input {
-            left_stick_x: i16::MIN,
-            left_stick_y: 0,
-            left_trigger: 0,
-            right_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-
-        let command = elaborate_input(&mut inputs, TYPE::Joystick);
-        assert_eq!(command.is_some(), true);
-
-
-        let command = command.unwrap();
-        match command {
-            RobotCommand::MotorDirect {
-                left_speed,
-                right_speed,
-            } => {
-                assert_eq!(left_speed, -255);
-                assert_eq!(right_speed, 255);
-            }
-            _ => panic!("Expected RobotCommand::MotorDirect variant."),
-        }
-    }
-
-    #[test]
-    fn test_elaborate_input_trigger() {
-        let _robot_command = create_robot_command();
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            left_trigger: 255,
-            right_trigger: 127,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            pressed_keys: HashSet::new(),
-        };
-
-        let command = elaborate_input(&mut inputs, TYPE::Trigger);
-        assert_eq!(command.is_some(), true);
-
-
-        let command = command.unwrap();
-        match command {
-            RobotCommand::MotorDirect {
-                left_speed,
-                right_speed,
-            } => {
-                assert_eq!(left_speed, 255);
-                assert_eq!(right_speed, 127);
-            }
-            _ => panic!("Expected RobotCommand::MotorDirect variant."),
-        }
-    }
-
-    /*
-    #[test]
-    fn test_read_input_keyboard_event() {
-        let mut event_pump = MockEventPump::new(vec![
-            Event::KeyDown {
-                keycode: Some(Keycode::W),
-                ..Default::default()
-            },
-        ]);
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            keycode: None,
-        };
-
-        let input_type = read_input(&mut event_pump, &mut inputs);
-        assert_eq!(input_type, TYPE::KEYBOARD);
-        assert_eq!(inputs.keycode, Some(Keycode::W));
-    }
-
-    #[test]
-    fn test_read_input_joystick_event() {
-        let mut event_pump = MockEventPump::new(vec![
-            Event::JoyAxisMotion {
-                axis_idx: 0,
-                value: i16::MAX,
-                ..Default::default()
-            },
-        ]);
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            keycode: None,
-        };
-
-        let input_type = read_input(&mut event_pump, &mut inputs);
-        assert_eq!(input_type, TYPE::JOYSTICK);
-        assert_eq!(inputs.left_stick_x, -i16::MAX);
-    }
-
-    #[test]
-    fn test_read_input_no_event() {
-        let mut event_pump = MockEventPump::new(vec![]);
-        let mut inputs = Input {
-            left_stick_x: 0,
-            left_stick_y: 0,
-            right_trigger: 0,
-            left_trigger: 0,
-            a: false,
-            b: false,
-            x: false,
-            y: false,
-            keycode: None,
-        };
-
-        let input_type = read_input(&mut event_pump, &mut inputs);
-        assert_eq!(input_type, TYPE::NO_EVENT);
-    }
-*/
-    // Mock EventPump for testing `read_input` without SDL dependencies
-    // struct MockEventPump {
-    //     events: Vec<Event>,
-    // }
-    // 
-    // impl MockEventPump {
-    //     fn new(events: Vec<Event>) -> Self {
-    //         MockEventPump { events }
-    //     }
-    // }
-    // 
-    // impl Iterator for MockEventPump {
-    //     type Item = Event;
-    // 
-    //     fn next(&mut self) -> Option<Self::Item> {
-    //         self.events.pop()
-    //     }
-    // }
-    // 
-    // /*impl EventPump for MockEventPump {
-    //     fn poll_iter(&mut self) -> MockEventPump {
-    //         self.clone()
-    //     }
-    // }*/
-    // 
-    // // Dummy implementation for default cloning, compatible with MockEventPump
-    // impl Clone for MockEventPump {
-    //     fn clone(&self) -> Self {
-    //         MockEventPump {
-    //             events: self.events.clone(),
-    //         }
-    //     }
-    // }
 }

@@ -4,6 +4,7 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
 #include "communication/protobuf_handler.h"
+#include "constants.h"
 
 class Lidar {
 public:
@@ -40,4 +41,8 @@ private:
     } __attribute__((packed));
 
     void handle_point(const node_info_t& node, ProtobufHandler& proto_handler);
+
+    static const size_t BATCH_SIZE = constants::LIDAR_BATCH_SIZE;
+    ProtobufHandler::LidarPointData points_buffer_[BATCH_SIZE];
+    size_t points_count_ = 0;
 };

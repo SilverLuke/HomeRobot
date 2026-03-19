@@ -1,0 +1,14 @@
+config RMT_TX
+    bool "Remote Control Transmitter Driver"
+
+config RMT_TX_INIT_PRIORITY
+    int "RMT TX initialization priority"
+    default KERNEL_INIT_PRIORITY_DEVICE
+
+rsource "Kconfig.esp32"
+
+if RMT_TX
+module = RMT_TX
+module-str = rmt_tx
+source "subsys/logging/Kconfig.template.log_config"
+endif

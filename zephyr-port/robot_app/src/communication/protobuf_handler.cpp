@@ -53,34 +53,36 @@ bool ProtobufHandler::send_heartbeat(uint32_t millis) {
     return encode_and_send(message);
 }
 
-struct LidarPointContext {
-    float distance_mm;
-    float angle_deg;
-    uint32_t quality;
-    bool scan_completed;
+struct LidarScanContext {
+    const ProtobufHandler::LidarPointData* points;
+    size_t count;
 };
 
-static bool encode_lidar_points(pb_ostream_t *stream, const pb_field_t *field, void * const *arg) {
-    LidarPointContext* ctx = (LidarPointContext*)*arg;
+static bool encode_lidar_scan_points(pb_ostream_t *stream, const pb_field_t *field, void * const *arg) {
+    LidarScanContext* ctx = (LidarScanContext*)*arg;
 
-    if (!pb_encode_tag_for_field(stream, field)) return false;
+    for (size_t i = 0; i < ctx->count; i++) {
+        if (!pb_encode_tag_for_field(stream, field)) return false;
 
-    homerobot_LidarPoint point = homerobot_LidarPoint_init_default;
-    point.distance_mm = ctx->distance_mm;
-    point.angle_deg = ctx->angle_deg;
-    point.quality = ctx->quality;
-    point.scan_completed = ctx->scan_completed;
+        homerobot_LidarPoint point = homerobot_LidarPoint_init_default;
+        point.distance_mm = ctx->points[i].distance_mm;
+        point.angle_deg = ctx->points[i].angle_deg;
+        point.quality = ctx->points[i].quality;
+        point.scan_completed = ctx->points[i].scan_completed;
 
-    return pb_encode_submessage(stream, homerobot_LidarPoint_fields, &point);
+        if (!pb_encode_submessage(stream, homerobot_LidarPoint_fields, &point)) return false;
+    }
+
+    return true;
 }
 
-bool ProtobufHandler::send_lidar_point(uint32_t millis, float distance_mm, float angle_deg, uint32_t quality, bool scan_completed) {
+bool ProtobufHandler::send_lidar_scan(uint32_t millis, const LidarPointData* points, size_t count) {
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;
     message.which_payload = homerobot_RobotToServerMessage_lidar_tag;
     
-    LidarPointContext ctx = { distance_mm, angle_deg, quality, scan_completed };
-    message.payload.lidar.points.funcs.encode = encode_lidar_points;
+    LidarScanContext ctx = { points, count };
+    message.payload.lidar.points.funcs.encode = encode_lidar_scan_points;
     message.payload.lidar.points.arg = &ctx;
 
     return encode_and_send(message);

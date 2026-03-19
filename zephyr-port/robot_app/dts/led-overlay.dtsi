@@ -1,0 +1,15 @@
+// Device tree overlay for LED definition for T-Watch S3 board
+
+/ {
+        aliases {
+                led0 = &led_gpio0;
+        };
+
+        led_gpio0: led_gpio0 {
+                compatible = "gpio-leds";
+                led0_gpio {
+                        gpios = <&gpio0 45 GPIO_ACTIVE_HIGH>;
+                        label = "Onboard LED";
+                };
+        };
+};

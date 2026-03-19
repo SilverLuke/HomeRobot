@@ -7,11 +7,15 @@
 #include "communication/zephyr_net_client.h"
 #include "communication/protobuf_handler.h"
 #include "actuator/motor.h"
+#include "actuator/status_led.h"
 #include "sensors/lidar.h"
 #include "sensors/imu.h"
 #include "sensors/battery.h"
 #include "sensors/encoders.h"
 #include "secrets.h"
+#include "constants.h"
+
+using namespace constants;
 
 LOG_MODULE_REGISTER(robot_app, LOG_LEVEL_DBG);
 
@@ -24,6 +28,10 @@ static const struct pwm_dt_spec lidar_motor_pwm = PWM_DT_SPEC_GET(DT_ALIAS(lidar
 
 int main(void)
 {
+    StatusLed status_led;
+    status_led.init();
+    status_led.set_status(RobotStatus::NO_WIFI);
+
     printk("EARLY BOOT: Entering main\n");
     k_msleep(2000);
 	printk("Robot application started on Zephyr!\n");
@@ -34,10 +42,11 @@ int main(void)
 	}
 
 	printk("Waiting for Wi-Fi connection...\n");
-	if (!wifi.wait_for_connection(K_SECONDS(30))) {
+	if (!wifi.wait_for_connection(K_MSEC(WIFI_CONNECT_TIMEOUT_MS))) {
 		printk("Wi-Fi connection timeout\n");
 	} else {
 		printk("Wi-Fi connected!\n");
+        status_led.set_status(RobotStatus::WIFI_ONLY);
 		/* Start MCUmgr SMP UDP service for OTA */
 		/*
 		int err = smp_udp_open();
@@ -65,11 +74,12 @@ int main(void)
 		LOG_ERR("Battery initialization failed!");
 	}
 
-	/* PCNT device (the peripheral) */
-	const struct device *const pcnt = DEVICE_DT_GET(DT_INST(0, espressif_esp32_pcnt));
+	/* PCNT devices for each encoder unit */
+	const struct device *const pcnt_sx = DEVICE_DT_GET(DT_ALIAS(encoder_sx));
+	const struct device *const pcnt_dx = DEVICE_DT_GET(DT_ALIAS(encoder_dx));
 
-	Encoders encoder_sx(pcnt, 0);
-	Encoders encoder_dx(pcnt, 1);
+	Encoders encoder_sx(pcnt_sx, 0);
+	Encoders encoder_dx(pcnt_dx, 1);
 
 	Motor motor_sx("SX", &motor_sx_fwd, &motor_sx_bwd, &encoder_sx);
 	Motor motor_dx("DX", &motor_dx_fwd, &motor_dx_bwd, &encoder_dx);
@@ -83,15 +93,21 @@ int main(void)
 	lidar.start();
 
 	uint32_t last_slow_telemetry = 0;
+    uint32_t last_battery_telemetry = 0;
+    uint32_t last_heartbeat = 0;
 
 	while (1) {
+        status_led.update();
+
 		if (wifi.is_connected()) {
 			if (!client.connected()) {
+                status_led.set_status(RobotStatus::WIFI_ONLY);
 				LOG_INF("Attempting to connect to server %s:%d...", wifi_server_host, wifi_server_port);
 				if (client.connect(wifi_server_host, wifi_server_port)) {
 					server_connected = true;
+                    status_led.set_status(RobotStatus::CONNECTED);
 				} else {
-					k_msleep(5000);
+					k_msleep(SERVER_RECONNECT_INTERVAL_MS);
 				}
 			} else {
 				uint32_t now = k_uptime_get_32();
@@ -105,15 +121,24 @@ int main(void)
 					proto_handler.send_imu_data(now, ax, ay, az, gx, gy, gz);
 				}
 
-				// Slow telemetry (1Hz)
-				if (now - last_slow_telemetry >= 1000) {
-					proto_handler.send_battery_status(now, battery.get_percentage(), 
-													  battery.get_voltage_mv(), battery.read_raw());
-					
+				// Encoder telemetry
+				if (now - last_slow_telemetry >= ENCODER_TELEMETRY_INTERVAL_MS) {
 					proto_handler.send_encoders_data(now, encoder_sx.get_ticks(), encoder_dx.get_ticks());
-					
 					last_slow_telemetry = now;
 				}
+
+				// Battery telemetry
+				if (now - last_battery_telemetry >= BATTERY_TELEMETRY_INTERVAL_MS) {
+					proto_handler.send_battery_status(now, battery.get_percentage(), 
+													  battery.get_voltage_mv(), battery.read_raw());
+					last_battery_telemetry = now;
+				}
+
+                // Heartbeat
+                if (now - last_heartbeat >= HEARTBEAT_INTERVAL_MS) {
+                    proto_handler.send_heartbeat(now);
+                    last_heartbeat = now;
+                }
 
 				lidar.loop(proto_handler);
 				motor_sx.loop();
@@ -163,9 +188,10 @@ int main(void)
 		} else {
 			LOG_WRN("Wi-Fi disconnected, waiting...");
 			server_connected = false;
+            status_led.set_status(RobotStatus::NO_WIFI);
 		}
 		
-		k_msleep(10); // 100Hz loop
+		k_msleep(MAIN_LOOP_DELAY_MS);
 	}
 
 	return 0;
