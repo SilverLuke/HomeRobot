@@ -1,7 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/sensor.h>
-#include <zephyr/mgmt/mcumgr/transport/smp_udp.h>
+// #include <zephyr/mgmt/mcumgr/transport/smp_udp.h>
 
 #include "communication/wifi_manager.h"
 #include "communication/zephyr_net_client.h"
@@ -24,25 +24,29 @@ static const struct pwm_dt_spec lidar_motor_pwm = PWM_DT_SPEC_GET(DT_ALIAS(lidar
 
 int main(void)
 {
-	LOG_INF("Robot application started on Zephyr!");
+    printk("EARLY BOOT: Entering main\n");
+    k_msleep(2000);
+	printk("Robot application started on Zephyr!\n");
 
 	WifiManager& wifi = WifiManager::instance();
 	if (!wifi.connect(wifi_ssid, wifi_password)) {
-		LOG_ERR("Failed to start Wi-Fi connection");
+		printk("Failed to start Wi-Fi connection\n");
 	}
 
-	LOG_INF("Waiting for Wi-Fi connection...");
+	printk("Waiting for Wi-Fi connection...\n");
 	if (!wifi.wait_for_connection(K_SECONDS(30))) {
-		LOG_ERR("Wi-Fi connection timeout");
+		printk("Wi-Fi connection timeout\n");
 	} else {
-		LOG_INF("Wi-Fi connected!");
+		printk("Wi-Fi connected!\n");
 		/* Start MCUmgr SMP UDP service for OTA */
+		/*
 		int err = smp_udp_open();
 		if (err) {
 			LOG_ERR("Failed to start MCUmgr SMP UDP service (err %d)", err);
 		} else {
 			LOG_INF("MCUmgr SMP UDP service started!");
 		}
+		*/
 	}
 
 	ZephyrNetClient client;

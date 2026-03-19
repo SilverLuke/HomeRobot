@@ -2,6 +2,7 @@
 **/.idea/
 build
 build-zephyr
+.ccache
 
 # Robot
 robot/.pio

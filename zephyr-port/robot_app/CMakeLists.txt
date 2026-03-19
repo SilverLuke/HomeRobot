@@ -13,6 +13,9 @@ target_sources(app PRIVATE
     src/communication/protobuf_handler.cpp
     src/actuator/motor.cpp
     src/sensors/lidar.cpp
+    src/sensors/imu.cpp
+    src/sensors/battery.cpp
+    src/sensors/encoders.cpp
 )
 
 zephyr_nanopb_sources(app ../../proto/messages.proto)

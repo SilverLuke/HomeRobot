@@ -138,6 +138,14 @@ pkgs.mkShell {
       echo "WARNING: Could not determine ZEPHYR_BASE."
     fi
 
+    # Configure ccache
+    export CCACHE_DIR="$PWD/.ccache"
+    export PATH="${pkgs.ccache}/lib/ccache:$PATH"
+    # Ensure CMake (used by Zephyr/West) uses ccache
+    export CMAKE_C_COMPILER_LAUNCHER=ccache
+    export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+    echo "ccache configured at $CCACHE_DIR"
     echo "Nix shell is ready. You can now use 'west' and other Zephyr tools."
   '';
 }
