@@ -14,6 +14,68 @@ This is a personal project, the goal is to create a robot that can navigate in a
 - 3D printed chassis
 - Wires
 
+## Setup and Installation
+
+Follow these steps to set up the development environment for HomeRobot.
+
+### 1. Zephyr Project Setup
+Initialize and update the Zephyr project workspace:
+
+```bash
+# Initialize the workspace using the zephyrproject-rtos manifest
+west init zephyrproject
+cd zephyrproject
+west update
+# Export zephyr for west
+west zephyr-export
+```
+
+### 2. Zephyr SDK (Version 1.0.0)
+The project is configured to look for the Zephyr SDK at `zephyr-port/zephyr-sdk-1.0.0`.
+
+To set it up:
+1. Download the Zephyr SDK (Version 1.0.0 or compatible version).
+2. Extract or build the SDK into the `zephyr-port/zephyr-sdk-1.0.0` directory.
+3. Run the installation script:
+
+```bash
+cd zephyr-port/zephyr-sdk-1.0.0
+./setup.sh -t all -h -c
+```
+
+*Note: Ensure `ZEPHYR_SDK_INSTALL_DIR` is set to this path in your environment.*
+
+### 3. Other Prerequisites
+The easiest way to manage dependencies is using **Nix** and **direnv**:
+
+```bash
+# Install Nix and direnv, then run:
+direnv allow
+```
+
+This will automatically set up:
+- **Rust & Cargo**: Required for the `server/`.
+- **Python Environment**: With all dependencies for Zephyr.
+- **Protobuf Compiler**: For `nanopb` and server communication.
+- **Build Tools**: CMake, Ninja, and cross-compilation toolchains.
+
+If not using Nix, ensure you have the following installed:
+- [Rust](https://rustup.rs/)
+- [West](https://docs.zephyrproject.org/latest/develop/west/index.html) (`pip3 install west`)
+- Protobuf Compiler (`apt install protobuf-compiler`)
+
+### 4. Building and Flashing
+
+Use the `Makefile` at the root for common tasks:
+
+```bash
+# Build the Rust server and the Zephyr app
+make all
+
+# Flash the Zephyr app to the ESP32-C6
+make flash ESP_DEVICE=/dev/ttyACM0
+```
+
 ## Related repositories
 
 To be completed

@@ -3,6 +3,8 @@
 build
 build-zephyr
 .ccache
+.direnv
+.envrc
 
 # Robot
 robot/.pio
@@ -15,8 +17,9 @@ server/target
 target
 
 # Zephyr
+build-zephyr-led
 zephyr-port/robot_app/src/secrets.h
-zephyr-port/zephyr_led_app/build
 zephyr-port/zephyr-sdk-1.0.0
+zephyr-port/zephyr_led_app/build
 zephyrproject
 
