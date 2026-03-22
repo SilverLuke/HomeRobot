@@ -18,8 +18,8 @@
         motor-sx-bwd-pwm = &pwm_motor_sx_bwd_label;
         motor-dx-fwd-pwm = &pwm_motor_dx_fwd_label;
         motor-dx-bwd-pwm = &pwm_motor_dx_bwd_label;
-        encoder-sx = &pcnt0;
-        encoder-dx = &pcnt1;
+        encoder-sx = &pcnt;
+        encoder-dx = &pcnt;
         status-led = &rmt_led;
     };
 
@@ -128,6 +128,11 @@
     status = "okay";
     pinctrl-0 = <&uart1_default>;
     pinctrl-names = "default";
+    current-speed = <115200>;
+};
+
+&uart0 {
+    status = "okay";
     current-speed = <115200>;
 };
 

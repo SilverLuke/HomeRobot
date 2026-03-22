@@ -28,6 +28,7 @@ static const struct pwm_dt_spec lidar_motor_pwm = PWM_DT_SPEC_GET(DT_ALIAS(lidar
 
 int main(void)
 {
+    printk("\n\n*** MAIN START ***\n\n");
     StatusLed status_led;
     status_led.init();
     status_led.set_status(RobotStatus::NO_WIFI);

@@ -4,52 +4,65 @@
 
 LOG_MODULE_REGISTER(encoders, LOG_LEVEL_INF);
 
+// ESP32-C6 specific PCNT register offsets based on Technical Reference Manual
+#define PCNT_CTRL_REG_OFF          0x60
+#define PCNT_U0_CNT_REG_OFF        0x30 // Unit 0 count is at 0x30, Unit 1 at 0x34...
+#define PCNT_BASE_ADDR             0x60012000
+
 Encoders::Encoders(const struct device* pcnt_unit_dev, uint8_t unit_idx)
     : dev_(pcnt_unit_dev), unit_idx_(unit_idx) {
 }
 
 bool Encoders::init() {
     if (!device_is_ready(dev_)) {
-        LOG_ERR("Encoder device %s not ready", dev_->name);
+        printk("ENCODER ERROR: Device %s not ready\n", dev_->name);
         return false;
     }
 
-    // Ensure the PCNT peripheral clock is enabled and the unit is not paused.
-    // Bit 16 is the clock gate for the whole PCNT module in C6.
-    PCNT.ctrl.val |= (1 << 16); 
+    // Direct Register Access for initialization (ESP32-C6)
+    volatile uint32_t* pcnt_ctrl = (volatile uint32_t*)(PCNT_BASE_ADDR + PCNT_CTRL_REG_OFF);
     
-    // Clear the reset and pause bits for this unit in the CTRL register.
-    // Bit (unit*2) is reset, bit (unit*2 + 1) is pause.
-    PCNT.ctrl.val &= ~(1 << (unit_idx_ * 2));
-    PCNT.ctrl.val &= ~(1 << (unit_idx_ * 2 + 1));
+    // Bit 16: Module Clock Enable
+    *pcnt_ctrl |= (1 << 16); 
+    
+    // Bits [0, 2, 4, 6]: Reset for Units 0-3
+    // Bits [1, 3, 5, 7]: Pause for Units 0-3
+    *pcnt_ctrl &= ~(1 << (unit_idx_ * 2));     // Clear Reset
+    *pcnt_ctrl &= ~(1 << (unit_idx_ * 2 + 1)); // Clear Pause
 
     reset();
-    LOG_INF("Encoder %s (unit %d) initialized and reset", dev_->name, unit_idx_);
+    printk("ENCODER: %s (unit %d) initialized\n", dev_->name, unit_idx_);
     return true;
 }
 
 int32_t Encoders::get_ticks() {
     struct sensor_value val;
-    // We try the sensor API first as it's the most correct way in Zephyr.
     int err = sensor_sample_fetch(dev_);
     if (err == 0) {
-        // Many ESP32 drivers use SENSOR_CHAN_ROTATION for pulse counters.
         err = sensor_channel_get(dev_, SENSOR_CHAN_ROTATION, &val);
         if (err == 0) {
             return (int32_t)val.val1;
         }
     }
 
-    // Fallback: direct register access if the sensor API is not supported or fails.
-    // For ESP32-C6, the counter registers are at base + 0x30 + unit_idx * 4.
-    // According to the SVD, the CNT register is exactly at this offset.
-    return (int32_t)(int16_t)PCNT.cnt_unit[unit_idx_].pulse_cnt;
+    // Explicit Fallback for ESP32-C6
+    volatile uint32_t* cnt_reg = (volatile uint32_t*)(PCNT_BASE_ADDR + PCNT_U0_CNT_REG_OFF + (unit_idx_ * 4));
+    int32_t ticks = (int32_t)(int16_t)(*cnt_reg & 0xFFFF);
+    
+    static uint32_t last_print = 0;
+    if (k_uptime_get_32() - last_print > 1000) {
+        printk("ENCODER %d ticks: %d\n", unit_idx_, ticks);
+        last_print = k_uptime_get_32();
+    }
+    
+    return ticks;
 }
 
 void Encoders::reset() {
-    // Reset the pulse counter for this unit using ESP32 CTRL register.
-    // Bit (unit*2) is the reset bit.
-    PCNT.ctrl.val |= (1 << (unit_idx_ * 2));
+    volatile uint32_t* pcnt_ctrl = (volatile uint32_t*)(PCNT_BASE_ADDR + PCNT_CTRL_REG_OFF);
+    
+    // Toggle Reset bit
+    *pcnt_ctrl |= (1 << (unit_idx_ * 2));
     k_busy_wait(10);
-    PCNT.ctrl.val &= ~(1 << (unit_idx_ * 2));
+    *pcnt_ctrl &= ~(1 << (unit_idx_ * 2));
 }
