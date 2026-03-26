@@ -48,6 +48,18 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
                         Payload::Config(_) => {
                             stats.log("[CONFIG] Robot configuration updated");
                         }
+                        Payload::RpcResponse(resp) => {
+                            stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
+                            if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {
+                                let diag_result: crate::homerobot::DiagnosticResult = diag_result;
+                                stats.log(&format!("[DIAGNOSTICS] All OK: {}", diag_result.all_ok));
+                                for check in diag_result.checks {
+                                    stats.log(&format!("  - {}: {} ({})", check.name, if check.success { "PASS" } else { "FAIL" }, check.message));
+                                }
+                            } else {
+                                stats.log("[RPC ERROR] Failed to decode DiagnosticResult from payload");
+                            }
+                        }
                         _ => {} 
                     }
                 }

@@ -32,6 +32,7 @@ pub enum RobotCommand {
         right_kd: f32,
     },
     RequestData,
+    RunDiagnostic,
 }
 
 impl Default for RobotCommand {
@@ -66,6 +67,15 @@ pub fn send_manual_command(
             };
 
             match &current_command {
+                RobotCommand::RunDiagnostic => {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    let call_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
+                    msg.payload = Some(server_to_robot_message::Payload::RpcRequest(crate::homerobot::RpcRequest {
+                        call_id,
+                        method: "RunDiagnostic".to_string(),
+                        payload: vec![],
+                    }));
+                }
                 RobotCommand::StopAll => {
                     msg.payload = Some(server_to_robot_message::Payload::StopAll(true));
                 }

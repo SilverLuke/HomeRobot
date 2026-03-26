@@ -1,0 +1,7 @@
+homerobot.DiagnosticCheck.name max_size:32
+homerobot.DiagnosticCheck.message max_size:128
+homerobot.DiagnosticResult.checks max_count:5
+homerobot.RpcRequest.method max_size:32
+homerobot.RpcRequest.payload max_size:256
+homerobot.RpcResponse.payload max_size:256
+homerobot.RpcResponse.error max_size:64

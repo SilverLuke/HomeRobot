@@ -15,10 +15,10 @@ public:
     StatusLed();
     bool init();
     void set_status(RobotStatus status);
+    void set_color(uint8_t r, uint8_t g, uint8_t b);
     void update(); // Should be called periodically or run in a thread
 
 private:
-    void set_color(uint8_t r, uint8_t g, uint8_t b);
     void write_led();
 
     const struct device* rmt_dev_;

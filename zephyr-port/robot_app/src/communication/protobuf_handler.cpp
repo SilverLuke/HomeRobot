@@ -88,6 +88,26 @@ bool ProtobufHandler::send_lidar_scan(uint32_t millis, const LidarPointData* poi
     return encode_and_send(message);
 }
 
+bool ProtobufHandler::send_rpc_response(uint32_t millis, uint32_t call_id, const uint8_t* payload, size_t payload_len, const char* error) {
+    homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
+    message.sequence_millis = millis;
+    message.which_payload = homerobot_RobotToServerMessage_rpc_response_tag;
+    
+    message.payload.rpc_response.call_id = call_id;
+    
+    if (payload && payload_len > 0) {
+        message.payload.rpc_response.payload.size = payload_len;
+        memcpy(message.payload.rpc_response.payload.bytes, payload, payload_len);
+    }
+    
+    if (error) {
+        strncpy(message.payload.rpc_response.error, error, sizeof(message.payload.rpc_response.error) - 1);
+        message.payload.rpc_response.error[sizeof(message.payload.rpc_response.error) - 1] = '\0';
+    }
+    
+    return encode_and_send(message);
+}
+
 bool ProtobufHandler::receive_and_decode(homerobot_ServerToRobotMessage& message) {
     if (reading_header_) {
         uint8_t header_byte;

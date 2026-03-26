@@ -73,6 +73,7 @@ pub fn print_summary() {
     println!("D - Turn right (left motor only)\r");
     println!("S - Backward (both motors)\r");
     println!("Space - Stop\r");
+    println!("T - Run Diagnostics (RPC)\r");
     println!("'q' - Quit (press twice)\r");
     println!("Keys will be detected immediately without pressing Enter!\r");
     println!("Unified input control started. Press ESC or 'q' twice to quit.\r");
@@ -128,6 +129,7 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                         CKeyCode::Char('s') => { inputs.pressed_keys.insert(Keycode::S); last_read = Keyboard; }
                         CKeyCode::Char('d') => { inputs.pressed_keys.insert(Keycode::D); last_read = Keyboard; }
                         CKeyCode::Char(' ') => { inputs.pressed_keys.insert(Keycode::Space); last_read = Keyboard; }
+                        CKeyCode::Char('t') => { inputs.pressed_keys.insert(Keycode::T); last_read = Keyboard; }
                         _ => {}
                     }
                 } else if key_event.kind == KeyEventKind::Release {
@@ -137,6 +139,7 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                         CKeyCode::Char('s') => { inputs.pressed_keys.remove(&Keycode::S); last_read = Keyboard; }
                         CKeyCode::Char('d') => { inputs.pressed_keys.remove(&Keycode::D); last_read = Keyboard; }
                         CKeyCode::Char(' ') => { inputs.pressed_keys.remove(&Keycode::Space); last_read = Keyboard; }
+                        CKeyCode::Char('t') => { inputs.pressed_keys.remove(&Keycode::T); last_read = Keyboard; }
                         _ => {}
                     }
                 }
@@ -302,6 +305,9 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand>
                     right_power: 0,
                     right_angle: 0.0,
                 })
+            } else if inputs.pressed_keys.contains(&Keycode::T) {
+                // Trigger Diagnostics
+                Some(RobotCommand::RunDiagnostic)
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
                 Some(RobotCommand::default())
             } else {

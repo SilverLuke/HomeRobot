@@ -27,6 +27,8 @@ public:
     };
     bool send_lidar_scan(uint32_t millis, const LidarPointData* points, size_t count);
 
+    bool send_rpc_response(uint32_t millis, uint32_t call_id, const uint8_t* payload, size_t payload_len, const char* error = nullptr);
+
     bool receive_and_decode(homerobot_ServerToRobotMessage& message);
 
     // TODO: Add more telemetry types (Encoders, etc.)

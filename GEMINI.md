@@ -7,11 +7,12 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 - **Robot Firmware (`zephyr-port/robot_app`)**: The primary firmware for the **ESP32-C6**, developed using **Zephyr RTOS**. It manages:
   - **Sensors**: IMU (BMI160), LiDAR (RP-Lidar A1M8), Encoders (PCNT), and Battery (ADC).
   - **Actuators**: Differential drive motors with PID speed control.
-  - **Communication**: Bidirectional Protobuf over TCP/IP (Wi-Fi).
+  - **Communication**: Bidirectional Protobuf over TCP/IP (Wi-Fi). Includes a lightweight **RPC Dispatcher** for synchronous commands.
+  - **Self-Diagnostics**: Integrated module to verify hardware health (Battery, IMU, Motors/Encoders) on boot or via remote RPC.
 - **Control Server (`server/`)**: A **Rust** application that:
   - Consumes telemetry (IMU, raw Encoder ticks, Lidar scans).
   - Performs **Server-side Odometry** and eventually SLAM.
-  - Issues real-time movement and configuration commands.
+  - Issues real-time movement commands and **RPC requests** (e.g., remote diagnostics).
 - **Protobuf (`proto/`)**: Standardized definitions in `messages.proto`. Communication uses a **2-byte Big-Endian length prefix** for framing.
 - **Legacy Robot (`robot/`)**: Original Arduino/PlatformIO version (deprecated).
 
@@ -57,6 +58,15 @@ Navigate to `server/`:
 ### Communication Protocol
 - **Transport**: TCP Sockets.
 - **Framing**: `[Length: 2 bytes (BE)][Protobuf Payload: N bytes]`.
+- **RPC System**: Uses `RpcRequest` and `RpcResponse` envelopes within the Protobuf stream to handle synchronous command/response patterns without disrupting the asynchronous telemetry flow.
+
+### Remote Diagnostics
+- **Trigger**: Press 'T' in the Rust server CLI to trigger a full hardware self-test.
+- **Sequence**:
+  1. Battery voltage/percentage check.
+  2. IMU communication and gravity vector validation.
+  3. Sequential motor test (Forward -> Backward) with real-time IMU vibration monitoring.
+- **Feedback**: Results are returned as a structured `DiagnosticResult` message and displayed in the server logs.
 
 ### Logging
 - Firmware uses Zephyr's logging subsystem (`LOG_INF`, `LOG_DBG`, etc.).

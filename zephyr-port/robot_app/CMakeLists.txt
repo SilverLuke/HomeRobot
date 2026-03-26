@@ -15,6 +15,7 @@ target_sources(app PRIVATE
     src/communication/protobuf_handler.cpp
     src/actuator/motor.cpp
     src/actuator/status_led.cpp
+    src/diagnostic.cpp
     src/sensors/lidar.cpp
     src/sensors/imu.cpp
     src/sensors/battery.cpp

@@ -57,6 +57,40 @@ message RobotConfig {
   float lidar_frequency = 3;
 }
 
+// Empty message for parameterless RPCs
+message Empty {}
+
+// Results of a single diagnostic check
+message DiagnosticCheck {
+  string name = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Summary of the full diagnostic run
+message DiagnosticResult {
+  bool all_ok = 1;
+  repeated DiagnosticCheck checks = 2;
+}
+
+// RPC Envelope for sending requests to the Robot
+message RpcRequest {
+  uint32 call_id = 1;
+  string method = 2;       // e.g., "RunDiagnostic"
+  bytes payload = 3;       // Serialized request parameters
+}
+
+// RPC Envelope for returning results to the Server
+message RpcResponse {
+  uint32 call_id = 1;
+  bytes payload = 2;       // Serialized response message
+  string error = 3;        // Error string if the call failed
+}
+
+service RobotService {
+  rpc RunDiagnostic(Empty) returns (DiagnosticResult);
+}
+
 // Command to move the motors
 message MotorMoveCommand {
   uint32 left_power = 1;
@@ -81,6 +115,7 @@ message RobotToServerMessage {
     MotorEncoders encoders = 5;
     RobotConfig config = 6;
     bool heartbeat = 7;
+    RpcResponse rpc_response = 8;
   }
 }
 
@@ -93,5 +128,6 @@ message ServerToRobotMessage {
     LidarControlCommand lidar_control = 4;
     bool stop_all = 5;
     bool request_data = 6;
+    RpcRequest rpc_request = 7;
   }
 }

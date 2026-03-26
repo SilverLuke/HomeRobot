@@ -11,7 +11,10 @@
 #include "sensors/lidar.h"
 #include "sensors/imu.h"
 #include "sensors/battery.h"
+#include <pb_encode.h>
+#include <pb_decode.h>
 #include "sensors/encoders.h"
+#include "diagnostic.h"
 #include "secrets.h"
 #include "constants.h"
 
@@ -87,6 +90,14 @@ int main(void)
 
 	motor_sx.init(1.0, 0.0, 0.0);
 	motor_dx.init(1.0, 0.0, 0.0);
+
+	// Hardware Diagnostics
+	Diagnostic diagnostic(motor_sx, motor_dx, imu, battery, status_led);
+	if (!diagnostic.run_all()) {
+		LOG_WRN("Hardware diagnostics reported issues!");
+	} else {
+		LOG_INF("Hardware diagnostics passed.");
+	}
 
 	const struct device *const lidar_uart = DEVICE_DT_GET(DT_ALIAS(lidar_uart));
 	Lidar lidar(lidar_uart, &lidar_motor_pwm);
@@ -181,6 +192,31 @@ int main(void)
 							motor_dx.turn_off();
 							lidar.stop();
 							break;
+						case homerobot_ServerToRobotMessage_rpc_request_tag: {
+							const auto& req = rx_msg.payload.rpc_request;
+							LOG_INF("Received RPC Request: ID=%u, Method=%s", req.call_id, req.method);
+
+							if (strncmp(req.method, "RunDiagnostic", sizeof(req.method)) == 0) {
+								// Run the diagnostics
+								LOG_INF("Running diagnostic via RPC...");
+								homerobot_DiagnosticResult diag_result = diagnostic.run_rpc();
+
+								// Encode the result into the RPC response payload
+								uint8_t payload_buffer[256];
+								pb_ostream_t rpc_stream = pb_ostream_from_buffer(payload_buffer, sizeof(payload_buffer));
+								
+								if (pb_encode(&rpc_stream, homerobot_DiagnosticResult_fields, &diag_result)) {
+									proto_handler.send_rpc_response(now, req.call_id, payload_buffer, rpc_stream.bytes_written, nullptr);
+								} else {
+									LOG_ERR("Failed to encode DiagnosticResult: %s", PB_GET_ERROR(&rpc_stream));
+									proto_handler.send_rpc_response(now, req.call_id, nullptr, 0, "Encoding failed");
+								}
+							} else {
+								LOG_WRN("Unknown RPC Method: %s", req.method);
+								proto_handler.send_rpc_response(now, req.call_id, nullptr, 0, "Unknown method");
+							}
+							break;
+						}
 						default:
 							break;
 					}
