@@ -138,13 +138,22 @@ bool Diagnostic::test_motors_and_encoders(homerobot_DiagnosticResult* result) {
 bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_DiagnosticResult* result) {
     LOG_INF("Testing %s...", name);
     
+    // Get baseline IMU for vibration detection
+    imu_.update();
+    float bax, bay, baz;
+    imu_.get_accel(bax, bay, baz);
+    
+    VibrationMetrics vib;
+    vib.reset();
+
     motor.set_position(0);
     int32_t start_pos = motor.get_position();
     
+    // Forward test
     motor.set_motor(FORWARD, 100);
     for (int i = 0; i < 5; i++) {
         k_msleep(100);
-        log_imu_sample();
+        sample_vibration(vib, bax, bay, baz);
     }
     
     motor.set_motor(BRAKE, 0);
@@ -152,10 +161,11 @@ bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_Dia
     int32_t fwd_pos = motor.get_position();
     int32_t fwd_diff = fwd_pos - start_pos;
     
+    // Backward test
     motor.set_motor(BACKWARD, 100);
     for (int i = 0; i < 5; i++) {
         k_msleep(100);
-        log_imu_sample();
+        sample_vibration(vib, bax, bay, baz);
     }
 
     motor.set_motor(BRAKE, 0);
@@ -165,9 +175,14 @@ bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_Dia
     
     bool fwd_ok = fwd_diff > 10;
     bool bwd_ok = bwd_diff < -10;
+    
+    // Health assessment based on vibration
+    // Values are heuristic: > 5.0g deviation is very high, > 20 rad/s gyro is very high.
+    bool vib_ok = vib.max_acc_vibration < 5.0f && vib.max_gyro_vibration < 15.0f;
 
     char msg[128];
-    snprintf(msg, sizeof(msg), "Fwd: %d, Bwd: %d", fwd_diff, bwd_diff);
+    snprintf(msg, sizeof(msg), "Fwd:%d Bwd:%d Vib:%.1f/%.1f", 
+             fwd_diff, bwd_diff, (double)vib.max_acc_vibration, (double)vib.max_gyro_vibration);
 
     if (!fwd_ok || !bwd_ok) {
         LOG_ERR("%s: Failed motion test (%s)", name, msg);
@@ -175,17 +190,28 @@ bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_Dia
         return false;
     }
 
+    if (!vib_ok) {
+        LOG_WRN("%s: High vibration detected! (%s)", name, msg);
+        // We still pass the test but report the warning in the message
+    }
+
     if (result) add_check(*result, name, true, msg);
     return true;
 }
 
-void Diagnostic::log_imu_sample() {
-
+void Diagnostic::sample_vibration(VibrationMetrics& metrics, float bax, float bay, float baz) {
     if (imu_.update()) {
         float ax, ay, az, gx, gy, gz;
         imu_.get_accel(ax, ay, az);
         imu_.get_gyro(gx, gy, gz);
-        LOG_INF("  [IMU Sample] Accel: (%.2f, %.2f, %.2f) Gyro: (%.2f, %.2f, %.2f)", 
-                (double)ax, (double)ay, (double)az, (double)gx, (double)gy, (double)gz);
+        
+        // Deviation from baseline gravity vector
+        float dev_acc = sqrtf(powf(ax - bax, 2) + powf(ay - bay, 2) + powf(az - baz, 2));
+        float dev_gyro = sqrtf(gx*gx + gy*gy + gz*gz);
+        
+        if (dev_acc > metrics.max_acc_vibration) metrics.max_acc_vibration = dev_acc;
+        if (dev_gyro > metrics.max_gyro_vibration) metrics.max_gyro_vibration = dev_gyro;
+
+        LOG_DBG("  [Vib Sample] Acc Dev: %.2f Gyro: %.2f", (double)dev_acc, (double)dev_gyro);
     }
 }

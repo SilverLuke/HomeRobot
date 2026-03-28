@@ -38,5 +38,11 @@ private:
     // Helper for individual motor test
     bool test_single_motor(Motor& motor, const char* name, homerobot_DiagnosticResult* result = nullptr);
     
-    void log_imu_sample();
+    struct VibrationMetrics {
+        float max_acc_vibration = 0; // Max deviation from baseline
+        float max_gyro_vibration = 0;
+        void reset() { max_acc_vibration = 0; max_gyro_vibration = 0; }
+    };
+
+    void sample_vibration(VibrationMetrics& metrics, float baseline_ax, float baseline_ay, float baseline_az);
 };
