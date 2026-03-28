@@ -9,7 +9,7 @@ Battery::Battery(const struct device* adc_dev, uint8_t channel)
 
 bool Battery::init() {
     if (!device_is_ready(adc_dev_)) {
-        LOG_ERR("ADC device not ready");
+        LOG_ERR( "ADC device not ready");
         return false;
     }
 
@@ -22,7 +22,7 @@ bool Battery::init() {
 
     int err = adc_channel_setup(adc_dev_, &channel_cfg_);
     if (err) {
-        LOG_ERR("Failed to setup ADC channel (err %d)", err);
+        LOG_ERR( "Failed to setup ADC channel (err %d)", err);
         return false;
     }
 
@@ -40,7 +40,7 @@ int32_t Battery::read_raw() {
 
     int err = adc_read(adc_dev_, &sequence);
     if (err) {
-        LOG_ERR("ADC read failed (err %d)", err);
+        LOG_ERR( "ADC read failed (err %d)", err);
         return -1;
     }
 

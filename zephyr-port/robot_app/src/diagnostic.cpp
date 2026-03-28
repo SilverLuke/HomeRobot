@@ -46,7 +46,7 @@ homerobot_DiagnosticResult Diagnostic::run_rpc() {
 }
 
 bool Diagnostic::run_all() {
-    LOG_INF("--- STARTING HARDWARE DIAGNOSTICS ---");
+    LOG_INF( "--- STARTING HARDWARE DIAGNOSTICS ---");
     
     // 1. LED Test: Visual confirmation
     led_.set_color(0, 0, 50); // Blue for "Testing"
@@ -59,24 +59,24 @@ bool Diagnostic::run_all() {
     bool imu_ok = test_imu();
     
     if (!battery_ok) {
-        LOG_ERR("Critical: Battery test failed!");
+        LOG_ERR( "Critical: Battery test failed!");
         led_.set_color(50, 0, 0); // Solid Red
         return false;
     }
 
     if (!imu_ok) {
-        LOG_WRN("Warning: IMU test failed!");
+        LOG_WRN( "Warning: IMU test failed!");
     }
 
     bool motors_ok = test_motors_and_encoders();
 
     if (battery_ok && imu_ok && motors_ok) {
-        LOG_INF("--- DIAGNOSTICS COMPLETED: ALL OK ---");
+        LOG_INF( "--- DIAGNOSTICS COMPLETED: ALL OK ---");
         led_.set_color(0, 50, 0); // Success Green
         k_msleep(1000);
         return true;
     } else {
-        LOG_WRN("--- DIAGNOSTICS COMPLETED: ERRORS FOUND ---");
+        LOG_WRN( "--- DIAGNOSTICS COMPLETED: ERRORS FOUND ---");
         led_.set_color(50, 25, 0); // Warning Orange
         k_msleep(1000);
         return false;
@@ -86,13 +86,13 @@ bool Diagnostic::run_all() {
 bool Diagnostic::test_battery(homerobot_DiagnosticResult* result) {
     uint32_t mv = battery_.get_voltage_mv();
     uint32_t pct = battery_.get_percentage();
-    LOG_INF("Battery: %u mV (%u%%)", mv, pct);
+    LOG_INF( "Battery: %u mV (%u%%)", mv, pct);
 
     char msg[128];
     snprintf(msg, sizeof(msg), "Voltage: %u mV, %u%%", mv, pct);
 
     if (mv < 10000) { 
-        LOG_ERR("Battery voltage dangerously low or not detected!");
+        LOG_ERR( "Battery voltage dangerously low or not detected!");
         if (result) add_check(*result, "Battery", false, msg);
         return false;
     }
@@ -102,21 +102,21 @@ bool Diagnostic::test_battery(homerobot_DiagnosticResult* result) {
 
 bool Diagnostic::test_imu(homerobot_DiagnosticResult* result) {
     if (!imu_.update()) {
-        LOG_ERR("IMU: Communication failed!");
+        LOG_ERR( "IMU: Communication failed!");
         if (result) add_check(*result, "IMU", false, "Communication failed");
         return false;
     }
 
     float ax, ay, az;
     imu_.get_accel(ax, ay, az);
-    LOG_INF("IMU: Accel X: %.2f, Y: %.2f, Z: %.2f", (double)ax, (double)ay, (double)az);
+    LOG_INF( "IMU: Accel X: %.2f, Y: %.2f, Z: %.2f", (double)ax, (double)ay, (double)az);
 
     char msg[128];
     float total_g = sqrt(ax*ax + ay*ay + az*az);
     snprintf(msg, sizeof(msg), "Total G: %.2f", (double)total_g);
 
     if (total_g < 8.0f || total_g > 12.0f) {
-        LOG_WRN("IMU: Accelerometer reading is outside normal gravity range (%.2f g)", (double)total_g);
+        LOG_WRN( "IMU: Accelerometer reading is outside normal gravity range (%.2f g)", (double)total_g);
         if (result) add_check(*result, "IMU", false, msg);
         return false;
     }
@@ -126,7 +126,7 @@ bool Diagnostic::test_imu(homerobot_DiagnosticResult* result) {
 }
 
 bool Diagnostic::test_motors_and_encoders(homerobot_DiagnosticResult* result) {
-    LOG_INF("Starting Motor/Encoder sequential test...");
+    LOG_INF( "Starting Motor/Encoder sequential test...");
     
     bool left_ok = test_single_motor(left_motor_, "Left Motor (SX)", result);
     k_msleep(500); // Brief pause between motor tests
@@ -136,7 +136,7 @@ bool Diagnostic::test_motors_and_encoders(homerobot_DiagnosticResult* result) {
 }
 
 bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_DiagnosticResult* result) {
-    LOG_INF("Testing %s...", name);
+    LOG_INF( "Testing %s...", name);
     
     // Get baseline IMU for vibration detection
     imu_.update();
@@ -185,13 +185,13 @@ bool Diagnostic::test_single_motor(Motor& motor, const char* name, homerobot_Dia
              fwd_diff, bwd_diff, (double)vib.max_acc_vibration, (double)vib.max_gyro_vibration);
 
     if (!fwd_ok || !bwd_ok) {
-        LOG_ERR("%s: Failed motion test (%s)", name, msg);
+        LOG_ERR( "%s: Failed motion test (%s)", name, msg);
         if (result) add_check(*result, name, false, msg);
         return false;
     }
 
     if (!vib_ok) {
-        LOG_WRN("%s: High vibration detected! (%s)", name, msg);
+        LOG_WRN( "%s: High vibration detected! (%s)", name, msg);
         // We still pass the test but report the warning in the message
     }
 
@@ -212,6 +212,6 @@ void Diagnostic::sample_vibration(VibrationMetrics& metrics, float bax, float ba
         if (dev_acc > metrics.max_acc_vibration) metrics.max_acc_vibration = dev_acc;
         if (dev_gyro > metrics.max_gyro_vibration) metrics.max_gyro_vibration = dev_gyro;
 
-        LOG_DBG("  [Vib Sample] Acc Dev: %.2f Gyro: %.2f", (double)dev_acc, (double)dev_gyro);
+        LOG_DBG( "  [Vib Sample] Acc Dev: %.2f Gyro: %.2f", (double)dev_acc, (double)dev_gyro);
     }
 }

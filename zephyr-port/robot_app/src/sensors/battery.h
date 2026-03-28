@@ -32,9 +32,7 @@ private:
     static constexpr uint32_t BATTERY_MAX_VOLTAGE = 16800; // 4S Li-ion fully charged
     static constexpr uint32_t BATTERY_MIN_VOLTAGE = 12000; // 4S Li-ion discharged (3.0V per cell)
     
-    // Voltage divider: R1=100k, R2=10k -> V_adc = V_bat * (10 / (100+10)) = V_bat / 11
-    // ESP32-C6 ADC range is 0-3.3V (with 1/4 gain it's roughly 0-1.1V * 4 = 4.4V max)
-    // Actually gain 1/4 on ESP32 means 0dB to 11dB attenuation.
-    // Let's assume standard divider and reference.
-    static constexpr float VOLTAGE_DIVIDER_RATIO = 11.0f; 
+    // Voltage divider: Adjusted based on 15V telemetry (Raw 2453 -> ~2.63V at ADC)
+    // 15.0 / 2.63 = 5.7
+    static constexpr float VOLTAGE_DIVIDER_RATIO = 5.7f; 
 };

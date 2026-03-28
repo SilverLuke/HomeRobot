@@ -116,7 +116,7 @@ bool ProtobufHandler::receive_and_decode(homerobot_ServerToRobotMessage& message
             if (rx_idx_ == 2) {
                 expected_size_ = (uint16_t)((rx_buffer_[0] << 8) | rx_buffer_[1]);
                 if (expected_size_ > sizeof(rx_buffer_)) {
-                    LOG_ERR("Incoming message too large: %u", expected_size_);
+                    LOG_ERR( "Incoming message too large: %u", expected_size_);
                     rx_idx_ = 0;
                     return false;
                 }
@@ -139,7 +139,7 @@ bool ProtobufHandler::receive_and_decode(homerobot_ServerToRobotMessage& message
                 rx_idx_ = 0;
                 
                 if (!status) {
-                    LOG_ERR("Decoding failed: %s", PB_GET_ERROR(&stream));
+                    LOG_ERR( "Decoding failed: %s", PB_GET_ERROR(&stream));
                     return false;
                 }
                 return true;
@@ -153,12 +153,12 @@ bool ProtobufHandler::receive_and_decode(homerobot_ServerToRobotMessage& message
 bool ProtobufHandler::encode_and_send(const homerobot_RobotToServerMessage& message) {
     pb_ostream_t stream = pb_ostream_from_buffer(buffer_, sizeof(buffer_));
     if (!pb_encode(&stream, homerobot_RobotToServerMessage_fields, &message)) {
-        LOG_ERR("Encoding failed: %s", PB_GET_ERROR(&stream));
+        LOG_ERR( "Encoding failed: %s", PB_GET_ERROR(&stream));
         return false;
     }
 
     size_t encoded_size = stream.bytes_written;
-    LOG_DBG("Encoded %zu bytes", encoded_size);
+    LOG_DBG( "Encoded %zu bytes", encoded_size);
 
     // TODO: Framing. For now, just send it directly.
     // However, without framing, the server cannot know where one message ends and the next begins.
@@ -170,12 +170,12 @@ bool ProtobufHandler::encode_and_send(const homerobot_RobotToServerMessage& mess
     header[1] = (uint8_t)(encoded_size & 0xFF);
 
     if (client_.write(header, 2) != 2) {
-        LOG_ERR("Failed to send header");
+        LOG_ERR( "Failed to send header");
         return false;
     }
 
     if (client_.write(buffer_, encoded_size) != encoded_size) {
-        LOG_ERR("Failed to send message body");
+        LOG_ERR( "Failed to send message body");
         return false;
     }
 

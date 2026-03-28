@@ -2,7 +2,7 @@
 # tools/read_esp32_logs.sh - Capture a snapshot of ESP32 logs.
 
 # Default values
-DURATION=${1:-5}
+DURATION=${1:-15}
 DEVICE=${2:-/dev/ttyACM0}
 BAUD=${3:-115200}
 
@@ -27,7 +27,7 @@ if command -v west &> /dev/null; then
     # We use a subshell to capture output and handle the potential disconnect
     # 2>&1 to see everything.
     timeout --foreground --signal=SIGINT "${DURATION}s" west espressif monitor -p "$DEVICE" 2>&1
-    
+
     RET=$?
     # 124 is timeout (which is what we expect)
     if [ $RET -eq 124 ] || [ $RET -eq 0 ]; then

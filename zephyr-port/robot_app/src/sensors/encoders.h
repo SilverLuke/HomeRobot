@@ -5,14 +5,14 @@
 
 class Encoders {
 public:
-    Encoders(const struct device* pcnt_unit_dev, uint8_t unit_idx);
+    Encoders(const struct device* pcnt_dev, uint8_t unit_idx);
 
     bool init();
     
     /**
-     * @brief Get the current raw tick count from the encoder.
+     * @brief Get the current total tick count from the encoder.
      */
-    int32_t get_ticks();
+    int32_t get_total_ticks();
 
     /**
      * @brief Reset the encoder tick count to zero.
@@ -22,4 +22,5 @@ public:
 private:
     const struct device* dev_;
     uint8_t unit_idx_;
+    int32_t total_ticks_{0};
 };

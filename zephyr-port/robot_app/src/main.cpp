@@ -1,235 +1,108 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/sensor.h>
-// #include <zephyr/mgmt/mcumgr/transport/smp_udp.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/adc.h>
+#include <zephyr/drivers/pwm.h>
 
-#include "communication/wifi_manager.h"
-#include "communication/zephyr_net_client.h"
-#include "communication/protobuf_handler.h"
-#include "actuator/motor.h"
+extern "C" {
+#include <esp_rom_uart.h>
+#include <esp_rom_sys.h>
+}
+
 #include "actuator/status_led.h"
+#include "actuator/motor.h"
 #include "sensors/lidar.h"
-#include "sensors/imu.h"
 #include "sensors/battery.h"
-#include <pb_encode.h>
-#include <pb_decode.h>
 #include "sensors/encoders.h"
-#include "diagnostic.h"
-#include "secrets.h"
 #include "constants.h"
 
 using namespace constants;
 
 LOG_MODULE_REGISTER(robot_app, LOG_LEVEL_DBG);
 
-/* PWM DT Specs */
+// DT Specs
+static const struct device *const lidar_uart_dev = DEVICE_DT_GET(DT_ALIAS(lidar_uart));
+static const struct gpio_dt_spec lidar_en_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(lidar_en), gpios);
+static const struct device *const adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc0));
+
+// PWM DT Specs for Motors
 static const struct pwm_dt_spec motor_sx_fwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_sx_fwd_pwm));
 static const struct pwm_dt_spec motor_sx_bwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_sx_bwd_pwm));
 static const struct pwm_dt_spec motor_dx_fwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_dx_fwd_pwm));
 static const struct pwm_dt_spec motor_dx_bwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_dx_bwd_pwm));
-static const struct pwm_dt_spec lidar_motor_pwm = PWM_DT_SPEC_GET(DT_ALIAS(lidar_pwm));
 
-int main(void)
+// PCNT Devices for Encoders
+static const struct device *const encoder_dev = DEVICE_DT_GET(DT_ALIAS(encoder_sx));
+
+extern "C" int main(void)
 {
-    printk("\n\n*** MAIN START ***\n\n");
-    StatusLed status_led;
-    status_led.init();
-    status_led.set_status(RobotStatus::NO_WIFI);
+    k_msleep(1000); // Give serial bridge time
+    esp_rom_printf("\n\n!!! KERNEL REACHED MAIN !!!\n");
+    esp_rom_printf("Standalone Independent Motor Test (Fixed Encoders)\n");
 
-    printk("EARLY BOOT: Entering main\n");
-    k_msleep(2000);
-	printk("Robot application started on Zephyr!\n");
+    StatusLed statusLed;
+    Battery battery(adc_dev, 2); 
+    Lidar lidar(lidar_uart_dev, &lidar_en_gpio);
+    
+    // SX is Unit 0, DX is Unit 1
+    Encoders encSx(encoder_dev, 0);
+    Encoders encDx(encoder_dev, 1);
+    
+    Motor motorSx("SX", &motor_sx_fwd, &motor_sx_bwd, &encSx);
+    Motor motorDx("DX", &motor_dx_fwd, &motor_dx_bwd, &encDx);
 
-	WifiManager& wifi = WifiManager::instance();
-	if (!wifi.connect(wifi_ssid, wifi_password)) {
-		printk("Failed to start Wi-Fi connection\n");
-	}
+    statusLed.init();
+    battery.init();
+    lidar.init();
+    encSx.init();
+    encDx.init();
+    motorSx.init(1.0, 0.01, 0.1);
+    motorDx.init(1.0, 0.01, 0.1);
 
-	printk("Waiting for Wi-Fi connection...\n");
-	if (!wifi.wait_for_connection(K_MSEC(WIFI_CONNECT_TIMEOUT_MS))) {
-		printk("Wi-Fi connection timeout\n");
-	} else {
-		printk("Wi-Fi connected!\n");
-        status_led.set_status(RobotStatus::WIFI_ONLY);
-		/* Start MCUmgr SMP UDP service for OTA */
-		/*
-		int err = smp_udp_open();
-		if (err) {
-			LOG_ERR("Failed to start MCUmgr SMP UDP service (err %d)", err);
-		} else {
-			LOG_INF("MCUmgr SMP UDP service started!");
-		}
-		*/
-	}
+    statusLed.set_status(RobotStatus::WIFI_ONLY);
+    
+    // Independent Motor Test Sequence
+    esp_rom_printf("Starting Independent Motor Test...\n");
+    uint64_t start_ms = k_uptime_get();
+    while (k_uptime_get() - start_ms < 6000) {
+        uint64_t elapsed = k_uptime_get() - start_ms;
 
-	ZephyrNetClient client;
-	ProtobufHandler proto_handler(client);
-	bool server_connected = false;
+        if (elapsed < 2000) {
+            if (elapsed % 500 < 100) esp_rom_printf("Moving SX ONLY...\n");
+            motorSx.set_motor(FORWARD, 100);
+            motorDx.set_motor(BRAKE, 0);
+        } else if (elapsed < 4000) {
+            if (elapsed % 500 < 100) esp_rom_printf("Moving DX ONLY...\n");
+            motorSx.set_motor(BRAKE, 0);
+            motorDx.set_motor(FORWARD, 100);
+        } else {
+            motorSx.set_motor(BRAKE, 0);
+            motorDx.set_motor(BRAKE, 0);
+        }
 
-	const struct device *const imu_dev = DEVICE_DT_GET(DT_ALIAS(imu));
-	Imu imu(imu_dev);
-	if (!imu.init()) {
-		LOG_ERR("IMU initialization failed!");
-	}
+        int32_t sx = encSx.get_total_ticks();
+        int32_t dx = encDx.get_total_ticks();
+        if (elapsed % 500 < 100) esp_rom_printf("SX: %d | DX: %d\n", sx, dx);
+        k_msleep(100);
+    }
 
-	const struct device *const adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc0));
-	Battery battery(adc_dev, 2); // Channel 2 from overlay
-	if (!battery.init()) {
-		LOG_ERR("Battery initialization failed!");
-	}
+    while (1) {
+        uint32_t v_mv = battery.get_voltage_mv();
+        int32_t sx = encSx.get_total_ticks();
+        int32_t dx = encDx.get_total_ticks();
+        
+        static uint32_t last_print = 0;
+        if (k_uptime_get_32() - last_print >= 1000) {
+            esp_rom_printf("BAT: %u mV | SX: %d | DX: %d | Standalone\n", v_mv, sx, dx);
+            last_print = k_uptime_get_32();
+        }
 
-	/* PCNT devices for each encoder unit */
-	const struct device *const pcnt_sx = DEVICE_DT_GET(DT_ALIAS(encoder_sx));
-	const struct device *const pcnt_dx = DEVICE_DT_GET(DT_ALIAS(encoder_dx));
-
-	Encoders encoder_sx(pcnt_sx, 0);
-	Encoders encoder_dx(pcnt_dx, 1);
-
-	Motor motor_sx("SX", &motor_sx_fwd, &motor_sx_bwd, &encoder_sx);
-	Motor motor_dx("DX", &motor_dx_fwd, &motor_dx_bwd, &encoder_dx);
-
-	motor_sx.init(1.0, 0.0, 0.0);
-	motor_dx.init(1.0, 0.0, 0.0);
-
-	// Hardware Diagnostics
-	Diagnostic diagnostic(motor_sx, motor_dx, imu, battery, status_led);
-	if (!diagnostic.run_all()) {
-		LOG_WRN("Hardware diagnostics reported issues!");
-	} else {
-		LOG_INF("Hardware diagnostics passed.");
-	}
-
-	const struct device *const lidar_uart = DEVICE_DT_GET(DT_ALIAS(lidar_uart));
-	Lidar lidar(lidar_uart, &lidar_motor_pwm);
-	lidar.init();
-	lidar.start();
-
-	uint32_t last_slow_telemetry = 0;
-    uint32_t last_battery_telemetry = 0;
-    uint32_t last_heartbeat = 0;
-
-	while (1) {
-        status_led.update();
-
-		if (wifi.is_connected()) {
-			if (!client.connected()) {
-                status_led.set_status(RobotStatus::WIFI_ONLY);
-				LOG_INF("Attempting to connect to server %s:%d...", wifi_server_host, wifi_server_port);
-				if (client.connect(wifi_server_host, wifi_server_port)) {
-					server_connected = true;
-                    status_led.set_status(RobotStatus::CONNECTED);
-				} else {
-					k_msleep(SERVER_RECONNECT_INTERVAL_MS);
-				}
-			} else {
-				uint32_t now = k_uptime_get_32();
-
-				// IMU Telemetry (High frequency)
-				if (imu.update()) {
-					float ax, ay, az, gx, gy, gz;
-					imu.get_accel(ax, ay, az);
-					imu.get_gyro(gx, gy, gz);
-
-					proto_handler.send_imu_data(now, ax, ay, az, gx, gy, gz);
-				}
-
-				// Encoder telemetry
-				if (now - last_slow_telemetry >= ENCODER_TELEMETRY_INTERVAL_MS) {
-					proto_handler.send_encoders_data(now, encoder_sx.get_ticks(), encoder_dx.get_ticks());
-					last_slow_telemetry = now;
-				}
-
-				// Battery telemetry
-				if (now - last_battery_telemetry >= BATTERY_TELEMETRY_INTERVAL_MS) {
-					proto_handler.send_battery_status(now, battery.get_percentage(), 
-													  battery.get_voltage_mv(), battery.read_raw());
-					last_battery_telemetry = now;
-				}
-
-                // Heartbeat
-                if (now - last_heartbeat >= HEARTBEAT_INTERVAL_MS) {
-                    proto_handler.send_heartbeat(now);
-                    last_heartbeat = now;
-                }
-
-				lidar.loop(proto_handler);
-				motor_sx.loop();
-				motor_dx.loop();
-
-				/* Process incoming commands */
-				homerobot_ServerToRobotMessage rx_msg;
-				if (proto_handler.receive_and_decode(rx_msg)) {
-					LOG_INF("Received command from server, type: %d", rx_msg.which_payload);
-					switch (rx_msg.which_payload) {
-						case homerobot_ServerToRobotMessage_motor_move_tag:
-							motor_sx.set_motor(rx_msg.payload.motor_move.left_power > 0 ? FORWARD : BRAKE, 
-											   (uint8_t)rx_msg.payload.motor_move.left_power);
-							motor_dx.set_motor(rx_msg.payload.motor_move.right_power > 0 ? FORWARD : BRAKE, 
-											   (uint8_t)rx_msg.payload.motor_move.right_power);
-							// Note: Simplified logic, should handle direction from angle or power sign
-							break;
-						case homerobot_ServerToRobotMessage_motor_config_tag:
-							LOG_INF("Applying new PID configuration");
-							if (rx_msg.payload.motor_config.has_left_motor) {
-								motor_sx.config_set_pid(rx_msg.payload.motor_config.left_motor.kp,
-														rx_msg.payload.motor_config.left_motor.ki,
-														rx_msg.payload.motor_config.left_motor.kd);
-								if (rx_msg.payload.motor_config.left_motor.max_speed > 0) {
-									motor_sx.config_set_limit(50, (uint8_t)rx_msg.payload.motor_config.left_motor.max_speed);
-								}
-							}
-							if (rx_msg.payload.motor_config.has_right_motor) {
-								motor_dx.config_set_pid(rx_msg.payload.motor_config.right_motor.kp,
-														rx_msg.payload.motor_config.right_motor.ki,
-														rx_msg.payload.motor_config.right_motor.kd);
-								if (rx_msg.payload.motor_config.right_motor.max_speed > 0) {
-									motor_dx.config_set_limit(50, (uint8_t)rx_msg.payload.motor_config.right_motor.max_speed);
-								}
-							}
-							break;
-						case homerobot_ServerToRobotMessage_stop_all_tag:
-							motor_sx.turn_off();
-							motor_dx.turn_off();
-							lidar.stop();
-							break;
-						case homerobot_ServerToRobotMessage_rpc_request_tag: {
-							const auto& req = rx_msg.payload.rpc_request;
-							LOG_INF("Received RPC Request: ID=%u, Method=%s", req.call_id, req.method);
-
-							if (strncmp(req.method, "RunDiagnostic", sizeof(req.method)) == 0) {
-								// Run the diagnostics
-								LOG_INF("Running diagnostic via RPC...");
-								homerobot_DiagnosticResult diag_result = diagnostic.run_rpc();
-
-								// Encode the result into the RPC response payload
-								uint8_t payload_buffer[256];
-								pb_ostream_t rpc_stream = pb_ostream_from_buffer(payload_buffer, sizeof(payload_buffer));
-								
-								if (pb_encode(&rpc_stream, homerobot_DiagnosticResult_fields, &diag_result)) {
-									proto_handler.send_rpc_response(now, req.call_id, payload_buffer, rpc_stream.bytes_written, nullptr);
-								} else {
-									LOG_ERR("Failed to encode DiagnosticResult: %s", PB_GET_ERROR(&rpc_stream));
-									proto_handler.send_rpc_response(now, req.call_id, nullptr, 0, "Encoding failed");
-								}
-							} else {
-								LOG_WRN("Unknown RPC Method: %s", req.method);
-								proto_handler.send_rpc_response(now, req.call_id, nullptr, 0, "Unknown method");
-							}
-							break;
-						}
-						default:
-							break;
-					}
-				}
-			}
-		} else {
-			LOG_WRN("Wi-Fi disconnected, waiting...");
-			server_connected = false;
-            status_led.set_status(RobotStatus::NO_WIFI);
-		}
-		
-		k_msleep(MAIN_LOOP_DELAY_MS);
-	}
+        lidar.loop();
+        statusLed.update();
+        k_msleep(100);
+    }
 
 	return 0;
 }

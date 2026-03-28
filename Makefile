@@ -1,23 +1,24 @@
-# Paths
+# Sources paths
 SERVER_DIR = server
 ZEPHYR_APP_DIR = zephyr-port/robot_app
 ZEPHYR_BOARD_S3 = esp32s3_devkitc/esp32s3/procpu
 ZEPHYR_BOARD_C6 = esp32c6_devkitc/esp32c6/hpcore
-ZEPHYR_BUILD_DIR = build-zephyr
+# Build paths
+
+ZEPHYR_BUILD_DIR = /tmp/homerobot/build-zephyr
+
 ESP_DEVICE = /dev/ttyACM0
 # Tools
 CARGO = cargo
 WEST = west
 
-.PHONY: all server zephyr build-s3 build-c6 flash monitor snapshot-logs clean
+.PHONY: all server build-s3 build-c6 flash monitor snapshot-logs clean
 
-all: server build-s3
+all: server build-c6
 
 server:
 	@echo "Building server with cargo..."
 	$(CARGO) build --manifest-path $(SERVER_DIR)/Cargo.toml
-
-zephyr: build-s3
 
 build-s3:
 	@echo "Building Zephyr app with west for $(ZEPHYR_BOARD_S3)..."
@@ -32,8 +33,8 @@ flash:
 	$(WEST) flash -d $(ZEPHYR_BUILD_DIR) --esp-device $(ESP_DEVICE)
 
 monitor:
-	@echo "Starting west monitor on $(ESP_DEVICE)..."
-	$(WEST) monitor -p $(ESP_DEVICE)
+	@echo "Starting west espressif monitor on $(ESP_DEVICE)..."
+	cd $(ZEPHYR_BUILD_DIR) && $(WEST) espressif monitor -p $(ESP_DEVICE)
 
 snapshot-logs:
 	@echo "Capturing $(or $(DURATION),5) seconds of logs from $(ESP_DEVICE)..."

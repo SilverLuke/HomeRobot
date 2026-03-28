@@ -5,15 +5,14 @@
 
 / {
     chosen {
-        zephyr,console = &usb_serial;
-        zephyr,shell-uart = &usb_serial;
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
     };
 
     /* Aliases for easy access in code */
     aliases {
         lidar-uart = &uart1;
         imu = &i2c0_bmi160;
-        lidar-pwm = &pwm_motor_lidar;
         motor-sx-fwd-pwm = &pwm_motor_sx_fwd_label;
         motor-sx-bwd-pwm = &pwm_motor_sx_bwd_label;
         motor-dx-fwd-pwm = &pwm_motor_dx_fwd_label;
@@ -21,6 +20,7 @@
         encoder-sx = &pcnt;
         encoder-dx = &pcnt;
         status-led = &rmt_led;
+        lidar-en = &lidar_en_gpio;
     };
 
     soc {
@@ -44,8 +44,16 @@
         };
     };
 
+    lidar_ctrl {
+        compatible = "gpio-leds";
+        lidar_en_gpio: lidar_en {
+            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            label = "Lidar Enable";
+        };
+    };
+
     pwm_motors {
-        compatible = "pwm-leds"; /* Using pwm-leds as a generic PWM consumer */
+        compatible = "pwm-leds";
         pwm_motor_sx_fwd_label: motor_sx_fwd {
             pwms = <&ledc0 0 50000 PWM_POLARITY_NORMAL>;
         };
@@ -57,9 +65,6 @@
         };
         pwm_motor_dx_bwd_label: motor_dx_bwd {
             pwms = <&ledc0 3 50000 PWM_POLARITY_NORMAL>;
-        };
-        pwm_motor_lidar: lidar {
-            pwms = <&ledc0 4 50000 PWM_POLARITY_NORMAL>;
         };
     };
 };
@@ -75,7 +80,29 @@
         };
     };
 
+    uart0_default: uart0_default {
+        group1 {
+            pinmux = <UART0_TX_GPIO0>,
+                     <UART0_RX_GPIO1>;
+        };
+    };
+
+    uart0_sleep: uart0_sleep {
+        group1 {
+            pinmux = <UART0_TX_GPIO0>,
+                     <UART0_RX_GPIO1>;
+        };
+    };
+
     uart1_default: uart1_default {
+        group1 {
+            pinmux = <UART1_TX_GPIO6>,
+                     <UART1_RX_GPIO7>;
+            bias-pull-up;
+        };
+    };
+
+    uart1_sleep: uart1_sleep {
         group1 {
             pinmux = <UART1_TX_GPIO6>,
                      <UART1_RX_GPIO7>;
@@ -84,11 +111,10 @@
 
     ledc0_default: ledc0_default {
         group1 {
-            pinmux = <LEDC_CH0_GPIO19>, /* SX FWD */
-                     <LEDC_CH1_GPIO18>, /* SX BWD */
-                     <LEDC_CH2_GPIO11>, /* DX FWD */
-                     <LEDC_CH3_GPIO10>, /* DX BWD */
-                     <LEDC_CH4_GPIO15>; /* LIDAR */
+            pinmux = <LEDC_CH0_GPIO19>,
+                     <LEDC_CH1_GPIO18>,
+                     <LEDC_CH2_GPIO11>,
+                     <LEDC_CH3_GPIO10>;
             output-enable;
         };
     };
@@ -124,15 +150,19 @@
     };
 };
 
-&uart1 {
+&uart0 {
     status = "okay";
-    pinctrl-0 = <&uart1_default>;
-    pinctrl-names = "default";
+    pinctrl-0 = <&uart0_default>;
+    pinctrl-1 = <&uart0_sleep>;
+    pinctrl-names = "default", "sleep";
     current-speed = <115200>;
 };
 
-&uart0 {
+&uart1 {
     status = "okay";
+    pinctrl-0 = <&uart1_default>;
+    pinctrl-1 = <&uart1_sleep>;
+    pinctrl-names = "default", "sleep";
     current-speed = <115200>;
 };
 
@@ -162,17 +192,12 @@
         reg = <3>;
         timer = <0>;
     };
-
-    pwm_lidar: channel@4 {
-        reg = <4>;
-        timer = <1>;
-    };
 };
 
 &pcnt {
+    status = "okay";
     pinctrl-0 = <&pcnt_default>;
     pinctrl-names = "default";
-    status = "okay";
     #address-cells = <1>;
     #size-cells = <0>;
     pcnt0: unit@0 {

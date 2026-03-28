@@ -22,9 +22,15 @@ StatusLed::StatusLed() :
 bool StatusLed::init() {
     rmt_dev_ = DEVICE_DT_GET(RMT_LED_NODE);
     if (!device_is_ready(rmt_dev_)) {
-        LOG_ERR("RMT Device for LED not ready");
+        LOG_ERR( "RMT Device for LED not ready");
         return false;
     }
+    LOG_INF( "Status LED: Initialized on RMT device %p", rmt_dev_);
+    
+    // Initial flash to confirm physical connectivity
+    set_color(50, 50, 50); // White
+    k_msleep(200);
+    
     set_status(RobotStatus::NO_WIFI);
     return true;
 }
@@ -55,7 +61,12 @@ void StatusLed::set_color(uint8_t r, uint8_t g, uint8_t b) {
 
 void StatusLed::write_led() {
     if (rmt_dev_) {
-        rmt_tx_transmit(rmt_dev_, symbols_, 24, K_MSEC(100));
+        int ret = rmt_tx_transmit(rmt_dev_, symbols_, 24, K_MSEC(100));
+        if (ret < 0) {
+            LOG_ERR( "Status LED: Transmit failed (%d)", ret);
+        } else {
+            LOG_DBG( "Status LED: Transmit success (R:%d G:%d B:%d)", r_, g_, b_);
+        }
     }
 }
 

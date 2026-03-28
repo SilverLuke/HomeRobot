@@ -8,7 +8,7 @@ Imu::Imu(const struct device* dev) : dev_(dev) {
 
 bool Imu::init() {
     if (!device_is_ready(dev_)) {
-        LOG_ERR("IMU device not ready");
+        LOG_ERR( "IMU device not ready");
         return false;
     }
     return true;
@@ -16,7 +16,7 @@ bool Imu::init() {
 
 bool Imu::update() {
     if (sensor_sample_fetch(dev_) < 0) {
-        LOG_ERR("Sensor sample update error");
+        LOG_ERR( "Sensor sample update error");
         return false;
     }
 

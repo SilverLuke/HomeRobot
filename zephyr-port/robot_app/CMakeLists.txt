@@ -10,9 +10,9 @@ include(nanopb)
 
 target_sources(app PRIVATE 
     src/main.cpp
-    src/communication/zephyr_net_client.cpp
-    src/communication/wifi_manager.cpp
-    src/communication/protobuf_handler.cpp
+    # src/communication/zephyr_net_client.cpp
+    # src/communication/wifi_manager.cpp
+    # src/communication/protobuf_handler.cpp
     src/actuator/motor.cpp
     src/actuator/status_led.cpp
     src/diagnostic.cpp
@@ -20,6 +20,7 @@ target_sources(app PRIVATE
     src/sensors/imu.cpp
     src/sensors/battery.cpp
     src/sensors/encoders.cpp
+    src/sensors/pcnt_reader.c
 )
 
 zephyr_nanopb_sources(app ../../proto/messages.proto)

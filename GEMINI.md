@@ -19,9 +19,23 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 ## Hardware Stack
 - **MCU**: ESP32-C6 (Main controller)
 - **LiDAR**: RP-Lidar A1M8 (360-degree point cloud)
+  - **UART**: UART1 (TX: GPIO 7, RX: GPIO 6)
+  - **Motor Enable**: GPIO 15
 - **IMU**: BMI160 (6-axis Accel/Gyro)
-- **Actuators**: 2x DC Motors with Encoders (Differential Drive)
+  - **I2C**: I2C0 (SDA: GPIO 4, SCL: GPIO 5)
+- **Actuators**: 2x DC Motors (Differential Drive)
+  - **Motor SX**: Forward: GPIO 19 (PWM), Backward: GPIO 18 (PWM)
+  - **Motor DX**: Forward: GPIO 11 (PWM), Backward: GPIO 10 (PWM)
+- **Encoders**: 2x Incremental Encoders (PCNT)
+  - **Encoder SX**: A: GPIO 21, B: GPIO 20 (PCNT Unit 0)
+  - **Encoder DX**: A: GPIO 23, B: GPIO 22 (PCNT Unit 1)
 - **Power**: 4x Li-Ion 26650 batteries (4S configuration)
+  - **Battery Sense**: ADC0 Channel 2 (GPIO 2)
+
+### Driver Notes
+- **Encoders**: Uses a C wrapper (`pcnt_reader.c`) to access low-level ESP32-C6 PCNT hardware units directly, bypassing Zephyr's Unit 0 limitation.
+- **Motors**: 2-pin PWM scheme (PWM on FWD or BWD pin, other pin LOW).
+- **Console**: UART0 (GPIO 0/1) via CH343 USB bridge.
 
 ## Building and Running
 
@@ -37,6 +51,7 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 - `make server`: Builds the Rust control server.
 - `make zephyr`: Builds the Zephyr-based robot application.
 - `make flash`: Flashes the Zephyr app to the ESP32-C6.
+- `make monitor`: Starts the serial monitor for the ESP32.
 - `make snapshot-logs`: Captures 5 seconds of logs from the ESP32 (useful for non-blocking status checks).
 
 #### Control Server (Rust)
