@@ -14,6 +14,10 @@ bool Encoders::init() {
         LOG_ERR("PCNT device not ready");
         return false;
     }
+    
+    // Manually start the specific unit
+    pcnt_init_unit(unit_idx_);
+    
     LOG_INF("Encoders initialized on PCNT device %p, Unit %d", dev_, unit_idx_);
     return true;
 }
