@@ -39,6 +39,7 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
         loop {
             match protocol.read_message() {
                 Ok(Some(msg)) => {
+                    stats.log(&format!("[MSG] Received message (seq: {})", msg.sequence_millis));
                     if let Some(payload) = msg.payload {
                         match payload {
                             Payload::Battery(bat) => {
@@ -75,7 +76,7 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
             }
         }
 
-        send_manual_command(robot_command.clone(), &mut protocol, start_time, &mut last_sent_command);
+        send_manual_command(robot_command.clone(), &mut protocol, start_time, &mut last_sent_command, stats.clone());
         sleep(Duration::from_millis(10));
     }
 
@@ -138,6 +139,14 @@ fn main() -> io::Result<()> {
     // 3. SDL & Terminal Input Loop (Main Thread)
     // We wrap this in enable_raw_mode to allow terminal input to be captured instantly.
     crossterm::terminal::enable_raw_mode().unwrap();
+    use crossterm::execute;
+    use crossterm::event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags};
+    let _ = execute!(
+        io::stdout(),
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+        )
+    );
     
     if let Ok(sdl_context) = sdl2::init() {
         print_summary();

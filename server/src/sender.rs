@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use crate::homerobot::{ServerToRobotMessage, MotorMoveCommand, server_to_robot_message};
 use crate::reader::ProtocolManager;
+use crate::stats::Stats;
 use prost::Message;
 
 // Robot command structure representing all possible commands to the robot
@@ -50,7 +51,8 @@ pub fn send_manual_command(
     robot_command: Arc<Mutex<RobotCommand>>,
     protocol: &mut ProtocolManager<TcpStream>,
     start_time: Instant,
-    last_sent_command: &mut RobotCommand)
+    last_sent_command: &mut RobotCommand,
+    stats: Arc<Stats>)
 {
     let mut new_command = None;
     if let Ok(current_command) = robot_command.lock() {
@@ -133,6 +135,8 @@ pub fn send_manual_command(
 
             if let Err(e) = protocol.send_packet(&final_packet) {
                 eprintln!("Error sending motor command: {:?}\r", e);
+            } else {
+                stats.log(&format!("[CMD] Sent: {:?}", current_command));
             }
 
             *last_sent_command = current_command;

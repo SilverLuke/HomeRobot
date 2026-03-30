@@ -100,7 +100,8 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
         // 1. Check Terminal Input (crossterm)
         if event::poll(Duration::from_millis(0)).unwrap_or(false) {
             if let Ok(CEvent::Key(key_event)) = event::read() {
-                if key_event.kind == KeyEventKind::Press {
+                if key_event.kind == KeyEventKind::Press || key_event.kind == KeyEventKind::Repeat {
+                    let kind_str = if key_event.kind == KeyEventKind::Repeat { "Repeat" } else { "Pressed" };
                     match key_event.code {
                         CKeyCode::Char('q') | CKeyCode::Esc => {
                             let count = quit_count.fetch_add(1, Ordering::SeqCst) + 1;
@@ -124,22 +125,22 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                                 process::exit(0);
                             }
                         }
-                        CKeyCode::Char('w') => { inputs.pressed_keys.insert(Keycode::W); last_read = Keyboard; }
-                        CKeyCode::Char('a') => { inputs.pressed_keys.insert(Keycode::A); last_read = Keyboard; }
-                        CKeyCode::Char('s') => { inputs.pressed_keys.insert(Keycode::S); last_read = Keyboard; }
-                        CKeyCode::Char('d') => { inputs.pressed_keys.insert(Keycode::D); last_read = Keyboard; }
-                        CKeyCode::Char(' ') => { inputs.pressed_keys.insert(Keycode::Space); last_read = Keyboard; }
-                        CKeyCode::Char('t') => { inputs.pressed_keys.insert(Keycode::T); last_read = Keyboard; }
+                        CKeyCode::Char('w') => { stats.log(&format!("[KEY] {} 'w'", kind_str)); inputs.pressed_keys.insert(Keycode::W); last_read = Keyboard; }
+                        CKeyCode::Char('a') => { stats.log(&format!("[KEY] {} 'a'", kind_str)); inputs.pressed_keys.insert(Keycode::A); last_read = Keyboard; }
+                        CKeyCode::Char('s') => { stats.log(&format!("[KEY] {} 's'", kind_str)); inputs.pressed_keys.insert(Keycode::S); last_read = Keyboard; }
+                        CKeyCode::Char('d') => { stats.log(&format!("[KEY] {} 'd'", kind_str)); inputs.pressed_keys.insert(Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char(' ') => { stats.log(&format!("[KEY] {} 'Space'", kind_str)); inputs.pressed_keys.insert(Keycode::Space); last_read = Keyboard; }
+                        CKeyCode::Char('t') => { stats.log(&format!("[KEY] {} 't'", kind_str)); inputs.pressed_keys.insert(Keycode::T); last_read = Keyboard; }
                         _ => {}
                     }
                 } else if key_event.kind == KeyEventKind::Release {
                     match key_event.code {
-                        CKeyCode::Char('w') => { inputs.pressed_keys.remove(&Keycode::W); last_read = Keyboard; }
-                        CKeyCode::Char('a') => { inputs.pressed_keys.remove(&Keycode::A); last_read = Keyboard; }
-                        CKeyCode::Char('s') => { inputs.pressed_keys.remove(&Keycode::S); last_read = Keyboard; }
-                        CKeyCode::Char('d') => { inputs.pressed_keys.remove(&Keycode::D); last_read = Keyboard; }
-                        CKeyCode::Char(' ') => { inputs.pressed_keys.remove(&Keycode::Space); last_read = Keyboard; }
-                        CKeyCode::Char('t') => { inputs.pressed_keys.remove(&Keycode::T); last_read = Keyboard; }
+                        CKeyCode::Char('w') => { stats.log("[KEY] Released 'w'"); inputs.pressed_keys.remove(&Keycode::W); last_read = Keyboard; }
+                        CKeyCode::Char('a') => { stats.log("[KEY] Released 'a'"); inputs.pressed_keys.remove(&Keycode::A); last_read = Keyboard; }
+                        CKeyCode::Char('s') => { stats.log("[KEY] Released 's'"); inputs.pressed_keys.remove(&Keycode::S); last_read = Keyboard; }
+                        CKeyCode::Char('d') => { stats.log("[KEY] Released 'd'"); inputs.pressed_keys.remove(&Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char(' ') => { stats.log("[KEY] Released 'Space'"); inputs.pressed_keys.remove(&Keycode::Space); last_read = Keyboard; }
+                        CKeyCode::Char('t') => { stats.log("[KEY] Released 't'"); inputs.pressed_keys.remove(&Keycode::T); last_read = Keyboard; }
                         _ => {}
                     }
                 }
@@ -184,10 +185,12 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                     }
                 }
                 SdlEvent::KeyDown { keycode: Some(key), .. } => {
+                    stats.log(&format!("[KEY] Pressed '{:?}'", key));
                     inputs.pressed_keys.insert(key);
                     last_read = Keyboard;
                 },
                 SdlEvent::KeyUp { keycode: Some(key), .. } => {
+                    stats.log(&format!("[KEY] Released '{:?}'", key));
                     inputs.pressed_keys.remove(&key);
                     last_read = Keyboard;
                 },
@@ -311,7 +314,7 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand>
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
                 Some(RobotCommand::default())
             } else {
-                None
+                Some(RobotCommand::StopAll)
             };
             return command;
         }
