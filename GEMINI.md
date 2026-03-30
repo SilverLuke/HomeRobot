@@ -39,10 +39,12 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 
 ## Building and Running
 
-### Prerequisites
-- [Nix](https://nixos.org/) with `direnv` (recommended for environment setup)
-- [Cargo](https://doc.rust-lang.org/cargo/) (Rust build tool)
-- [West](https://docs.zephyrproject.org/latest/develop/west/index.html) (Zephyr build tool)
+### AI Agent Capabilities
+The AI coding agent has direct connectivity to the robot hardware via the local development environment. It can autonomously:
+- **Build**: Compile the Zephyr firmware and Rust server.
+- **Flash**: Deploy firmware to the ESP32-C6 via `make flash`.
+- **Monitor**: Capture and analyze real-time logs via `make monitor` or `make snapshot-logs`.
+- **Test**: Execute manual movement and diagnostic commands using the `cmd_sender` utility to verify hardware behavior.
 
 ### Key Commands
 
@@ -54,6 +56,21 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 - `make flash`: Flashes the Zephyr app to the ESP32-C6.
 - `make monitor`: Starts the serial monitor for the ESP32.
 - `make snapshot-logs`: Captures 5 seconds of logs from the ESP32 (useful for non-blocking status checks).
+
+#### Command Sender (Testing Utility)
+Navigate to `tools/cmd_sender/` to send direct Protobuf commands:
+- `cargo run -- move --left 100 --right 100`: Move forward at 100 power.
+- `cargo run -- stop`: Send an immediate emergency stop.
+- `cargo run -- diag`: Trigger the remote diagnostic suite.
+- `cargo run -- interactive`: Enter WASD mode for manual navigation (Esc to exit).
+- Add `--proxy` if testing via the `robot_proxy` bridge.
+
+#### Manual Verification Workflow
+To get immediate feedback after a code change (e.g., PID adjustment or sensor logic update):
+1. **Flash & Monitor**: Run `make flash monitor` to deploy the change and observe serial output.
+2. **Trigger Action**: In a separate terminal, use `cmd_sender` to move the robot (e.g., `cargo run -- move --left 50 --right 50`).
+3. **Analyze**: Observe the PID error and encoder ticks in the serial logs to verify the hardware response matches expectations.
+4. **Diagnostic**: Run `cargo run -- diag` to perform a comprehensive health check and verify that all systems are still operational.
 
 #### Control Server (Rust)
 Navigate to `server/`:
@@ -75,6 +92,24 @@ Navigate to `server/`:
 - **Transport**: TCP Sockets.
 - **Framing**: `[Length: 2 bytes (BE)][Protobuf Payload: N bytes]`.
 - **RPC System**: Uses `RpcRequest` and `RpcResponse` envelopes within the Protobuf stream to handle synchronous command/response patterns without disrupting the asynchronous telemetry flow.
+- **Config Sync**: The robot is programmed to transmit its current `RobotConfig` (PID gains, etc.) immediately upon a successful TCP connection. This ensures the Server Dashboard is always synchronized with the hardware state without manual querying.
+
+## Dashboard Architecture (GTK4 + Rust)
+- **Threading Model**: 
+    - **Main Thread**: Dedicated exclusively to the GTK4 Event Loop (`app.run()`).
+    - **Background Thread 1 (Networking)**: Manages the TCP listener and per-connection `handle_connection` loops.
+    - **Background Thread 2 (Input)**: Manages legacy SDL2 joystick and terminal `crossterm` events.
+- **Async Bridge**: Since `glib::MainContext::channel` is deprecated in `glib-rs 0.20`, the server uses a standard `std::sync::mpsc` channel. The GTK thread polls this channel every 33ms (approx. 30 FPS) using `glib::timeout_add_local`.
+- **Memory Safety**: To share GTK widgets (labels, canvas) with the polling closure, widgets must be **cloned** (incrementing the GObject reference count) before being moved into the closure.
+
+## Telemetry Strategy
+- **Fast Telemetry (10Hz)**: IMU (Accel/Gyro) and Encoders are bundled and sent every 100ms. This frequency is optimized for real-time dashboard responsiveness without saturating the ESP32 Wi-Fi buffer.
+- **Slow Telemetry (0.2Hz)**: Battery voltage and health status are sent every 5 seconds.
+- **LiDAR Streaming**: Sent as batches of points. The Dashboard uses a custom `GtkDrawingArea` with a scale of `0.05 px/mm` and renders a 50cm-interval polar grid for spatial reference.
+
+## Development Gotchas
+- **Nix Dev Headers**: GTK4 compilation in Nix requires the `.dev` output of libraries (e.g., `gtk4.dev`, `glib.dev`) to be present in `nativeBuildInputs` so that `pkg-config` can locate the `.pc` files.
+- **Stop Logic**: Due to firmware-side tag limitations, the "Stop" command (sent on WASD release) is implemented as a `MotorMoveCommand` with `power=0`, rather than a dedicated boolean flag, to ensure cross-version compatibility.
 
 ### Remote Diagnostics
 - **Trigger**: Press 'T' in the Rust server CLI to trigger a full hardware self-test.

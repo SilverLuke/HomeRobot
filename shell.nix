@@ -79,6 +79,13 @@ pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
     # System dependencies for Zephyr and Server
     SDL2
+    gtk4.dev
+    glib.dev
+    cairo.dev
+    pango.dev
+    gdk-pixbuf.dev
+    graphene.dev
+    libadwaita
     cargo
     rustc
     ccache
