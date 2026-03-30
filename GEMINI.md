@@ -47,9 +47,10 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 ### Key Commands
 
 #### Top-level (Makefile)
-- `make all`: Builds both the server and the Zephyr app.
+- `make all`: Builds both the server and the Zephyr app (default 16MB flash).
 - `make server`: Builds the Rust control server.
 - `make zephyr`: Builds the Zephyr-based robot application.
+- `make build-c6 FLASH=8M`: Build specifically for 8MB flash hardware (defaults to 16M).
 - `make flash`: Flashes the Zephyr app to the ESP32-C6.
 - `make monitor`: Starts the serial monitor for the ESP32.
 - `make snapshot-logs`: Captures 5 seconds of logs from the ESP32 (useful for non-blocking status checks).

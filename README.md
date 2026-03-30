@@ -30,12 +30,12 @@ west update
 west zephyr-export
 ```
 
-### 2. Zephyr SDK (Version 1.0.0)
-The project is configured to look for the Zephyr SDK at `zephyr-port/zephyr-sdk-1.0.0`.
+### 2. Zephyr SDK
+The project is configured to look for the Zephyr SDK at `zephyr-port/zephyr-sdk-1.0.0` (Note: This matches the expected directory name, but the recommended SDK version is **0.16.8**).
 
 To set it up:
-1. Download the Zephyr SDK (Version 1.0.0 or compatible version).
-2. Extract or build the SDK into the `zephyr-port/zephyr-sdk-1.0.0` directory.
+1. Download the Zephyr SDK (Version 0.16.8 or compatible).
+2. Extract it into the `zephyr-port/zephyr-sdk-1.0.0` directory.
 3. Run the installation script:
 
 ```bash
@@ -43,7 +43,7 @@ cd zephyr-port/zephyr-sdk-1.0.0
 ./setup.sh -t all -h -c
 ```
 
-*Note: Ensure `ZEPHYR_SDK_INSTALL_DIR` is set to this path in your environment.*
+*Note: In Nix environments, `ZEPHYR_SDK_INSTALL_DIR` is set automatically.*
 
 ### 3. Other Prerequisites
 The easiest way to manage dependencies is using **Nix** and **direnv**:
@@ -69,11 +69,20 @@ If not using Nix, ensure you have the following installed:
 Use the `Makefile` at the root for common tasks:
 
 ```bash
-# Build the Rust server and the Zephyr app
+# Build the Rust server and the Zephyr app (Default 16MB flash)
 make all
 
+# Build only the Rust control server
+make server
+
+# Build for specific hardware (e.g., 8MB flash)
+make build-c6 FLASH=8M
+
 # Flash the Zephyr app to the ESP32-C6
-make flash ESP_DEVICE=/dev/ttyACM0
+make flash
+
+# Start the serial monitor
+make monitor
 ```
 
 ## Related repositories
@@ -84,7 +93,7 @@ To be completed
 
 ## To Do
 
-- [] Check endianess before sending in / recieving from  the network
+- [ ] Check endianness before sending to / receiving from the network
 
 
 

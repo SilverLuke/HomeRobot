@@ -7,6 +7,10 @@ ZEPHYR_BOARD_C6 = esp32c6_devkitc/esp32c6/hpcore
 
 ZEPHYR_BUILD_DIR = /tmp/homerobot/build-zephyr
 
+# Hardware variations
+FLASH ?= 16M
+SNIPPET = espressif-flash-$(FLASH)
+
 ESP_DEVICE = /dev/ttyACM0
 # Tools
 CARGO = cargo
@@ -25,8 +29,8 @@ build-s3:
 	$(WEST) build -p -b $(ZEPHYR_BOARD_S3) -d $(ZEPHYR_BUILD_DIR) $(ZEPHYR_APP_DIR)
 
 build-c6:
-	@echo "Building Zephyr app with west for $(ZEPHYR_BOARD_C6)..."
-	$(WEST) build -p -b $(ZEPHYR_BOARD_C6) -d $(ZEPHYR_BUILD_DIR) $(ZEPHYR_APP_DIR)
+	@echo "Building Zephyr app with west for $(ZEPHYR_BOARD_C6) with $(FLASH) flash..."
+	$(WEST) build -p -b $(ZEPHYR_BOARD_C6) -S $(SNIPPET) -d $(ZEPHYR_BUILD_DIR) $(ZEPHYR_APP_DIR) -- -DCONFIG_ESPTOOLPY_FLASHSIZE_$(FLASH)B=y
 
 flash:
 	@echo "Flashing Zephyr app to $(ESP_DEVICE)..."
