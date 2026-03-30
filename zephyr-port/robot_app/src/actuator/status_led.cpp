@@ -29,7 +29,7 @@ bool StatusLed::init() {
     
     // Initial flash to confirm physical connectivity
     set_color(50, 50, 50); // White
-    k_msleep(200);
+    k_msleep(50);
     
     set_status(RobotStatus::NO_WIFI);
     return true;

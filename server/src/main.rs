@@ -69,7 +69,7 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
                 Ok(None) => break,
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
                 Err(e) => {
-                    stats.log(&format!("[ERROR] Connection to {} lost: {:?}", addr, e));
+                    stats.log(&format!("[ERROR] Connection to {} lost: {} ({:?})", addr, e, e.kind()));
                     return; // Exit handle_connection
                 }
             }

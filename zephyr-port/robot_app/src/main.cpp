@@ -62,12 +62,33 @@ const char* get_payload_name(pb_size_t which) {
 
 extern "C" int main(void)
 {
-    // HUGE DELAY FOR VOLTAGE STABILIZATION
-    esp_rom_printf("\n\n--- HomeRobot Booting (5s stabilizer) ---\n");
-    k_sleep(K_MSEC(5000));
+    // Fast bootstrap: initialize battery first
+    esp_rom_printf("\n\n--- HomeRobot Booting (Fast) ---\n");
+    k_sleep(K_MSEC(100)); // Minimal stabilization
 
     StatusLed statusLed;
     Battery battery(adc_dev, 2); 
+
+    statusLed.init(); // note: statusLed.init() now has 50ms delay
+    battery.init();
+
+    // Power Guard: Check if battery is connected (>10V)
+    // This prevents BOD resets when running only on USB (5V)
+    uint32_t boot_voltage = battery.get_voltage_mv();
+    esp_rom_printf("Boot Voltage: %u mV\n", boot_voltage);
+    
+    if (boot_voltage < 10000) {
+        statusLed.set_color(50, 25, 0); // Orange warning
+        while (boot_voltage < 10000) {
+            esp_rom_printf("!!! LOW POWER: %u mV !!! (Please turn on battery switch)\n", boot_voltage);
+            k_sleep(K_MSEC(1000));
+            boot_voltage = battery.get_voltage_mv();
+        }
+        statusLed.set_status(RobotStatus::NO_WIFI);
+    }
+    esp_rom_printf("Power OK: %u mV. Proceeding with full init...\n", boot_voltage);
+
+    // Initialize the rest of the hardware
     Lidar lidar(lidar_uart_dev, &lidar_en_gpio);
     Imu imu(imu_dev);
     Encoders encSx(encoder_dev, 0);
@@ -75,8 +96,6 @@ extern "C" int main(void)
     Motor motorSx("SX", &motor_sx_fwd, &motor_sx_bwd, &encSx);
     Motor motorDx("DX", &motor_dx_fwd, &motor_dx_bwd, &encDx);
 
-    statusLed.init();
-    battery.init();
     encSx.init();
     encDx.init();
     imu.init();
@@ -99,7 +118,7 @@ extern "C" int main(void)
             if (!netClient.connected()) {
                 esp_rom_printf("Wi-Fi OK. Connecting to server: %s:%d\n", wifi_server_host, wifi_server_port);
                 if (netClient.connect(wifi_server_host, wifi_server_port)) {
-                    esp_rom_printf("CONNECTED to server\n");
+                    esp_rom_printf("[%u] CONNECTED to server at %s:%d\n", k_uptime_get_32(), wifi_server_host, wifi_server_port);
                     statusLed.set_status(RobotStatus::CONNECTED);
                 } else {
                     esp_rom_printf("Server connection failed\n");

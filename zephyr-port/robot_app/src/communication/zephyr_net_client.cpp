@@ -26,11 +26,11 @@ std::size_t ZephyrNetClient::read(uint8_t* buffer, std::size_t size) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
       return 0;
     }
-    LOG_ERR( "Recv error: %d", errno);
+    LOG_ERR( "Recv error: %d (sock_fd=%d)", errno, sock_fd_);
     stop();
     return 0;
   } else if (bytes_read == 0) {
-    LOG_INF( "Connection closed by peer");
+    LOG_INF( "Connection closed by peer (EOF) (sock_fd=%d)", sock_fd_);
     stop();
     return 0;
   }
