@@ -13,6 +13,11 @@ indicatif = "0.17"
 signal-hook = "0.4.3"
 libc = "0.2.183"
 crossterm = "0.29.0"
+gtk4 = { version = "0.9.6", features = ["v4_16"] }
+gdk4 = "0.9.6"
+glib = "0.20"
+cairo-rs = "0.20"
+lazy_static = "1.5"
 
 [build-dependencies]
 prost-build = "0.13"

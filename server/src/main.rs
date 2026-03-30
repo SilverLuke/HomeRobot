@@ -3,124 +3,46 @@ mod input;
 mod sender;
 mod constants;
 mod stats;
+mod gui;
+mod command;
+mod connection;
 
 pub mod homerobot {
     include!(concat!(env!("OUT_DIR"), "/homerobot.rs"));
 }
 
-use std::net::{TcpListener, TcpStream};
+use gtk4::prelude::*;
+use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{io, thread, process};
 use std::io::Write;
 
-use crate::input::{handle_input, print_joystick_info, print_summary};
-use crate::sender::{send_manual_command, RobotCommand};
-use crate::homerobot::robot_to_server_message::Payload;
+use crate::input::{handle_input, print_summary};
+use crate::command::RobotCommand;
 use crate::stats::Stats;
-
-/// Handles a single robot connection
-fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>, stats: Arc<Stats>, sig_count: Arc<AtomicUsize>) {
-    stats.active_connections.fetch_add(1, Ordering::SeqCst);
-    let addr = stream.peer_addr().unwrap_or_else(|_| "unknown".parse().unwrap());
-    stats.log(&format!("[CONN] New connection from {}", addr));
-    
-    stream.set_nonblocking(true).ok();
-    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-
-    let mut protocol = reader::ProtocolManager::new(stream, stats.clone());
-    let start_time = Instant::now();
-    let mut last_sent_command = RobotCommand::default();
-    
-    while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
-        // Drain all available messages
-        loop {
-            match protocol.read_message() {
-                Ok(Some(msg)) => {
-                    stats.log(&format!("[MSG] Received message (seq: {})", msg.sequence_millis));
-                    if let Some(payload) = msg.payload {
-                        match payload {
-                            Payload::Battery(bat) => {
-                                stats.log(&format!("[BATTERY] {}%, {} mV", bat.percentage, bat.voltage_mv));
-                            }
-                            Payload::Encoders(enc) => {
-                                stats.log(&format!("[ENCODERS] L: {}, R: {}", enc.left_encoder, enc.right_encoder));
-                            }
-                            Payload::Config(_) => {
-                                stats.log("[CONFIG] Robot configuration updated");
-                            }
-                            Payload::Lidar(scan) => {
-                                let points_len = scan.points.len();
-                                let has_scan_completed = scan.points.iter().any(|p| p.scan_completed);
-                                
-                                if has_scan_completed {
-                                    static mut LAST_SCAN_TIME: Option<Instant> = None;
-                                    let now = Instant::now();
-                                    unsafe {
-                                        if let Some(last) = LAST_SCAN_TIME {
-                                            let duration = now.duration_since(last);
-                                            let freq = 1.0 / duration.as_secs_f32();
-                                            stats.log(&format!("[LIDAR] Received scan ({} pts), Freq: {:.2} Hz", points_len, freq));
-                                        } else {
-                                            stats.log(&format!("[LIDAR] Received first full scan ({} pts)", points_len));
-                                        }
-                                        LAST_SCAN_TIME = Some(now);
-                                    }
-                                } else {
-                                    stats.log(&format!("[LIDAR] Received points batch ({} pts)", points_len));
-                                }
-                            }
-                            Payload::RpcResponse(resp) => {
-                                stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
-                                if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {
-                                    let diag_result: crate::homerobot::DiagnosticResult = diag_result;
-                                    stats.log(&format!("[DIAGNOSTICS] All OK: {}", diag_result.all_ok));
-                                    for check in diag_result.checks {
-                                        stats.log(&format!("  - {}: {} ({})", check.name, if check.success { "PASS" } else { "FAIL" }, check.message));
-                                    }
-                                } else {
-                                    stats.log("[RPC ERROR] Failed to decode DiagnosticResult from payload");
-                                }
-                            }
-                            _ => {} 
-                        }
-                    }
-                }
-                Ok(None) => break,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
-                Err(e) => {
-                    stats.log(&format!("[ERROR] Connection to {} lost: {} ({:?})", addr, e, e.kind()));
-                    return; // Exit handle_connection
-                }
-            }
-        }
-
-        send_manual_command(robot_command.clone(), &mut protocol, start_time, &mut last_sent_command, stats.clone());
-        sleep(Duration::from_millis(10));
-    }
-
-    stats.active_connections.fetch_sub(1, Ordering::SeqCst);
-    stats.log(&format!("[CONN] Closing connection to {}", addr));
-}
+use crate::gui::init_gui;
+use crate::connection::handle_connection;
 
 fn main() -> io::Result<()> {
-    // 0. Disable SDL2 Signal Catching
     std::env::set_var("SDL_NO_SIGNAL_HANDLERS", "1");
 
     let stats = Stats::new();
     let robot_command = Arc::new(Mutex::new(RobotCommand::StopAll));
     let sig_count = Arc::new(AtomicUsize::new(0));
 
-    // 1. Cross-platform Signal Handling
+    // 1. Initialize GTK GUI
+    let (gui_app, gui_tx) = init_gui(robot_command.clone());
+
+    // 2. Signal Handling
     let sc = sig_count.clone();
     let stats_signal = stats.clone();
     ctrlc::set_handler(move || {
         let count = sc.fetch_add(1, Ordering::SeqCst) + 1;
         if count == 1 {
             stats_signal.running.store(false, Ordering::SeqCst);
-            // Print directly to stderr for immediate visibility
             let _ = writeln!(io::stderr(), "\r\n[CTRL+C] Shutdown initiated. Press again to force exit.\r");
         } else {
             let _ = writeln!(io::stderr(), "\r\n[CTRL+C] Force exit requested.\r");
@@ -129,12 +51,15 @@ fn main() -> io::Result<()> {
     }).expect("Error setting Ctrl-C handler");
 
     println!("======================================\r");
-    println!("      Robot Control Server v0.8       \r");
+    println!("      Robot Control Server v1.0       \r");
+    println!("      (with GTK4 Dashboard)           \r");
     println!("======================================\r");
-    // 2. Start Listener
+
+    // 3. Start Listener
     let stats_server = stats.clone();
     let rc_server = robot_command.clone();
     let sig_count_server = sig_count.clone();
+    let gui_tx_server = gui_tx.clone();
     thread::spawn(move || {
         let addr = "0.0.0.0:12345";
         let listener = TcpListener::bind(addr).expect("Could not bind");
@@ -147,7 +72,8 @@ fn main() -> io::Result<()> {
                     let rc = Arc::clone(&rc_server);
                     let st = Arc::clone(&stats_server);
                     let sc = Arc::clone(&sig_count_server);
-                    thread::spawn(move || handle_connection(stream, rc, st, sc));
+                    let gtx = gui_tx_server.clone();
+                    thread::spawn(move || handle_connection(stream, rc, st, sc, gtx));
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                     sleep(Duration::from_millis(100));
@@ -157,33 +83,20 @@ fn main() -> io::Result<()> {
         }
     });
 
-    // 3. SDL & Terminal Input Loop (Main Thread)
-    // We wrap this in enable_raw_mode to allow terminal input to be captured instantly.
-    crossterm::terminal::enable_raw_mode().unwrap();
-    use crossterm::execute;
-    use crossterm::event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags};
-    let _ = execute!(
-        io::stdout(),
-        PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
-        )
-    );
-    
-    if let Ok(sdl_context) = sdl2::init() {
-        print_summary();
-        if let Ok(joystick) = sdl_context.joystick() {
-            let _ = print_joystick_info(&joystick);
+    // 4. Input Loop (Background Thread)
+    let rc_input = robot_command.clone();
+    let st_input = stats.clone();
+    let sc_input = sig_count.clone();
+    thread::spawn(move || {
+        if let Ok(sdl_context) = sdl2::init() {
+            print_summary();
+            handle_input(rc_input, &sdl_context, st_input, sc_input);
         }
-        
-        handle_input(robot_command.clone(), &sdl_context, stats.clone(), sig_count.clone());
-    } else {
-        writeln!(io::stderr(), "[ERROR] Failed to initialize SDL2 input subsystem\r").unwrap();
-        while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
-            sleep(Duration::from_millis(500));
-        }
-    }
+    });
 
-    let _ = crossterm::terminal::disable_raw_mode();
+    // 5. Run GTK GUI on Main Thread
+    gui_app.run();
+
     println!("\n\r[SHUTDOWN] Exiting...\r");
     Ok(())
 }
