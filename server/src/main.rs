@@ -35,40 +35,43 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
     let mut last_sent_command = RobotCommand::default();
     
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
-        match protocol.read_message() {
-            Ok(Some(msg)) => {
-                if let Some(payload) = msg.payload {
-                    match payload {
-                        Payload::Battery(bat) => {
-                            stats.log(&format!("[BATTERY] {}%, {} mV", bat.percentage, bat.voltage_mv));
-                        }
-                        Payload::Encoders(enc) => {
-                            stats.log(&format!("[ENCODERS] L: {}, R: {}", enc.left_encoder, enc.right_encoder));
-                        }
-                        Payload::Config(_) => {
-                            stats.log("[CONFIG] Robot configuration updated");
-                        }
-                        Payload::RpcResponse(resp) => {
-                            stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
-                            if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {
-                                let diag_result: crate::homerobot::DiagnosticResult = diag_result;
-                                stats.log(&format!("[DIAGNOSTICS] All OK: {}", diag_result.all_ok));
-                                for check in diag_result.checks {
-                                    stats.log(&format!("  - {}: {} ({})", check.name, if check.success { "PASS" } else { "FAIL" }, check.message));
-                                }
-                            } else {
-                                stats.log("[RPC ERROR] Failed to decode DiagnosticResult from payload");
+        // Drain all available messages
+        loop {
+            match protocol.read_message() {
+                Ok(Some(msg)) => {
+                    if let Some(payload) = msg.payload {
+                        match payload {
+                            Payload::Battery(bat) => {
+                                stats.log(&format!("[BATTERY] {}%, {} mV", bat.percentage, bat.voltage_mv));
                             }
+                            Payload::Encoders(enc) => {
+                                stats.log(&format!("[ENCODERS] L: {}, R: {}", enc.left_encoder, enc.right_encoder));
+                            }
+                            Payload::Config(_) => {
+                                stats.log("[CONFIG] Robot configuration updated");
+                            }
+                            Payload::RpcResponse(resp) => {
+                                stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
+                                if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {
+                                    let diag_result: crate::homerobot::DiagnosticResult = diag_result;
+                                    stats.log(&format!("[DIAGNOSTICS] All OK: {}", diag_result.all_ok));
+                                    for check in diag_result.checks {
+                                        stats.log(&format!("  - {}: {} ({})", check.name, if check.success { "PASS" } else { "FAIL" }, check.message));
+                                    }
+                                } else {
+                                    stats.log("[RPC ERROR] Failed to decode DiagnosticResult from payload");
+                                }
+                            }
+                            _ => {} 
                         }
-                        _ => {} 
                     }
                 }
-            }
-            Ok(None) => {}
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-            Err(e) => {
-                stats.log(&format!("[ERROR] Connection to {} lost: {:?}", addr, e));
-                break;
+                Ok(None) => break,
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                Err(e) => {
+                    stats.log(&format!("[ERROR] Connection to {} lost: {:?}", addr, e));
+                    return; // Exit handle_connection
+                }
             }
         }
 

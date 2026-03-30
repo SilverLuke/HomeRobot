@@ -24,7 +24,10 @@ impl<S: Read + Write> ProtocolManager<S> {
     }
 
     pub(crate) fn read_message(&mut self) -> io::Result<Option<RobotToServerMessage>> {
-        self.do_read()?;
+        // If we don't even have a header, try to read more from socket
+        if self.read_buffer.len() < 2 {
+            self.do_read()?;
+        }
 
         if self.read_buffer.len() < 2 {
             return Ok(None);
@@ -36,6 +39,11 @@ impl<S: Read + Write> ProtocolManager<S> {
             len_bytes[i] = *self.read_buffer.get(i).unwrap();
         }
         let msg_len = u16::from_be_bytes(len_bytes) as usize;
+
+        // If we don't have the full message, try to read more from socket
+        if self.read_buffer.len() < 2 + msg_len {
+            self.do_read()?;
+        }
 
         if self.read_buffer.len() < 2 + msg_len {
             return Ok(None);
