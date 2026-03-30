@@ -10,9 +10,9 @@ include(nanopb)
 
 target_sources(app PRIVATE 
     src/main.cpp
-    # src/communication/zephyr_net_client.cpp
-    # src/communication/wifi_manager.cpp
-    # src/communication/protobuf_handler.cpp
+    src/communication/zephyr_net_client.cpp
+    src/communication/wifi_manager.cpp
+    src/communication/protobuf_handler.cpp
     src/actuator/motor.cpp
     src/actuator/status_led.cpp
     src/diagnostic.cpp

@@ -35,10 +35,10 @@ public:
 
 private:
     NetClient& client_;
-    uint8_t buffer_[512]; // Buffer for serialized data
+    uint8_t buffer_[1024]; // Buffer for serialized data
 
     // RX state
-    uint8_t rx_buffer_[512];
+    uint8_t rx_buffer_[1024];
     size_t rx_idx_;
     uint16_t expected_size_;
     bool reading_header_;

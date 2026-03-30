@@ -20,7 +20,7 @@ std::size_t ZephyrNetClient::read(uint8_t* buffer, std::size_t size) {
     return 0;
   }
 
-  // Use non-blocking read for now
+  // Use non-blocking read
   ssize_t bytes_read = zsock_recv(sock_fd_, buffer, size, ZSOCK_MSG_DONTWAIT);
   if (bytes_read < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -47,8 +47,12 @@ std::size_t ZephyrNetClient::write(const uint8_t* buffer, std::size_t size) {
     return 0;
   }
 
-  ssize_t bytes_written = zsock_send(sock_fd_, buffer, size, 0);
+  // Use non-blocking send to prevent hanging the main loop
+  ssize_t bytes_written = zsock_send(sock_fd_, buffer, size, ZSOCK_MSG_DONTWAIT);
   if (bytes_written < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return 0; // Buffer full, skip this write to keep loop running
+    }
     LOG_ERR( "Send error: %d", errno);
     stop();
     return 0;
@@ -114,5 +118,4 @@ void ZephyrNetClient::stop() {
 }
 
 void ZephyrNetClient::flush() {
-  // No-op for Zephyr BSD sockets (write already sends)
 }
