@@ -31,13 +31,21 @@ void Lidar::start() {
     LOG_INF("Starting Lidar...");
     enable_motor(true);
     
-    // Give it time to spin up
+    // Reset lidar to clear any stuck state
+    LOG_INF("Sending RESET command...");
+    uint8_t reset_cmd[] = {CMD_SYNC_BYTE, CMD_RESET};
+    for(int i=0; i<2; i++) uart_poll_out(uart_dev_, reset_cmd[i]);
+    
+    // Give it time to spin up and reset
     k_sleep(K_MSEC(1000));
 
     // Send Scan command
     LOG_INF("Sending SCAN command...");
     uint8_t scan_cmd[] = {CMD_SYNC_BYTE, CMD_SCAN};
-    for(int i=0; i<2; i++) uart_poll_out(uart_dev_, scan_cmd[i]);
+    for(int i=0; i<2; i++) {
+        uart_poll_out(uart_dev_, scan_cmd[i]);
+        LOG_DBG("Sent byte: 0x%02x", scan_cmd[i]);
+    }
     
     state_ = State::WAITING_HEADER;
 }
@@ -59,6 +67,11 @@ void Lidar::enable_motor(bool enable) {
 void Lidar::loop(ProtobufHandler* proto_handler) {
     uint8_t rx_byte;
     while (uart_poll_in(uart_dev_, &rx_byte) == 0) {
+        static bool first_byte = true;
+        if (first_byte) {
+            LOG_INF("Lidar: Receiving raw bytes...");
+            first_byte = false;
+        }
         process_byte(rx_byte, proto_handler);
     }
 }
@@ -111,6 +124,7 @@ void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler
     points_count_++;
 
     if (points_count_ >= BATCH_SIZE) {
+        LOG_DBG("Sending lidar scan batch (%d points)", points_count_);
         proto_handler->send_lidar_scan(k_uptime_get_32(), points_buffer_, points_count_);
         points_count_ = 0;
     }

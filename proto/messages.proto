@@ -129,5 +129,6 @@ message ServerToRobotMessage {
     bool stop_all = 5;
     bool request_data = 6;
     RpcRequest rpc_request = 7;
+    bool stop_moving = 8;
   }
 }

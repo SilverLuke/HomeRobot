@@ -54,6 +54,7 @@ const char* get_payload_name(pb_size_t which) {
         case homerobot_ServerToRobotMessage_motor_config_tag: return "MOTOR_CONFIG";
         case homerobot_ServerToRobotMessage_lidar_control_tag: return "LIDAR_CTRL";
         case homerobot_ServerToRobotMessage_stop_all_tag: return "STOP_ALL";
+        case homerobot_ServerToRobotMessage_stop_moving_tag: return "STOP_MOVING";
         case homerobot_ServerToRobotMessage_request_data_tag: return "REQ_DATA";
         case homerobot_ServerToRobotMessage_rpc_request_tag: return "RPC_REQ";
         default: return "UNKNOWN";
@@ -150,11 +151,22 @@ extern "C" int main(void)
                         diagnostic.run_rpc();
                         protoHandler.send_rpc_response(k_uptime_get_32(), rx_msg.payload.rpc_request.call_id, nullptr, 0);
                     }
+                    else if (rx_msg.which_payload == homerobot_ServerToRobotMessage_lidar_control_tag) {
+                        bool active = rx_msg.payload.lidar_control.active;
+                        esp_rom_printf(" -> LIDAR CTRL: %s\n", active ? "START" : "STOP");
+                        if (active) lidar.start();
+                        else lidar.stop();
+                    }
                     else if (rx_msg.which_payload == homerobot_ServerToRobotMessage_stop_all_tag) {
                         esp_rom_printf(" -> STOP ALL\n");
                         motorSx.set_motor(BRAKE, 0);
                         motorDx.set_motor(BRAKE, 0);
                         lidar.stop();
+                    }
+                    else if (rx_msg.which_payload == homerobot_ServerToRobotMessage_stop_moving_tag) {
+                        esp_rom_printf(" -> STOP MOVING\n");
+                        motorSx.set_motor(BRAKE, 0);
+                        motorDx.set_motor(BRAKE, 0);
                     }
                 }
             }

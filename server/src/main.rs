@@ -51,6 +51,27 @@ fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>,
                             Payload::Config(_) => {
                                 stats.log("[CONFIG] Robot configuration updated");
                             }
+                            Payload::Lidar(scan) => {
+                                let points_len = scan.points.len();
+                                let has_scan_completed = scan.points.iter().any(|p| p.scan_completed);
+                                
+                                if has_scan_completed {
+                                    static mut LAST_SCAN_TIME: Option<Instant> = None;
+                                    let now = Instant::now();
+                                    unsafe {
+                                        if let Some(last) = LAST_SCAN_TIME {
+                                            let duration = now.duration_since(last);
+                                            let freq = 1.0 / duration.as_secs_f32();
+                                            stats.log(&format!("[LIDAR] Received scan ({} pts), Freq: {:.2} Hz", points_len, freq));
+                                        } else {
+                                            stats.log(&format!("[LIDAR] Received first full scan ({} pts)", points_len));
+                                        }
+                                        LAST_SCAN_TIME = Some(now);
+                                    }
+                                } else {
+                                    stats.log(&format!("[LIDAR] Received points batch ({} pts)", points_len));
+                                }
+                            }
                             Payload::RpcResponse(resp) => {
                                 stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
                                 if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {

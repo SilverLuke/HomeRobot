@@ -10,6 +10,7 @@ use prost::Message;
 #[derive(Debug, Clone, PartialEq)]
 pub enum RobotCommand {
     StopAll,
+    StopMoving,
     MotorDirect { 
         left_speed: i16,
         right_speed: i16,
@@ -80,6 +81,9 @@ pub fn send_manual_command(
                 }
                 RobotCommand::StopAll => {
                     msg.payload = Some(server_to_robot_message::Payload::StopAll(true));
+                }
+                RobotCommand::StopMoving => {
+                    msg.payload = Some(server_to_robot_message::Payload::StopMoving(true));
                 }
                 RobotCommand::MotorDirect { left_speed, right_speed } => {
                     msg.payload = Some(server_to_robot_message::Payload::MotorMove(MotorMoveCommand {

@@ -72,7 +72,9 @@ pub fn print_summary() {
     println!("A - Turn left (right motor only)\r");
     println!("D - Turn right (left motor only)\r");
     println!("S - Backward (both motors)\r");
-    println!("Space - Stop\r");
+    println!("L - Start Lidar\r");
+    println!("K - Stop Lidar\r");
+    println!("Space - Stop All (Motors + Lidar)\r");
     println!("T - Run Diagnostics (RPC)\r");
     println!("'q' - Quit (press twice)\r");
     println!("Keys will be detected immediately without pressing Enter!\r");
@@ -129,6 +131,9 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                         CKeyCode::Char('a') => { stats.log(&format!("[KEY] {} 'a'", kind_str)); inputs.pressed_keys.insert(Keycode::A); last_read = Keyboard; }
                         CKeyCode::Char('s') => { stats.log(&format!("[KEY] {} 's'", kind_str)); inputs.pressed_keys.insert(Keycode::S); last_read = Keyboard; }
                         CKeyCode::Char('d') => { stats.log(&format!("[KEY] {} 'd'", kind_str)); inputs.pressed_keys.insert(Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char('l') => { stats.log(&format!("[KEY] {} 'l'", kind_str)); inputs.pressed_keys.insert(Keycode::L); last_read = Keyboard; }
+                        CKeyCode::Char('k') => { stats.log(&format!("[KEY] {} 'k'", kind_str)); inputs.pressed_keys.insert(Keycode::K); last_read = Keyboard; }
+                        CKeyCode::Char('x') => { stats.log(&format!("[KEY] {} 'x'", kind_str)); inputs.pressed_keys.insert(Keycode::X); last_read = Keyboard; }
                         CKeyCode::Char(' ') => { stats.log(&format!("[KEY] {} 'Space'", kind_str)); inputs.pressed_keys.insert(Keycode::Space); last_read = Keyboard; }
                         CKeyCode::Char('t') => { stats.log(&format!("[KEY] {} 't'", kind_str)); inputs.pressed_keys.insert(Keycode::T); last_read = Keyboard; }
                         _ => {}
@@ -139,6 +144,9 @@ pub fn handle_input(robot_command: Arc<Mutex<RobotCommand>>, sdl_context: &Sdl, 
                         CKeyCode::Char('a') => { stats.log("[KEY] Released 'a'"); inputs.pressed_keys.remove(&Keycode::A); last_read = Keyboard; }
                         CKeyCode::Char('s') => { stats.log("[KEY] Released 's'"); inputs.pressed_keys.remove(&Keycode::S); last_read = Keyboard; }
                         CKeyCode::Char('d') => { stats.log("[KEY] Released 'd'"); inputs.pressed_keys.remove(&Keycode::D); last_read = Keyboard; }
+                        CKeyCode::Char('l') => { stats.log("[KEY] Released 'l'"); inputs.pressed_keys.remove(&Keycode::L); last_read = Keyboard; }
+                        CKeyCode::Char('k') => { stats.log("[KEY] Released 'k'"); inputs.pressed_keys.remove(&Keycode::K); last_read = Keyboard; }
+                        CKeyCode::Char('x') => { stats.log("[KEY] Released 'x'"); inputs.pressed_keys.remove(&Keycode::X); last_read = Keyboard; }
                         CKeyCode::Char(' ') => { stats.log("[KEY] Released 'Space'"); inputs.pressed_keys.remove(&Keycode::Space); last_read = Keyboard; }
                         CKeyCode::Char('t') => { stats.log("[KEY] Released 't'"); inputs.pressed_keys.remove(&Keycode::T); last_read = Keyboard; }
                         _ => {}
@@ -311,10 +319,18 @@ fn elaborate_input(inputs: &mut Input, input_type: TYPE) -> Option<RobotCommand>
             } else if inputs.pressed_keys.contains(&Keycode::T) {
                 // Trigger Diagnostics
                 Some(RobotCommand::RunDiagnostic)
+            } else if inputs.pressed_keys.contains(&Keycode::L) {
+                // Start Lidar
+                Some(RobotCommand::LidarControl { active: true, target_frequency_hz: 5.0 })
+            } else if inputs.pressed_keys.contains(&Keycode::K) {
+                // Stop Lidar
+                Some(RobotCommand::LidarControl { active: false, target_frequency_hz: 0.0 })
             } else if inputs.pressed_keys.contains(&Keycode::Space) {
-                Some(RobotCommand::default())
-            } else {
+                // Stop All
                 Some(RobotCommand::StopAll)
+            } else {
+                // Fallback (e.g. WASD release)
+                Some(RobotCommand::StopMoving)
             };
             return command;
         }
