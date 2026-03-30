@@ -92,6 +92,9 @@ void StatusLed::update() {
         case RobotStatus::CONNECTED:
             target_r = 0; target_g = 50; target_b = 0; // Fixed Green
             break;
+        case RobotStatus::LOW_BATTERY:
+            target_r = 50; target_g = 25; target_b = 0; // Orange
+            break;
     }
 
     if (target_r != r_ || target_g != g_ || target_b != b_) {

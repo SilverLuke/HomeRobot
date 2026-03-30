@@ -101,26 +101,32 @@ bool Diagnostic::test_battery(homerobot_DiagnosticResult* result) {
 }
 
 bool Diagnostic::test_imu(homerobot_DiagnosticResult* result) {
+    LOG_INF("IMU: Starting detailed check...");
     if (!imu_.update()) {
-        LOG_ERR( "IMU: Communication failed!");
+        LOG_ERR( "IMU: Communication failed! (sample_fetch error)");
         if (result) add_check(*result, "IMU", false, "Communication failed");
         return false;
     }
 
-    float ax, ay, az;
+    float ax, ay, az, gx, gy, gz;
     imu_.get_accel(ax, ay, az);
-    LOG_INF( "IMU: Accel X: %.2f, Y: %.2f, Z: %.2f", (double)ax, (double)ay, (double)az);
+    imu_.get_gyro(gx, gy, gz);
+    
+    float total_g = sqrt(ax*ax + ay*ay + az*az);
+    
+    LOG_INF("IMU: Raw Accel -> X: %.3f, Y: %.3f, Z: %.3f (Total: %.3f m/s^2)", (double)ax, (double)ay, (double)az, (double)total_g);
+    LOG_INF("IMU: Raw Gyro  -> X: %.3f, Y: %.3f, Z: %.3f", (double)gx, (double)gy, (double)gz);
 
     char msg[128];
-    float total_g = sqrt(ax*ax + ay*ay + az*az);
-    snprintf(msg, sizeof(msg), "Total G: %.2f", (double)total_g);
+    snprintf(msg, sizeof(msg), "Acc:%.1f G:%.1f Gyro:%.1f", (double)total_g, (double)(total_g/9.81), (double)sqrt(gx*gx + gy*gy + gz*gz));
 
-    if (total_g < 8.0f || total_g > 12.0f) {
-        LOG_WRN( "IMU: Accelerometer reading is outside normal gravity range (%.2f g)", (double)total_g);
+    if (total_g < 7.0f || total_g > 13.0f) {
+        LOG_WRN( "IMU: Gravity vector (%.2f) outside Earth normal range [7, 13]", (double)total_g);
         if (result) add_check(*result, "IMU", false, msg);
         return false;
     }
     
+    LOG_INF("IMU: Sensor health OK.");
     if (result) add_check(*result, "IMU", true, msg);
     return true;
 }

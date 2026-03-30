@@ -15,6 +15,8 @@ public:
 
     bool send_encoders_data(uint32_t millis, int32_t left, int32_t right);
 
+    bool send_robot_config(uint32_t millis, float kp_l, float ki_l, float kd_l, float kp_r, float ki_r, float kd_r);
+
     bool send_heartbeat(uint32_t millis);
 
     bool send_lidar_point(uint32_t millis, float distance_mm, float angle_deg, uint32_t quality, bool scan_completed);

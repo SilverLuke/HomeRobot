@@ -13,9 +13,11 @@ bool ProtobufHandler::send_imu_data(uint32_t millis, float acc_x, float acc_y, f
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;
     message.which_payload = homerobot_RobotToServerMessage_imu_tag;
+    message.payload.imu.has_acceleration = true;
     message.payload.imu.acceleration.x = acc_x;
     message.payload.imu.acceleration.y = acc_y;
     message.payload.imu.acceleration.z = acc_z;
+    message.payload.imu.has_gyroscope = true;
     message.payload.imu.gyroscope.x = gyro_x;
     message.payload.imu.gyroscope.y = gyro_y;
     message.payload.imu.gyroscope.z = gyro_z;
@@ -40,6 +42,28 @@ bool ProtobufHandler::send_encoders_data(uint32_t millis, int32_t left, int32_t 
     message.which_payload = homerobot_RobotToServerMessage_encoders_tag;
     message.payload.encoders.left_encoder = left;
     message.payload.encoders.right_encoder = right;
+
+    return encode_and_send(message);
+}
+
+bool ProtobufHandler::send_robot_config(uint32_t millis, float kp_l, float ki_l, float kd_l, float kp_r, float ki_r, float kd_r) {
+    homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
+    message.sequence_millis = millis;
+    message.which_payload = homerobot_RobotToServerMessage_config_tag;
+    
+    message.payload.config.has_left_motor = true;
+    message.payload.config.left_motor.kp = kp_l;
+    message.payload.config.left_motor.ki = ki_l;
+    message.payload.config.left_motor.kd = kd_l;
+    message.payload.config.left_motor.max_speed = 255;
+
+    message.payload.config.has_right_motor = true;
+    message.payload.config.right_motor.kp = kp_r;
+    message.payload.config.right_motor.ki = ki_r;
+    message.payload.config.right_motor.kd = kd_r;
+    message.payload.config.right_motor.max_speed = 255;
+
+    message.payload.config.lidar_frequency = 5.0;
 
     return encode_and_send(message);
 }

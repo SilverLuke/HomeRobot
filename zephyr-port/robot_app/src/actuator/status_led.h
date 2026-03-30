@@ -7,7 +7,8 @@
 enum class RobotStatus {
     NO_WIFI,        // Fixed Red
     WIFI_ONLY,      // Blinking Red
-    CONNECTED       // Green
+    CONNECTED,      // Green
+    LOW_BATTERY     // Orange
 };
 
 class StatusLed {

@@ -10,6 +10,7 @@ include(nanopb)
 
 target_sources(app PRIVATE 
     src/main.cpp
+    src/robot.cpp
     src/communication/zephyr_net_client.cpp
     src/communication/wifi_manager.cpp
     src/communication/protobuf_handler.cpp

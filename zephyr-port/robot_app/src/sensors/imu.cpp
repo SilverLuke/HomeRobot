@@ -7,16 +7,22 @@ Imu::Imu(const struct device* dev) : dev_(dev) {
 }
 
 bool Imu::init() {
-    if (!device_is_ready(dev_)) {
-        LOG_ERR( "IMU device not ready");
+    if (dev_ == nullptr) {
+        LOG_ERR("IMU device pointer is NULL! Check devicetree alias 'imu'");
         return false;
     }
+    if (!device_is_ready(dev_)) {
+        LOG_ERR("IMU device '%s' is NOT READY. Check I2C wiring and power.", dev_->name);
+        return false;
+    }
+    LOG_INF("IMU device '%s' is ready.", dev_->name);
     return true;
 }
 
 bool Imu::update() {
-    if (sensor_sample_fetch(dev_) < 0) {
-        LOG_ERR( "Sensor sample update error");
+    int ret = sensor_sample_fetch(dev_);
+    if (ret < 0) {
+        LOG_ERR("IMU fetch failed: error %d. Check if sensor is connected to I2C.", ret);
         return false;
     }
 
