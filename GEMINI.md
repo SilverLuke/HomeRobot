@@ -19,7 +19,7 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 ## Hardware Stack
 - **MCU**: ESP32-C6 (Main controller)
 - **LiDAR**: RP-Lidar A1M8 (360-degree point cloud)
-  - **UART**: UART1 (TX: GPIO 7, RX: GPIO 6)
+  - **UART**: UART1 (TX: GPIO 6, RX: GPIO 7)
   - **Motor Enable**: GPIO 15
 - **IMU**: BMI160 (6-axis Accel/Gyro)
   - **I2C**: I2C0 (SDA: GPIO 4, SCL: GPIO 5)

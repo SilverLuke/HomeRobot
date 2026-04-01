@@ -96,16 +96,18 @@
 
     uart1_default: uart1_default {
         group1 {
-            pinmux = <ESP32_PINMUX(7, ESP_NOSIG, ESP_U1TXD_OUT)>,
-                     <ESP32_PINMUX(6, ESP_U1RXD_IN, ESP_NOSIG)>;
+            pinmux = <UART1_TX_GPIO6>;
+        };
+        group2 {
+            pinmux = <UART1_RX_GPIO7>;
             bias-pull-up;
         };
     };
 
     uart1_sleep: uart1_sleep {
         group1 {
-            pinmux = <ESP32_PINMUX(7, ESP_NOSIG, ESP_U1TXD_OUT)>,
-                     <ESP32_PINMUX(6, ESP_U1RXD_IN, ESP_NOSIG)>;
+            pinmux = <UART1_TX_GPIO6>,
+                     <UART1_RX_GPIO7>;
         };
     };
 
@@ -195,6 +197,8 @@
 };
 
 &pcnt {
+    pinctrl-0 = <&pcnt_default>;
+    pinctrl-names = "default";
     status = "okay";
     #address-cells = <1>;
     #size-cells = <0>;

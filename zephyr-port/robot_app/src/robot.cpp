@@ -4,7 +4,7 @@
 #include "secrets.h"
 #include "constants.h"
 
-LOG_MODULE_REGISTER(robot, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(robot, LOG_LEVEL_INF);
 
 using namespace constants;
 
@@ -77,6 +77,7 @@ void Robot::loop() {
             handle_operational();
             break;
     }
+    lidar_.loop(&proto_handler_);
     status_led_.update();
 }
 
@@ -100,6 +101,7 @@ void Robot::handle_initialize_hardware() {
     enc_sx_.init();
     enc_dx_.init();
     imu_.init();
+    LOG_INF("Initializing Lidar...");
     lidar_.init();
     motor_sx_.init(motor_kp_, motor_ki_, motor_kd_);
     motor_dx_.init(motor_kp_, motor_ki_, motor_kd_);
@@ -168,10 +170,7 @@ void Robot::handle_operational() {
     // 1. Process incoming commands
     process_commands();
 
-    // 2. Lidar loop
-    lidar_.loop(&proto_handler_);
-
-    // 3. Periodic telemetry
+    // 2. Periodic telemetry
     send_telemetry();
 }
 
@@ -211,10 +210,12 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_lidar_control_tag) {
         bool active = msg.payload.lidar_control.active;
+        LOG_INF("RPC: Lidar control received: active=%s", active ? "true" : "false");
         if (active) lidar_.start();
         else lidar_.stop();
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_stop_all_tag) {
+        LOG_INF("RPC: Stop all received");
         motor_sx_.set_motor(BRAKE, 0);
         motor_dx_.set_motor(BRAKE, 0);
         lidar_.stop();

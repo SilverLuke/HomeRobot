@@ -9,8 +9,6 @@ build-zephyr
 # Robot
 robot/.pio
 robot/src/secrets.h
-# robot/lib/LDS
-# robot/lib/FastIMU
 
 # Server
 server/target

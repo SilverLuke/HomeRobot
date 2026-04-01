@@ -1,14 +1,14 @@
-use crate::homerobot::RobotToServerMessage;
 use crate::constants::BUFFER_SIZE;
+use crate::homerobot::RobotToServerMessage;
 use crate::stats::Stats;
 use circular_buffer::CircularBuffer;
+use prost::Message;
 use std::io;
 use std::io::{Read, Write};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use prost::Message;
 
-pub struct ProtocolManager<S: Read + Write>{
+pub struct ProtocolManager<S: Read + Write> {
     stream: S,
     read_buffer: Box<CircularBuffer<BUFFER_SIZE, u8>>,
     stats: Arc<Stats>,
@@ -24,81 +24,84 @@ impl<S: Read + Write> ProtocolManager<S> {
     }
 
     pub(crate) fn read_message(&mut self) -> io::Result<Option<RobotToServerMessage>> {
-        // If we don't even have a header, try to read more from socket
+        // 1. Ensure we have the 2-byte length prefix
         if self.read_buffer.len() < 2 {
             self.do_read()?;
+            if self.read_buffer.len() < 2 {
+                return Ok(None);
+            }
         }
 
-        if self.read_buffer.len() < 2 {
-            return Ok(None);
+        // 2. Peek at the length prefix (Big-Endian u16)
+        let msg_len = {
+            let b0 = *self.read_buffer.get(0).expect("buffer length verified");
+            let b1 = *self.read_buffer.get(1).expect("buffer length verified");
+            u16::from_be_bytes([b0, b1]) as usize
+        };
+
+        // 3. Sanity check: message must fit in our buffer
+        if msg_len > BUFFER_SIZE - 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Message size {} exceeds buffer capacity", msg_len),
+            ));
         }
 
-        // Peek at the length prefix (2 bytes)
-        let mut len_bytes = [0u8; 2];
-        for i in 0..2 {
-            len_bytes[i] = *self.read_buffer.get(i).unwrap();
-        }
-        let msg_len = u16::from_be_bytes(len_bytes) as usize;
-
-        // If we don't have the full message, try to read more from socket
+        // 4. Ensure we have the full message body
         if self.read_buffer.len() < 2 + msg_len {
             self.do_read()?;
+            if self.read_buffer.len() < 2 + msg_len {
+                return Ok(None);
+            }
         }
 
-        if self.read_buffer.len() < 2 + msg_len {
-            return Ok(None);
-        }
+        // 5. Consume header and read body
+        let mut _header = [0u8; 2];
+        self.read_buffer.read_exact(&mut _header)?;
 
-        // Consume the length prefix
-        self.read_buffer.read_exact(&mut len_bytes).unwrap();
-
-        // Read the message body
         let mut msg_bytes = vec![0u8; msg_len];
-        self.read_buffer.read_exact(&mut msg_bytes).unwrap();
+        self.read_buffer.read_exact(&mut msg_bytes)?;
 
-        match RobotToServerMessage::decode(&msg_bytes[..]) {
-            Ok(msg) => {
-                // println!(
-                //     "Received Protobuf message! Seq: {}",
-                //     msg.sequence_millis
-                // );
-                Ok(Some(msg))
-            }
-            Err(e) => {
-                Err(io::Error::new(
+        // 6. Decode Protobuf message
+        RobotToServerMessage::decode(&msg_bytes[..])
+            .map(Some)
+            .map_err(|e| {
+                io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Failed to decode Protobuf: {}", e),
-                ))
-            }
-        }
+                    format!("Protobuf decode error: {}", e),
+                )
+            })
     }
 
     pub fn send_packet(&mut self, packet: &[u8]) -> Result<(), std::io::Error> {
         let bytes_written = self.stream.write(packet)?;
+        self.stats
+            .total_tx
+            .fetch_add(bytes_written, Ordering::SeqCst);
         self.stream.flush()?;
-
-        self.stats.total_tx.fetch_add(bytes_written, Ordering::SeqCst);
-
         Ok(())
     }
 
     fn do_read(&mut self) -> io::Result<usize> {
+        let free_space = BUFFER_SIZE - self.read_buffer.len();
+        if free_space == 0 {
+            return Err(io::Error::new(io::ErrorKind::Other, "Buffer overflow"));
+        }
+
         let mut buffer = [0u8; 1024];
-        match self.stream.read(&mut buffer) {
-            Ok(0) => Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Connection closed")),
+        let read_limit = std::cmp::min(buffer.len(), free_space);
+
+        match self.stream.read(&mut buffer[..read_limit]) {
+            Ok(0) => Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Connection closed",
+            )),
             Ok(read_bytes) => {
                 self.stats.total_rx.fetch_add(read_bytes, Ordering::SeqCst);
-                let free_space = BUFFER_SIZE - self.read_buffer.len();
-                if free_space >= read_bytes {
-                    self.read_buffer.extend(&buffer[..read_bytes]);
-                    Ok(read_bytes)
-                } else {
-                    Err(io::Error::new(io::ErrorKind::Other, "Buffer overflow"))
-                }
+                self.read_buffer.extend(&buffer[..read_bytes]);
+                Ok(read_bytes)
             }
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                Ok(0)
-            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(0),
             Err(error) => Err(error),
         }
     }

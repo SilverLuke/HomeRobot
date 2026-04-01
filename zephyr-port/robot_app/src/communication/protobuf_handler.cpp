@@ -3,7 +3,7 @@
 #include <pb_decode.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(protobuf_handler, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(protobuf_handler, LOG_LEVEL_INF);
 
 ProtobufHandler::ProtobufHandler(NetClient& client) 
     : client_(client), rx_idx_(0), expected_size_(0), reading_header_(true) {}

@@ -77,9 +77,15 @@ private:
     struct ans_header_t {
       uint8_t  syncByte1;
       uint8_t  syncByte2;
-      uint32_t size:30;
-      uint32_t subType:2;
+      uint8_t  data[4];   // size:30, subType:2
       uint8_t  type;
+
+      uint32_t size() const {
+          return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | (((uint32_t)data[2] & 0x3F) << 16);
+      }
+      uint8_t subType() const {
+          return (data[2] >> 6) | (data[3] << 2); // This depends on protocol, usually it's just zero.
+      }
     } __attribute__((packed));
 
     void handle_point(const node_info_t& node, ProtobufHandler* proto_handler);
@@ -91,4 +97,8 @@ private:
     static const size_t BATCH_SIZE = constants::LIDAR_BATCH_SIZE;
     ProtobufHandler::LidarPointData points_buffer_[BATCH_SIZE];
     size_t points_count_ = 0;
+
+    uint32_t last_log_ms_ = 0;
+    uint32_t total_points_read_ = 0;
+    uint32_t total_bytes_read_ = 0;
 };

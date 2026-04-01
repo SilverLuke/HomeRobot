@@ -150,9 +150,11 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                             gyro_label_c.set_text(&format!("Gyro: X: {:.2} Y: {:.2} Z: {:.2}", gx, gy, gz));
                         }
                         GuiUpdate::Lidar(points) => {
-                            let mut state = GUI_STATE.lock().unwrap();
-                            state.lidar_points = points;
-                            lidar_canvas_c.queue_draw();
+                            if !points.is_empty() {
+                                let mut state = GUI_STATE.lock().unwrap();
+                                crate::gui::lidar::update_scan(&mut state.display_scan, points);
+                                lidar_canvas_c.queue_draw();
+                            }
                         }
                         GuiUpdate::Config(conf) => {
                             if let Some(left) = conf.left_motor {

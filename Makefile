@@ -16,7 +16,7 @@ ESP_DEVICE = /dev/ttyACM0
 CARGO = cargo
 WEST = west
 
-.PHONY: all server build-s3 build-c6 flash monitor snapshot-logs clean
+.PHONY: all server build-s3 build-c6 build-lidar-debug flash monitor snapshot-logs clean
 
 all: server build-c6
 
@@ -27,6 +27,10 @@ server:
 build-s3:
 	@echo "Building Zephyr app with west for $(ZEPHYR_BOARD_S3)..."
 	$(WEST) build -p -b $(ZEPHYR_BOARD_S3) -d $(ZEPHYR_BUILD_DIR) $(ZEPHYR_APP_DIR)
+
+build-lidar-debug:
+	@echo "Building Lidar Debug app with west for $(ZEPHYR_BOARD_C6)..."
+	$(WEST) build -p -b $(ZEPHYR_BOARD_C6) -S $(SNIPPET) -d $(ZEPHYR_BUILD_DIR) zephyr-port/lidar_debug_app -- -DCONFIG_ESPTOOLPY_FLASHSIZE_$(FLASH)B=y
 
 build-c6:
 	@echo "Building Zephyr app with west for $(ZEPHYR_BOARD_C6) with $(FLASH) flash..."
