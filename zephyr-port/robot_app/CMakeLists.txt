@@ -30,4 +30,4 @@ target_include_directories(app PRIVATE src)
 zephyr_include_directories(include)
 add_subdirectory(drivers)
 
-target_compile_options(app PRIVATE -fno-threadsafe-statics)
+target_compile_options(app PRIVATE -fno-threadsafe-statics -fpermissive)

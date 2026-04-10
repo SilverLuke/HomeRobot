@@ -67,7 +67,7 @@ static int rmt_tx_esp32_init(const struct device *dev)
     }
 
     // Enable RMT peripheral and memory clock gating
-    rmt_ll_enable_periph_clock(data->hal.regs, true);
+    rmt_ll_enable_group_clock(data->hal.regs, true);
 
     // Set group clock source to 80MHz
     // integral=1, denom=1, numer=0 => 80MHz / (1 + 0 + 0/1) = 80MHz
