@@ -3,26 +3,45 @@
 #include <cstddef>
 #include <cstdint>
 
-// Minimal network client interface to enable testing Protocol without Arduino WiFiClient
+/**
+ * @brief Minimal network client interface.
+ * 
+ * This interface is used to abstract the network communication, 
+ * allowing to use different implementations (e.g. Arduino WiFiClient, Zephyr BSD Sockets).
+ */
 class NetClient {
 public:
   virtual ~NetClient() = default;
 
-  // Read up to size bytes into buffer, return number of bytes read.
+  /**
+   * @brief Read up to size bytes into buffer.
+   * @return number of bytes read.
+   */
   virtual std::size_t read(uint8_t* buffer, std::size_t size) = 0;
 
-  // Write size bytes from buffer, return number of bytes written.
+  /**
+   * @brief Write size bytes from buffer.
+   * @return number of bytes written.
+   */
   virtual std::size_t write(const uint8_t* buffer, std::size_t size) = 0;
 
-  // Is the client connected
+  /**
+   * @brief Is the client connected.
+   */
   virtual bool connected() = 0;
 
-  // Connect to host:port (may be no-op for adapters already connected)
+  /**
+   * @brief Connect to host:port.
+   */
   virtual bool connect(const char* host, uint16_t port) = 0;
 
-  // Stop/close the connection
+  /**
+   * @brief Stop/close the connection.
+   */
   virtual void stop() = 0;
 
-  // Flush any pending outgoing bytes (no-op for some implementations)
+  /**
+   * @brief Flush any pending outgoing bytes.
+   */
   virtual void flush() = 0;
 };

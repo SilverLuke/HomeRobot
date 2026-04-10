@@ -1,28 +1,38 @@
 #pragma once
-#include <cstdint>
 
+#include <zephyr/drivers/adc.h>
+#include <zephyr/kernel.h>
 
-/**
-* @brief Get the battery level in percentage, from 0 to 100
-*/
-long battery_level();
+class Battery {
+public:
+    Battery(const struct device* adc_dev, uint8_t channel);
 
-/**
- * @brief Return battery pack voltage in milli Volts
- */
-long battery_voltage();
+    bool init();
+    
+    /**
+     * @brief Read raw ADC value
+     */
+    int32_t read_raw();
 
-/**
-* @brief Get the raw value of the battery, from 0 to 4095
-*/
-uint16_t battery_raw();
+    /**
+     * @brief Get battery voltage in millivolts
+     */
+    uint32_t get_voltage_mv();
 
-/**
-* @brief Initialize the battery sensor, return 1 if the battery is not connected
-*/
-uint8_t init_battery();
+    /**
+     * @brief Get battery percentage (0-100)
+     */
+    uint32_t get_percentage();
 
-/**
- * @brief Send to serial the battery level, battery voltage, and the battery raw value
- */
-void show_battery();
+private:
+    const struct device* adc_dev_;
+    uint8_t channel_;
+    struct adc_channel_cfg channel_cfg_;
+    
+    static constexpr uint32_t BATTERY_MAX_VOLTAGE = 16800; // 4S Li-ion fully charged
+    static constexpr uint32_t BATTERY_MIN_VOLTAGE = 12000; // 4S Li-ion discharged (3.0V per cell)
+    
+    // Voltage divider: Adjusted based on 15V telemetry (Raw 2453 -> ~2.63V at ADC)
+    // 15.0 / 2.63 = 5.7
+    static constexpr float VOLTAGE_DIVIDER_RATIO = 5.7f; 
+};

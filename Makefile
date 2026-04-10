@@ -1,6 +1,6 @@
 # Sources paths
 SERVER_DIR = server
-ZEPHYR_APP_DIR = zephyr-port/robot_app
+ZEPHYR_APP_DIR = robot
 ZEPHYR_BOARD_S3 = esp32s3_devkitc/esp32s3/procpu
 ZEPHYR_BOARD_C6 = esp32c6_devkitc/esp32c6/hpcore
 # Build paths

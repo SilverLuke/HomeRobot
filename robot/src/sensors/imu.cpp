@@ -1,74 +1,44 @@
 #include "imu.h"
+#include <zephyr/logging/log.h>
 
-#include "../utils/utils.h"
-#include "Wire.h"
-#include "definitions.h"
+LOG_MODULE_REGISTER(imu, LOG_LEVEL_INF);
 
-IMU::IMU() {
-  log_i("\t - INIT IMU");
-  int err = 1;
-  int old_error = 0;
-  while (err != 0) {
-    err = imu.init(calib, IMU_ADDR);
-    if (err != 0) {
-      if (err != old_error) {
-        log_e("Error initializing IMU: %i", err);
-        old_error = err;
-      }
-      delay(1000);
+Imu::Imu(const struct device* dev) : dev_(dev) {
+}
+
+bool Imu::init() {
+    if (dev_ == nullptr) {
+        LOG_ERR("IMU device pointer is NULL! Check devicetree alias 'imu'");
+        return false;
     }
-  }
-  log_i("\t OK");
+    if (!device_is_ready(dev_)) {
+        LOG_ERR("IMU device '%s' is NOT READY. Check I2C wiring and power.", dev_->name);
+        return false;
+    }
+    LOG_INF("IMU device '%s' is ready.", dev_->name);
+    return true;
 }
 
-void IMU::read() {
-  this->read_millis = millis();
-  imu.update();
-  imu.getAccel(&accelData);
-  imu.getGyro(&gyroData);
-  if (imu.hasMagnetometer()) {
-    imu.getMag(&magData);
-    // filter.update(IMUGyro.gyroX, IMUGyro.gyroY, IMUGyro.gyroZ,
-    // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ, IMUMag.magX,
-    // IMUMag.magY, IMUMag.magZ);
-  } else {
-    // filter.updateIMU(IMUGyro.gyroX, IMUGyro.gyroY, IMUGyro.gyroZ,
-    // IMUAccel.accelX, IMUAccel.accelY, IMUAccel.accelZ);
-  }
+bool Imu::update() {
+    int ret = sensor_sample_fetch(dev_);
+    if (ret < 0) {
+        LOG_ERR("IMU fetch failed: error %d. Check if sensor is connected to I2C.", ret);
+        return false;
+    }
+
+    sensor_channel_get(dev_, SENSOR_CHAN_ACCEL_XYZ, accel_);
+    sensor_channel_get(dev_, SENSOR_CHAN_GYRO_XYZ, gyro_);
+    return true;
 }
 
-int32_t IMU::serialize(uint8_t* buffer, const size_t buffer_size) {
-  // Go to the first empty byte
-  auto* data = reinterpret_cast<uint32_t*>(buffer);
-  // Start serialize imu sensor
-  data[0] = host2netFloat(accelData.accelX);
-  data[1] = host2netFloat(accelData.accelY);
-  data[2] = host2netFloat(accelData.accelZ);
-  data[3] = host2netFloat(gyroData.gyroX);
-  data[4] = host2netFloat(gyroData.gyroY);
-  data[5] = host2netFloat(gyroData.gyroZ);
-
-  if (imu.hasMagnetometer()) {
-    data[6] = host2netFloat(magData.magX);
-    data[7] = host2netFloat(magData.magY);
-    data[8] = host2netFloat(magData.magZ);
-  }
-  return this->getDataSize();
+void Imu::get_accel(float& x, float& y, float& z) const {
+    x = (float)sensor_value_to_double(&accel_[0]);
+    y = (float)sensor_value_to_double(&accel_[1]);
+    z = (float)sensor_value_to_double(&accel_[2]);
 }
 
-void IMU::print() {
-  Serial.printf("IMU State (last read: %lu ms):\n", read_millis);
-  Serial.printf("Accelerometer (m/s²):\n");
-  Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", accelData.accelX,
-                accelData.accelY, accelData.accelZ);
-
-  Serial.printf("Gyroscope (rad/s):\n");
-  Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", gyroData.gyroX,
-                gyroData.gyroY, gyroData.gyroZ);
-
-  if (imu.hasMagnetometer()) {
-    Serial.printf("Magnetometer (µT):\n");
-    Serial.printf("\tX: %.2f\n\tY: %.2f\n\tZ: %.2f\n", magData.magX,
-                  magData.magY, magData.magZ);
-  }
+void Imu::get_gyro(float& x, float& y, float& z) const {
+    x = (float)sensor_value_to_double(&gyro_[0]);
+    y = (float)sensor_value_to_double(&gyro_[1]);
+    z = (float)sensor_value_to_double(&gyro_[2]);
 }

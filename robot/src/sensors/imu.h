@@ -1,46 +1,20 @@
 #pragma once
 
-#include "../utils/utils.h"
-#include "F_BMI160.hpp"
-#include "definitions.h"
-#include "sensor.h"
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/kernel.h>
 
-/*
-I2C Sensors
-// BMI160    ACC + GYRO   On address: 0x69
-// HMC5883L  MAGNETOMETER On address: 0x0D
-// BMI160_HMC5883L
-*/
+class Imu {
+public:
+    Imu(const struct device* dev);
 
-#define IMU_ADDR 0x68
+    bool init();
+    bool update();
 
-class IMU : public Sensor {
- private:
-  BMI160 imu;
-  size_t read_millis = 0;
-  calData calib{};
-  AccelData accelData{};
-  GyroData gyroData{};
-  MagData magData{};
+    void get_accel(float& x, float& y, float& z) const;
+    void get_gyro(float& x, float& y, float& z) const;
 
- public:
-  IMU();
-  ~IMU() override = default;
-
-  String name() override { return "IMU"; }
-  void startReading() override {};
-  void read() override;
-
-  uint32_t getMillis() override { return read_millis; }
-  SendPacketType getPacketType() override { return SendPacketType::TX_IMU; }
-  uint16_t getDataSize() override {
-    return imu.hasMagnetometer() ? 6 * sizeof(float) : 9 * sizeof(float);
-  }
-
-  int32_t serialize(uint8_t* buffer, size_t buffer_size) override;
-
-  void print();
-  void getAccel(AccelData* data) const { *data = accelData; }
-  void getGyro(GyroData* data) const { *data = gyroData; }
-  void getMag(MagData* data) const { *data = magData; }
+private:
+    const struct device* dev_;
+    struct sensor_value accel_[3];
+    struct sensor_value gyro_[3];
 };

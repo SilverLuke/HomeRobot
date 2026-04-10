@@ -24,7 +24,7 @@ target_sources(app PRIVATE
     src/sensors/pcnt_reader.c
 )
 
-zephyr_nanopb_sources(app ../../proto/messages.proto)
+zephyr_nanopb_sources(app ../proto/messages.proto)
 
 target_include_directories(app PRIVATE src)
 zephyr_include_directories(include)

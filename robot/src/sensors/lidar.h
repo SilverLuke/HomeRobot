@@ -1,79 +1,104 @@
 #pragma once
 
-#include "HardwareSerial.h"
-#include "LDS.h"
-#include "LDS_RPLIDAR_A1.h"
-#include "cppQueue.h"
-#include "sensor.h"
-/*
-LIDAR
-*/
-// LiDAR motor speed control using PWM
-#define LDS_MOTOR_PWM_PIN 15
-#define LDS_MOTOR_PWM_FREQ 10000
-#define LDS_MOTOR_PWM_BITS 11
-#define LDS_MOTOR_PWM_CHANNEL \
-  2  // ESP32 PWM channel for LiDAR motor speed control
-#define LDS_UART_NUM_0 1
+#include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include "communication/protobuf_handler.h"
+#include "constants.h"
 
-#define LIDAR_SERIAL_RX_PIN 7
-#define LIDAR_SERIAL_TX_PIN 6
-#define LIDAR_MOTOR_PIN 15
-
-#define MAX_LIDAR_BUFFER_SIZE 900
-#define MAX_LIDAR_FULL_READINGS (5+1)   // A full read has 180 points in it. So 900 keep 5 full reads
-
-struct ArrayPoint {
-  uint32_t read_millis;
-  uint16_t start;
-  uint16_t end;
-};
-
-class Lidar : public Sensor, public LDS_RPLIDAR_A1 {
+class Lidar {
 public:
-  Lidar();
-  ~Lidar() override;
+    Lidar(const struct device* uart_dev, const struct gpio_dt_spec* motor_gpio);
 
-  String name() override { return "Lidar"; }
-  void read() override { this->loop(); }
-  void startReading() override;
-  void stopReading() override;
-  int32_t serialize(uint8_t* buffer, size_t max_size) override;
-  uint32_t getMillis() override;
-  SendPacketType getPacketType() override { return SendPacketType::TX_LIDAR; };
-  uint16_t getDataSize() override;
+    bool init();
+    void loop(ProtobufHandler* proto_handler = nullptr);
 
-  using LDS_RPLIDAR_A1::getCurrentScanFreqHz;
-  using LDS_RPLIDAR_A1::getModelName;
-  using LDS_RPLIDAR_A1::getSamplingRateHz;
-  using LDS_RPLIDAR_A1::getSerialBaudRate;
-  using LDS_RPLIDAR_A1::isActive;
-  using LDS_RPLIDAR_A1::setScanTargetFreqHz;
+    void start();
+    void stop();
+
+    void enable_motor(bool enable);
 
 private:
-  // Callback methods
-  static void infoCallback(LDS::info_t code, const String& info);
-  static void errorCallback(LDS::result_t code, const String& aux_info);
-  static int serialReadCallback();
-  static size_t serialWriteCallback(const uint8_t* buffer, size_t length);
-  static void scanPointCallback(float angle_deg, float distance_mm,
-                                float quality, bool scan_completed);
-  static void motorPinCallback(float value, LDS::lds_pin_t lidar_pin);
-  static void packetCallback(uint8_t* packet, uint16_t length,
-                             bool scan_completed);
+    const struct device* uart_dev_;
+    const struct gpio_dt_spec* motor_gpio_;
+    
+    enum State {
+        IDLE,
+        WAITING_HEADER,
+        READING_DATA
+    } state_;
 
-  // Member variables
-  HardwareSerial* lidarSerial;
+    uint8_t rx_buffer_[1024];
+    size_t rx_idx_;
 
-  // For callback handling
-  static Lidar* instance;
+    void process_byte(uint8_t byte, ProtobufHandler* proto_handler);
+    
+    // RPLIDAR A1 protocol constants
+    static constexpr uint8_t CMD_SCAN = 0x20;
+    static constexpr uint8_t CMD_FORCE_SCAN = 0x21;
+    static constexpr uint8_t CMD_RESET = 0x40;
+    static constexpr uint8_t CMD_STOP = 0x25;
+    static constexpr uint8_t CMD_GET_DEV_INFO = 0x50;
+    static constexpr uint8_t CMD_GET_DEV_HEALTH = 0x52;
+    static constexpr uint8_t CMD_SYNC_BYTE = 0xA5;
 
-  /**
-   * @brief Lidar circular buffer used to store the data from the LiDAR.
-   */
+    static constexpr uint8_t CMDFLAG_HAS_PAYLOAD = 0x80;
 
-  cppQueue* buffer;
-  cppQueue* full_read_size;
-  cppQueue* read_millis;
+    static constexpr uint8_t ANS_SYNC_BYTE1 = 0xA5;
+    static constexpr uint8_t ANS_SYNC_BYTE2 = 0x5A;
 
+    static constexpr uint8_t RESP_MEAS_CHECKBIT = (0x1<<0);
+    static constexpr uint8_t RESP_MEAS_SYNCBIT = (0x1<<0);
+    static constexpr uint8_t RESP_MEAS_QUALITY_SHIFT = 2;
+    static constexpr uint8_t RESP_MEAS_ANGLE_SHIFT = 1;
+
+    static constexpr uint8_t ANS_TYPE_MEAS = 0x81;
+    static constexpr uint8_t ANS_TYPE_DEV_INFO = 0x4;
+    static constexpr uint8_t ANS_TYPE_DEV_HEALTH = 0x6;
+
+    struct device_health_t {
+      uint8_t   status;
+      uint16_t  error_code;
+    } __attribute__((packed));
+
+    struct node_info_t {
+      uint8_t    sync_quality; 
+      uint16_t   angle_q6_checkbit; 
+      uint16_t   distance_q2;
+    } __attribute__((packed));
+ 
+    struct device_info_t {
+      uint8_t   model;
+      uint16_t  firmware_version;
+      uint8_t   hardware_version;
+      uint8_t   serialnum[16];
+    } __attribute__((packed));
+
+    struct ans_header_t {
+      uint8_t  syncByte1;
+      uint8_t  syncByte2;
+      uint8_t  data[4];   // size:30, subType:2
+      uint8_t  type;
+
+      uint32_t size() const {
+          return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | (((uint32_t)data[2] & 0x3F) << 16);
+      }
+      uint8_t subType() const {
+          return (data[2] >> 6) | (data[3] << 2); // This depends on protocol, usually it's just zero.
+      }
+    } __attribute__((packed));
+
+    void handle_point(const node_info_t& node, ProtobufHandler* proto_handler);
+    int send_command(uint8_t cmd, const void * payload = nullptr, size_t payloadsize = 0);
+    int wait_response_header(ans_header_t * header, uint32_t timeout_ms);
+    int get_device_info(device_info_t & info, uint32_t timeout_ms);
+    int get_health(device_health_t & health, uint32_t timeout_ms);
+
+    static const size_t BATCH_SIZE = constants::LIDAR_BATCH_SIZE;
+    ProtobufHandler::LidarPointData points_buffer_[BATCH_SIZE];
+    size_t points_count_ = 0;
+
+    uint32_t last_log_ms_ = 0;
+    uint32_t total_points_read_ = 0;
+    uint32_t total_bytes_read_ = 0;
 };

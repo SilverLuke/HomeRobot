@@ -4,7 +4,7 @@
 HomeRobot is a personal robotics project focused on creating an autonomous vacuum robot. The system uses a **"Smart Server, Dumb Robot"** philosophy: the robot handles real-time hardware control and data streaming, while the high-level Rust server handles complex processing like SLAM, path planning, and odometry.
 
 ### Architecture
-- **Robot Firmware (`zephyr-port/robot_app`)**: The primary firmware for the **ESP32-C6**, developed using **Zephyr RTOS**. It manages:
+- **Robot Firmware (`robot/`)**: The primary firmware for the **ESP32-C6**, developed using **Zephyr RTOS**. It manages:
   - **Sensors**: IMU (BMI160), LiDAR (RP-Lidar A1M8), Encoders (PCNT), and Battery (ADC).
   - **Actuators**: Differential drive motors with PID speed control.
   - **Communication**: Bidirectional Protobuf over TCP/IP (Wi-Fi). Includes a lightweight **RPC Dispatcher** for synchronous commands.
@@ -14,7 +14,6 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
   - Performs **Server-side Odometry** and eventually SLAM.
   - Issues real-time movement commands and **RPC requests** (e.g., remote diagnostics).
 - **Protobuf (`proto/`)**: Standardized definitions in `messages.proto`. Communication uses a **2-byte Big-Endian length prefix** for framing.
-- **Legacy Robot (`robot/`)**: Original Arduino/PlatformIO version (deprecated).
 
 ## Hardware Stack
 - **MCU**: ESP32-C6 (Main controller)
