@@ -105,6 +105,14 @@ message LidarControlCommand {
   bool active = 2;
 }
 
+// Telemetry from Simulation/Gazebo
+message Telemetry {
+  int32 encoder_left = 1;
+  int32 encoder_right = 2;
+  ImuData imu = 3;
+  LidarScan lidar = 4;
+}
+
 // Wrapper message for data sent from the Robot (ESP32) to the Server
 message RobotToServerMessage {
   uint32 sequence_millis = 1;

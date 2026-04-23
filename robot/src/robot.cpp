@@ -4,10 +4,15 @@
 #include "secrets.h"
 #include "constants.h"
 
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+#include "bridge/gazebo_bridge.h"
+#endif
+
 LOG_MODULE_REGISTER(robot, LOG_LEVEL_INF);
 
 using namespace constants;
 
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 // Define static DT specs
 const struct device *const Robot::lidar_uart_dev = DEVICE_DT_GET(DT_ALIAS(lidar_uart));
 const struct gpio_dt_spec Robot::lidar_en_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(lidar_en), gpios);
@@ -18,6 +23,18 @@ const struct pwm_dt_spec Robot::motor_sx_bwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_sx
 const struct pwm_dt_spec Robot::motor_dx_fwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_dx_fwd_pwm));
 const struct pwm_dt_spec Robot::motor_dx_bwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_dx_bwd_pwm));
 const struct device *const Robot::encoder_dev = DEVICE_DT_GET(DT_ALIAS(encoder_sx));
+#else
+// Dummy values for simulation
+const struct device *const Robot::lidar_uart_dev = nullptr;
+const struct gpio_dt_spec Robot::lidar_en_gpio = {0};
+const struct device *const Robot::adc_dev = nullptr;
+const struct device *const Robot::imu_dev = nullptr;
+const struct pwm_dt_spec Robot::motor_sx_fwd = {0};
+const struct pwm_dt_spec Robot::motor_sx_bwd = {0};
+const struct pwm_dt_spec Robot::motor_dx_fwd = {0};
+const struct pwm_dt_spec Robot::motor_dx_bwd = {0};
+const struct device *const Robot::encoder_dev = nullptr;
+#endif
 
 Robot::Robot()
     : status_led_(),
@@ -37,6 +54,10 @@ Robot::Robot()
 
 void Robot::setup() {
     LOG_INF("--- Robot State Machine Starting ---");
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    GazeboBridge::init();
+    GazeboBridge::start();
+#endif
     status_led_.init();
     battery_.init();
     LOG_INF("Initial State: %s", state_to_string(state_));
@@ -106,11 +127,16 @@ void Robot::handle_initialize_hardware() {
     motor_sx_.init(motor_kp_, motor_ki_, motor_kd_);
     motor_dx_.init(motor_kp_, motor_ki_, motor_kd_);
 
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Simulation: Skipping Wi-Fi connection, moving to server connecting.");
+    set_state(RobotState::SERVER_CONNECTING);
+#else
     LOG_INF("Hardware ready. Starting Wi-Fi connection...");
     wifi_.connect(wifi_ssid, wifi_password);
     status_led_.set_status(RobotStatus::NO_WIFI);
 
     set_state(RobotState::WIFI_CONNECTING);
+#endif
 }
 
 void Robot::handle_wifi_connecting() {
@@ -124,22 +150,35 @@ void Robot::handle_wifi_connecting() {
 }
 
 void Robot::handle_server_connecting() {
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
     if (!wifi_.is_connected()) {
         LOG_WRN("Wi-Fi lost while connecting to server.");
         set_state(RobotState::WIFI_CONNECTING);
         return;
     }
+#endif
 
     status_led_.set_status(RobotStatus::WIFI_ONLY);
-    LOG_INF("Connecting to server: %s:%d", wifi_server_host, wifi_server_port);
+    
+    const char* server_host = wifi_server_host;
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    server_host = "127.0.0.1";
+#endif
 
-    if (net_client_.connect(wifi_server_host, wifi_server_port)) {
-        LOG_INF("CONNECTED to server at %s:%d", wifi_server_host, wifi_server_port);
+    LOG_INF("Connecting to server: %s:%d", server_host, wifi_server_port);
+
+    if (net_client_.connect(server_host, wifi_server_port)) {
+        LOG_INF("CONNECTED to server at %s:%d", server_host, wifi_server_port);
         status_led_.set_status(RobotStatus::CONNECTED);
         
+        // Small delay to ensure the network stack is ready for transmission
+        k_msleep(100);
+        
         // Send current config on connection
-        proto_handler_.send_robot_config(k_uptime_get_32(),
-            motor_kp_, motor_ki_, motor_kd_, motor_kp_, motor_ki_, motor_kd_);
+        if (net_client_.connected()) {
+            proto_handler_.send_robot_config(k_uptime_get_32(),
+                motor_kp_, motor_ki_, motor_kd_, motor_kp_, motor_ki_, motor_kd_);
+        }
         
         set_state(RobotState::OPERATIONAL);
     } else {
@@ -151,6 +190,7 @@ void Robot::handle_server_connecting() {
 }
 
 void Robot::handle_operational() {
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
     if (!wifi_.is_connected()) {
         LOG_WRN("Wi-Fi lost, reconnecting...");
         motor_sx_.set_motor(BRAKE, 0);
@@ -158,6 +198,7 @@ void Robot::handle_operational() {
         set_state(RobotState::WIFI_CONNECTING);
         return;
     }
+#endif
 
     if (!net_client_.connected()) {
         LOG_WRN("Server connection lost, reconnecting...");
@@ -188,11 +229,11 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
         float la = msg.payload.motor_move.left_angle;
         float ra = msg.payload.motor_move.right_angle;
 
-        if (lp == 0) motor_sx_.set_motor(BRAKE, 0);
-        else motor_sx_.set_motor(la >= 0 ? FORWARD : BACKWARD, (uint8_t)lp);
+        if (lp == 0) motor_sx_.set_manual_power(BRAKE, 0);
+        else motor_sx_.set_manual_power(la >= 0 ? FORWARD : BACKWARD, (uint8_t)lp);
 
-        if (rp == 0) motor_dx_.set_motor(BRAKE, 0);
-        else motor_dx_.set_motor(ra >= 0 ? FORWARD : BACKWARD, (uint8_t)rp);
+        if (rp == 0) motor_dx_.set_manual_power(BRAKE, 0);
+        else motor_dx_.set_manual_power(ra >= 0 ? FORWARD : BACKWARD, (uint8_t)rp);
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_motor_config_tag) {
         if (msg.payload.motor_config.has_left_motor) {

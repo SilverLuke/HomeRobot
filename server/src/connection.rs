@@ -33,9 +33,11 @@ pub fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotComman
                     if let Some(payload) = msg.payload {
                         match payload {
                             Payload::Battery(bat) => {
+                                println!("[SERVER] Telemetry Heartbeat: Battery {}%", bat.percentage);
                                 let _ = gui_tx.send(GuiUpdate::Battery { percentage: bat.percentage, voltage_mv: bat.voltage_mv });
                             }
                             Payload::Encoders(enc) => {
+                                println!("[SERVER] Telemetry Heartbeat: Encoders L={} R={}", enc.left_encoder, enc.right_encoder);
                                 let _ = gui_tx.send(GuiUpdate::Encoders { left: enc.left_encoder, right: enc.right_encoder });
                             }
                             Payload::Imu(imu) => {

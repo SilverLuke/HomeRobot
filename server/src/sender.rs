@@ -15,8 +15,14 @@ pub fn send_manual_command(
     stats: Arc<Stats>)
 {
     let mut new_command = None;
-    if let Ok(current_command) = robot_command.lock() {
-        new_command = Some(current_command.clone());
+    match robot_command.try_lock() {
+        Ok(current_command) => {
+            new_command = Some(current_command.clone());
+        }
+        Err(_) => {
+            // Lock busy, we'll try again next iteration (10ms)
+            return;
+        }
     }
 
     if let Some(current_command) = new_command {

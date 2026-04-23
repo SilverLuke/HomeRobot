@@ -301,6 +301,93 @@
               </object>
             </child>
 
+            <!-- Manual Control Buttons -->
+            <child>
+              <object class="GtkFrame">
+                <property name="label">Manual Control</property>
+                <child>
+                  <object class="GtkGrid">
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="margin-start">10</property>
+                    <property name="margin-end">10</property>
+                    <property name="margin-top">10</property>
+                    <property name="margin-bottom">10</property>
+                    <property name="row-spacing">6</property>
+                    <property name="column-spacing">6</property>
+
+                    <child>
+                      <object class="GtkToggleButton" id="btn_lidar">
+                        <property name="label">Lidar</property>
+                        <property name="active">true</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="suggested-action"/>
+                        </style>
+                        <layout>
+                          <property name="column">0</property>
+                          <property name="row">0</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_forward">
+                        <property name="label">▲</property>
+                        <property name="focusable">false</property>
+                        <layout>
+                          <property name="column">1</property>
+                          <property name="row">0</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_left">
+                        <property name="label">◀</property>
+                        <property name="focusable">false</property>
+                        <layout>
+                          <property name="column">0</property>
+                          <property name="row">1</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_stop">
+                        <property name="label">■</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="destructive-action"/>
+                        </style>
+                        <layout>
+                          <property name="column">1</property>
+                          <property name="row">1</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_right">
+                        <property name="label">▶</property>
+                        <property name="focusable">false</property>
+                        <layout>
+                          <property name="column">2</property>
+                          <property name="row">1</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_backward">
+                        <property name="label">▼</property>
+                        <property name="focusable">false</property>
+                        <layout>
+                          <property name="column">1</property>
+                          <property name="row">2</property>
+                        </layout>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+
             <!-- Keyboard Shortcuts Help -->
             <child>
               <object class="GtkFrame">
@@ -312,13 +399,8 @@
                     <property name="margin-top">10</property>
                     <property name="margin-bottom">10</property>
                     <property name="xalign">0</property>
-                    <property name="label">W: Forward
-A: Turn Left
-S: Backward
-D: Turn Right
-L: Start LiDAR
-K: Stop LiDAR
-T: Run Diagnostics
+                    <property name="label">WASD: Move Robot
+L: Toggle LiDAR
 Space: STOP ALL</property>
                   </object>
                 </child>

@@ -2,13 +2,26 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/uart.h>
 
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+#include "../bridge/gazebo_bridge.h"
+#endif
+
 LOG_MODULE_REGISTER(lidar, LOG_LEVEL_INF);
 
 Lidar::Lidar(const struct device* uart_dev, const struct gpio_dt_spec* motor_gpio)
-    : uart_dev_(uart_dev), motor_gpio_(motor_gpio), state_(State::IDLE), rx_idx_(0) {
+    : uart_dev_(uart_dev), motor_gpio_(motor_gpio), rx_idx_(0) {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    state_ = State::READING_DATA;
+#else
+    state_ = State::IDLE;
+#endif
 }
 
 bool Lidar::init() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Lidar (Simulated) initialized.");
+    return true;
+#else
     if (!device_is_ready(uart_dev_)) {
         LOG_ERR("UART device for Lidar not ready");
         return false;
@@ -25,9 +38,15 @@ bool Lidar::init() {
 
     LOG_INF("Lidar driver initialized");
     return true;
+#endif
 }
 
 void Lidar::start() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Starting Lidar (Simulated)...");
+    state_ = State::READING_DATA;
+    return;
+#else
     printk("Lidar::start() called\n");
     LOG_INF("Starting Lidar...");
     enable_motor(true);
@@ -62,9 +81,15 @@ void Lidar::start() {
     
     state_ = State::WAITING_HEADER;
     printk("Lidar started, state=WAITING_HEADER\n");
+#endif
 }
 
 void Lidar::stop() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Stopping Lidar (Simulated)...");
+    state_ = State::IDLE;
+    return;
+#else
     printk("Lidar::stop() called\n");
     uint8_t stop_cmd[] = {CMD_SYNC_BYTE, CMD_STOP};
     for(int i=0; i<2; i++) uart_poll_out(uart_dev_, stop_cmd[i]);
@@ -72,19 +97,45 @@ void Lidar::stop() {
     state_ = State::IDLE;
     rx_idx_ = 0;
     points_count_ = 0;
+#endif
 }
 
 void Lidar::enable_motor(bool enable) {
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
     if (motor_gpio_) {
         int ret = gpio_pin_set_dt(motor_gpio_, enable ? 1 : 0);
         if (ret < 0) LOG_ERR("Failed to set motor GPIO: %d", ret);
         LOG_INF("Lidar motor %s", enable ? "ENABLED" : "DISABLED");
         printk("Lidar motor %s\n", enable ? "ENABLED" : "DISABLED");
     }
+#endif
 }
-
 void Lidar::loop(ProtobufHandler* proto_handler) {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    if (!proto_handler) return;
+
+    homerobot_LidarScan scan = homerobot_LidarScan_init_default;
+    if (GazeboBridge::get_virtual_lidar(&scan)) {
+        LOG_DBG("Forwarding virtual Lidar scan (%d points)", scan.points_count);
+
+        // Convert Nanopb LidarScan back to ProtobufHandler format for consistency
+        // or just send it directly if possible. 
+        // ProtobufHandler::send_lidar_scan expects an array of LidarPointData.
+
+        static ProtobufHandler::LidarPointData pts[200];
+        for (pb_size_t i = 0; i < scan.points_count; i++) {
+            pts[i].angle_deg = scan.points[i].angle_deg;
+            pts[i].distance_mm = scan.points[i].distance_mm;
+            pts[i].quality = scan.points[i].quality;
+            pts[i].scan_completed = scan.points[i].scan_completed;
+        }
+
+        proto_handler->send_lidar_scan(k_uptime_get_32(), pts, scan.points_count);
+    }
+#else
     uint8_t rx_byte;
+...
+
     int bytes_in_this_loop = 0;
     while (uart_poll_in(uart_dev_, &rx_byte) == 0) {
         total_bytes_read_++;
@@ -107,6 +158,7 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
         }
         last_log_ms_ = now;
     }
+#endif
 }
 
 void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {

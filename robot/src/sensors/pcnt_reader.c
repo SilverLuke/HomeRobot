@@ -1,3 +1,4 @@
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 #include "pcnt_reader.h"
 #include <hal/pcnt_ll.h>
 
@@ -16,3 +17,8 @@ void pcnt_init_unit(uint8_t unit_idx) {
 int16_t pcnt_get_unit_count(uint8_t unit_idx) {
     return pcnt_ll_get_count(PCNT_LL_GET_HW(0), unit_idx);
 }
+#else
+#include "pcnt_reader.h"
+void pcnt_init_unit(uint8_t unit_idx) {}
+int16_t pcnt_get_unit_count(uint8_t unit_idx) { return 0; }
+#endif

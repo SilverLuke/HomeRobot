@@ -83,16 +83,16 @@ fn main() -> io::Result<()> {
         }
     });
 
-    // 4. Input Loop (Background Thread)
-    let rc_input = robot_command.clone();
-    let st_input = stats.clone();
-    let sc_input = sig_count.clone();
-    thread::spawn(move || {
-        if let Ok(sdl_context) = sdl2::init() {
-            print_summary();
-            handle_input(rc_input, &sdl_context, st_input, sc_input);
-        }
-    });
+    // 4. Input Loop (Background Thread) - DISABLED to prevent conflict with GTK GUI
+    // let rc_input = robot_command.clone();
+    // let st_input = stats.clone();
+    // let sc_input = sig_count.clone();
+    // thread::spawn(move || {
+    //     if let Ok(sdl_context) = sdl2::init() {
+    //         print_summary();
+    //         handle_input(rc_input, &sdl_context, st_input, sc_input);
+    //     }
+    // });
 
     // 5. Run GTK GUI on Main Thread
     gui_app.run();

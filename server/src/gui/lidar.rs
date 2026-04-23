@@ -21,17 +21,14 @@ pub fn update_scan(display_scan: &mut Vec<LidarPoint>, new_points: Vec<LidarPoin
         return;
     }
 
-    let first_angle = new_points.first().unwrap().angle_deg;
-    let last_angle = new_points.last().unwrap().angle_deg;
+    let first_angle = new_points.first().unwrap().angle_deg - 1.0;
+    let last_angle = new_points.last().unwrap().angle_deg + 1.0;
 
-    // Remove old points that fall within the new sector
+    // Remove old points that fall within the new sector (with margin)
     if first_angle <= last_angle {
-        // Normal case: sector is [first_angle, last_angle]
-        // We retain points that are OUTSIDE this range
         display_scan.retain(|p| p.angle_deg < first_angle || p.angle_deg > last_angle);
     } else {
-        // Wrap-around case: sector is [first_angle, 360] and [0, last_angle]
-        // We retain points that are BETWEEN last and first (the "gap")
+        // Wrap-around case
         display_scan.retain(|p| p.angle_deg < first_angle && p.angle_deg > last_angle);
     }
 
@@ -47,7 +44,7 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         let state = GUI_STATE.lock().unwrap();
         let center_x = width as f64 / 2.0;
         let center_y = height as f64 / 2.0;
-        let scale = 0.05;
+        let scale = 0.1; // 1mm = 0.1px (1m = 100px)
 
         cr.set_source_rgb(0.05, 0.05, 0.1);
         cr.paint().unwrap();

@@ -8,6 +8,10 @@ Battery::Battery(const struct device* adc_dev, uint8_t channel)
 }
 
 bool Battery::init() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Battery (Simulated) initialized.");
+    return true;
+#else
     if (adc_dev_ == nullptr) {
         LOG_ERR("ADC device pointer is NULL! Check devicetree node adc0.");
         return false;
@@ -31,9 +35,13 @@ bool Battery::init() {
     }
 
     return true;
+#endif
 }
 
 int32_t Battery::read_raw() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    return 2450; // Dummy raw value for ~15V
+#else
     int16_t sample_buffer[1];
     struct adc_sequence sequence = {
         .channels = BIT(channel_),
@@ -49,9 +57,13 @@ int32_t Battery::read_raw() {
     }
 
     return sample_buffer[0];
+#endif
 }
 
 uint32_t Battery::get_voltage_mv() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    return 15000; // Fixed 15V for simulation
+#else
     int32_t raw = read_raw();
     if (raw < 0) return 0;
 
@@ -62,6 +74,7 @@ uint32_t Battery::get_voltage_mv() {
     
     // Applying the voltage divider ratio
     return (uint32_t)((float)mv * VOLTAGE_DIVIDER_RATIO);
+#endif
 }
 
 uint32_t Battery::get_percentage() {

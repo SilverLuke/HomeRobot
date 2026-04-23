@@ -3,7 +3,11 @@
 
 LOG_MODULE_REGISTER(StatusLed, LOG_LEVEL_INF);
 
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 #define RMT_LED_NODE DT_ALIAS(status_led)
+#else
+#define RMT_LED_NODE DT_INVALID_NODE
+#endif
 
 /* WS2812 timings assuming an 80MHz RMT clock (12.5ns per tick) */
 #define T0H 32  // 400ns
@@ -20,6 +24,10 @@ StatusLed::StatusLed() :
 {}
 
 bool StatusLed::init() {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    LOG_INF("Status LED (Simulated) initialized.");
+    return true;
+#else
     rmt_dev_ = DEVICE_DT_GET(RMT_LED_NODE);
     if (!device_is_ready(rmt_dev_)) {
         LOG_ERR( "RMT Device for LED not ready");
@@ -33,6 +41,7 @@ bool StatusLed::init() {
     
     set_status(RobotStatus::NO_WIFI);
     return true;
+#endif
 }
 
 void StatusLed::set_status(RobotStatus status) {

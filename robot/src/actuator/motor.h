@@ -29,6 +29,7 @@ class Motor {
   void set_position(int32_t pos);
   int32_t get_position();
   void set_target(int32_t target);
+  void set_manual_power(Direction dir, uint8_t power);
   int32_t get_target() const { return target_; }
   bool target_reached(bool reset = false);
 
@@ -57,6 +58,7 @@ private:
   double kp_{0}, ki_{0}, kd_{0};
   Direction direction_{BRAKE};
   uint8_t power_{0};
+  bool manual_mode_{false};
 
   static constexpr uint32_t PWM_PERIOD = 50000; // 20kHz in nanoseconds (1/20000 * 1e9)
   static constexpr int32_t POSITION_TOLERANCE = 2;

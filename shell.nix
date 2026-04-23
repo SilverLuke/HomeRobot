@@ -9,6 +9,12 @@
 }:
 
 let
+  # Fetch the Gazebo Sim overlay flake and convert it for use in non-flake shell.nix
+  gazebo-flake = import (fetchTarball "https://github.com/edolstra/flake-compat/archive/master.tar.gz") {
+    src = fetchTarball "https://github.com/muellerbernd/gazebo-sim-overlay/archive/master.tar.gz";
+  };
+  gz-ionic = gazebo-flake.defaultNix.legacyPackages.${builtins.currentSystem}.gz-ionic;
+
   # Fetch west2nix from GitHub as in the original file
   west2nix = pkgs.callPackage (pkgs.fetchFromGitHub {
     owner = "adisbladis";
@@ -27,7 +33,7 @@ let
   # if it causes massive fetches.
   workspaceSetup = if projects != null
     then west2nix.mkWest2nixHook { manifest = projects; }
-    else "";
+    else "true";
 
   # A comprehensive Python environment for Zephyr development, using the "Nix way"
   pythonEnv = pkgs.python3.withPackages (
@@ -77,6 +83,9 @@ let
 in
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
+    # Gazebo Sim (Ionic) from the overlay
+    gz-ionic
+
     # System dependencies for Zephyr and Server
     SDL2
     gtk4.dev
@@ -117,57 +126,47 @@ pkgs.mkShell {
 
   # Environment variables and shell logic
   shellHook = ''
-    echo "--- Zephyr NixOS Environment (with west2nix) ---"
+    echo "--- HomeRobot (Zephyr + Rust) Nix Environment ---"
+    
+    # Set Gazebo Python path for the bridge
+    export PYTHONPATH="${gz-ionic}/lib/python:$PYTHONPATH"
+    export LD_LIBRARY_PATH="${gz-ionic}/lib:$LD_LIBRARY_PATH"
+    export QT_QPA_PLATFORM=xcb
+    export GZ_PARTITION=homerobot_sim
+    export GZ_IP=127.0.0.1
 
     # Set SDK and Toolchain variables
     if [ -d "$PWD/zephyr-port/zephyr-sdk-1.0.0" ]; then
       export ZEPHYR_SDK_INSTALL_DIR="$PWD/zephyr-port/zephyr-sdk-1.0.0"
       export ZEPHYR_TOOLCHAIN_VARIANT="zephyr"
-      echo "Set ZEPHYR_SDK_INSTALL_DIR to $ZEPHYR_SDK_INSTALL_DIR"
     else
-      echo "WARNING: ZEPHYR_SDK_INSTALL_DIR not found at $PWD/zephyr-port/zephyr-sdk-1.0.0"
+      echo "  [!] WARNING: Zephyr SDK not found in ./zephyr-port/"
     fi
 
-    # Source environment variables if .env file exists
-    if [ -f .env ]; then
-      echo "Sourcing .env file"
-      set -o allexport
-      source .env
-      set +o allexport
-    fi
-
-    # Define a manual workspace setup command to avoid automatic heavy fetches
-    if [ -f projects.nix ]; then
-      # Make the hook available via a temporary file or function
-      setup_workspace_fn() {
-        echo "Running west2nix workspace setup..."
-        ${workspaceSetup}
-      }
-      alias setup-workspace=setup_workspace_fn
-      
-      if [ ! -d "zephyrproject/zephyr" ]; then
-        echo "TIP: 'zephyrproject' not found. Run 'setup-workspace' to fetch Zephyr sources via west2nix."
-      else
-        echo "TIP: Run 'setup-workspace' if you need to update Zephyr sources from projects.nix."
-      fi
-    fi
-
-    # Set ZEPHYR_BASE. If west2nix is used, it should have created the zephyr directory.
+    # Set ZEPHYR_BASE if it exists
     if [ -d "$PWD/zephyrproject/zephyr" ]; then
       export ZEPHYR_BASE="$PWD/zephyrproject/zephyr"
-      echo "Set ZEPHYR_BASE to $ZEPHYR_BASE"
-    else
-      echo "WARNING: Could not determine ZEPHYR_BASE."
+    fi
+
+    # Source .env if present
+    [ -f .env ] && { set -o allexport; source .env; set +o allexport; }
+
+    # Setup workspace alias if projects.nix exists
+    if [ -f projects.nix ] && [ -n "${workspaceSetup}" ]; then
+      setup_workspace_fn() { echo "Updating workspace..."; ${workspaceSetup}; }
+      alias setup-workspace=setup_workspace_fn
     fi
 
     # Configure ccache
     export CCACHE_DIR="$PWD/.ccache"
     export PATH="${pkgs.ccache}/lib/ccache:$PATH"
-    # Ensure CMake (used by Zephyr/West) uses ccache
     export CMAKE_C_COMPILER_LAUNCHER=ccache
     export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-    echo "ccache configured at $CCACHE_DIR"
-    echo "Nix shell is ready. You can now use 'west' and other Zephyr tools."
+    # Gazebo Sim Resource Path
+    export GZ_SIM_RESOURCE_PATH="$PWD/simulation:$GZ_SIM_RESOURCE_PATH"
+
+    echo "  [✓] Environment ready. 'west' and Gazebo Ionic are available."
+    echo "  [TIP] Run simulation with: ./tools/start_sim.sh"
   '';
 }

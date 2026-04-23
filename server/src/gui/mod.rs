@@ -29,6 +29,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
     let rc_clone = robot_command.clone();
     
     app.connect_activate(move |app| {
+        println!("GUI: Initializing GTK components...");
         let builder = Builder::new();
         builder.add_from_string(include_str!("../main_window.ui")).expect("Failed to parse UI XML");
         
@@ -42,6 +43,14 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         let accel_label: Label = builder.object("accel_label").expect("Could not find accel_label");
         let gyro_label: Label = builder.object("gyro_label").expect("Could not find gyro_label");
         let apply_btn: Button = builder.object("apply_config").expect("Could not find apply_config");
+
+        // Movement Buttons
+        let btn_forward: Button = builder.object("btn_forward").expect("Could not find btn_forward");
+        let btn_backward: Button = builder.object("btn_backward").expect("Could not find btn_backward");
+        let btn_left: Button = builder.object("btn_left").expect("Could not find btn_left");
+        let btn_right: Button = builder.object("btn_right").expect("Could not find btn_right");
+        let btn_stop: Button = builder.object("btn_stop").expect("Could not find btn_stop");
+        let btn_lidar: gtk4::ToggleButton = builder.object("btn_lidar").expect("Could not find btn_lidar");
 
         // PID SpinButtons
         let kp_left: SpinButton = builder.object("kp_left").expect("Could not find kp_left");
@@ -74,34 +83,105 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         // Set up LIDAR drawing
         setup_lidar_drawing(&lidar_canvas);
 
+        // Custom CSS for Green Lidar Button
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_data("
+            .lidar-on { background-color: #2ecc71; color: white; }
+            .lidar-on:checked { background-color: #27ae60; color: white; }
+        ");
+        gtk4::style_context_add_provider_for_display(
+            &gdk4::Display::default().expect("Could not connect to a display."),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        btn_lidar.add_css_class("lidar-on");
+
         let key_controller = EventControllerKey::new();
-        key_controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        key_controller.set_propagation_phase(gtk4::PropagationPhase::Bubble);
         let rc_key = rc_clone.clone();
+        let btn_lidar_clone = btn_lidar.clone();
         key_controller.connect_key_pressed(move |_, key, _, _| {
             let mut cmd = rc_key.lock().unwrap();
             match key {
-                Key::w | Key::W => *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 127, right_angle: 1.0 },
-                Key::s | Key::S => *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: -1.0, right_power: 127, right_angle: -1.0 },
-                Key::a | Key::A => *cmd = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: 127, right_angle: 1.0 },
-                Key::d | Key::D => *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 0, right_angle: 0.0 },
-                Key::l | Key::L => *cmd = RobotCommand::LidarControl { active: true, target_frequency_hz: 5.0 },
-                Key::k | Key::K => *cmd = RobotCommand::LidarControl { active: false, target_frequency_hz: 0.0 },
-                Key::t | Key::T => *cmd = RobotCommand::RunDiagnostic,
-                Key::space => *cmd = RobotCommand::StopAll,
+                Key::w | Key::W => {
+                    println!("GUI: Keyboard Move: Forward (Latched)");
+                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 127, right_angle: 1.0 };
+                },
+                Key::s | Key::S => {
+                    println!("GUI: Keyboard Move: Backward (Latched)");
+                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: -1.0, right_power: 127, right_angle: -1.0 };
+                },
+                Key::a | Key::A => {
+                    println!("GUI: Keyboard Move: Left (Latched)");
+                    *cmd = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: 127, right_angle: 1.0 };
+                },
+                Key::d | Key::D => {
+                    println!("GUI: Keyboard Move: Right (Latched)");
+                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
+                },
+                Key::l | Key::L => {
+                    let new_state = !btn_lidar_clone.is_active();
+                    println!("GUI: Keyboard Lidar Toggle: {}", if new_state { "ON" } else { "OFF" });
+                    *cmd = RobotCommand::LidarControl { 
+                        active: new_state, 
+                        target_frequency_hz: if new_state { 5.0 } else { 0.0 } 
+                    };
+                    btn_lidar_clone.set_active(new_state);
+                },
+                Key::space => {
+                    println!("GUI: Keyboard STOP");
+                    *cmd = RobotCommand::StopMoving;
+                },
                 _ => {}
             }
             glib::Propagation::Proceed
         });
 
-        let rc_release = rc_clone.clone();
-        key_controller.connect_key_released(move |_, key, _, _| {
-             let mut cmd = rc_release.lock().unwrap();
-             match key {
-                Key::w | Key::W | Key::s | Key::S | Key::a | Key::A | Key::d | Key::D => *cmd = RobotCommand::StopMoving,
-                _ => {}
-             }
-        });
+        // Removed key_controller.connect_key_released to keep robot moving until Stop is requested
+        
         window.add_controller(key_controller);
+
+        // Connect Movement Buttons
+        let rc_fwd = rc_clone.clone();
+        btn_forward.connect_clicked(move |_| {
+            println!("GUI: Button Move: Forward");
+            *rc_fwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 127, right_angle: 1.0 };
+        });
+
+        let rc_bwd = rc_clone.clone();
+        btn_backward.connect_clicked(move |_| {
+            println!("GUI: Button Move: Backward");
+            *rc_bwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: -1.0, right_power: 127, right_angle: -1.0 };
+        });
+
+        let rc_left = rc_clone.clone();
+        btn_left.connect_clicked(move |_| {
+            println!("GUI: Button Move: Left");
+            *rc_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: 127, right_angle: 1.0 };
+        });
+
+        let rc_right = rc_clone.clone();
+        btn_right.connect_clicked(move |_| {
+            println!("GUI: Button Move: Right");
+            *rc_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
+        });
+
+        let rc_stop = rc_clone.clone();
+        btn_stop.connect_clicked(move |_| {
+            println!("GUI: Button STOP");
+            *rc_stop.lock().unwrap() = RobotCommand::StopMoving;
+        });
+
+        let rc_lidar = rc_clone.clone();
+        btn_lidar.connect_toggled(move |btn| {
+            let mut cmd = rc_lidar.lock().unwrap();
+            let active = btn.is_active();
+            *cmd = RobotCommand::LidarControl { 
+                active, 
+                target_frequency_hz: if active { 5.0 } else { 0.0 } 
+            };
+            println!("GUI: Lidar toggled: {}", active);
+        });
 
         // Apply config button
         let rc_conf = rc_clone.clone();
@@ -139,9 +219,11 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                 while let Ok(update) = rx_locked.try_recv() {
                     match update {
                         GuiUpdate::Battery { percentage, voltage_mv } => {
+                            println!("[GUI] Received Battery: {}%", percentage);
                             battery_label_c.set_text(&format!("Battery: {}% ({} mV)", percentage, voltage_mv));
                         }
                         GuiUpdate::Encoders { left, right } => {
+                            println!("[GUI] Received Encoders: L={} R={}", left, right);
                             enc_left_label_c.set_text(&left.to_string());
                             enc_right_label_c.set_text(&right.to_string());
                         }
@@ -150,6 +232,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                             gyro_label_c.set_text(&format!("Gyro: X: {:.2} Y: {:.2} Z: {:.2}", gx, gy, gz));
                         }
                         GuiUpdate::Lidar(points) => {
+                            println!("[GUI] Received Lidar: {} points", points.len());
                             if !points.is_empty() {
                                 let mut state = GUI_STATE.lock().unwrap();
                                 crate::gui::lidar::update_scan(&mut state.display_scan, points);
@@ -178,7 +261,6 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         });
 
         window.present();
-        lidar_canvas.grab_focus();
     });
 
     (app, tx)

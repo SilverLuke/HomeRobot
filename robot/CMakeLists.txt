@@ -24,6 +24,10 @@ target_sources(app PRIVATE
     src/sensors/pcnt_reader.c
 )
 
+if(CONFIG_BOARD_NATIVE_SIM)
+    target_sources(app PRIVATE src/bridge/gazebo_bridge.cpp)
+endif()
+
 zephyr_nanopb_sources(app ../proto/messages.proto)
 
 target_include_directories(app PRIVATE src)

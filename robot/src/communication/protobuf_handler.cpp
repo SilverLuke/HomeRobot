@@ -77,37 +77,20 @@ bool ProtobufHandler::send_heartbeat(uint32_t millis) {
     return encode_and_send(message);
 }
 
-struct LidarScanContext {
-    const ProtobufHandler::LidarPointData* points;
-    size_t count;
-};
-
-static bool encode_lidar_scan_points(pb_ostream_t *stream, const pb_field_t *field, void * const *arg) {
-    LidarScanContext* ctx = (LidarScanContext*)*arg;
-
-    for (size_t i = 0; i < ctx->count; i++) {
-        if (!pb_encode_tag_for_field(stream, field)) return false;
-
-        homerobot_LidarPoint point = homerobot_LidarPoint_init_default;
-        point.distance_mm = ctx->points[i].distance_mm;
-        point.angle_deg = ctx->points[i].angle_deg;
-        point.quality = ctx->points[i].quality;
-        point.scan_completed = ctx->points[i].scan_completed;
-
-        if (!pb_encode_submessage(stream, homerobot_LidarPoint_fields, &point)) return false;
-    }
-
-    return true;
-}
-
 bool ProtobufHandler::send_lidar_scan(uint32_t millis, const LidarPointData* points, size_t count) {
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;
     message.which_payload = homerobot_RobotToServerMessage_lidar_tag;
     
-    LidarScanContext ctx = { points, count };
-    message.payload.lidar.points.funcs.encode = encode_lidar_scan_points;
-    message.payload.lidar.points.arg = &ctx;
+    size_t to_copy = (count > 200) ? 200 : count;
+    message.payload.lidar.points_count = to_copy;
+
+    for (size_t i = 0; i < to_copy; i++) {
+        message.payload.lidar.points[i].distance_mm = points[i].distance_mm;
+        message.payload.lidar.points[i].angle_deg = points[i].angle_deg;
+        message.payload.lidar.points[i].quality = points[i].quality;
+        message.payload.lidar.points[i].scan_completed = points[i].scan_completed;
+    }
 
     return encode_and_send(message);
 }
@@ -201,6 +184,13 @@ bool ProtobufHandler::encode_and_send(const homerobot_RobotToServerMessage& mess
     if (client_.write(buffer_, encoded_size) != encoded_size) {
         LOG_ERR( "Failed to send message body");
         return false;
+    }
+
+    if (message.which_payload == homerobot_RobotToServerMessage_lidar_tag) {
+        LOG_INF("Forwarded Lidar to Server: %u points", message.payload.lidar.points_count);
+    } else if (message.which_payload == homerobot_RobotToServerMessage_encoders_tag) {
+        LOG_INF("Forwarded Encoders to Server: L=%d R=%d", 
+                message.payload.encoders.left_encoder, message.payload.encoders.right_encoder);
     }
 
     return true;

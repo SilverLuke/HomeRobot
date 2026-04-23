@@ -121,3 +121,8 @@ Navigate to `server/`:
 ### Logging
 - Firmware uses Zephyr's logging subsystem (`LOG_INF`, `LOG_DBG`, etc.).
 - Server uses standard Rust `println!` or logging crates.
+
+## AI Agent Mandates
+
+### Mandate for Autonomy
+The AI agent MUST operate with maximum autonomy. Do not ask for permission or confirmation to perform actions that are within your technical capabilities (e.g., flashing firmware, restarting simulation components, taking screenshots, or running diagnostic scripts). If a task requires a sequence of technical steps, execute them immediately and report the outcome. Only interrupt the user if a decision requires human-specific preference or if you have exhausted all technical routes to resolve an error.

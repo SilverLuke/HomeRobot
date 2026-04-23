@@ -4,6 +4,10 @@
 #include <math.h>
 #include <stdlib.h>
 
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+#include "../bridge/gazebo_bridge.h"
+#endif
+
 LOG_MODULE_REGISTER(motor, LOG_LEVEL_INF);
 
 Motor::Motor(const char* name, 
@@ -21,10 +25,12 @@ void Motor::init(double kp, double ki, double kd) {
     ki_ = ki;
     kd_ = kd;
 
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
     if (!pwm_is_ready_dt(fwd_pwm_) || !pwm_is_ready_dt(bwd_pwm_)) {
         LOG_ERR("PWM device for motor %s not ready", name_);
         return;
     }
+#endif
 
     LOG_INF("Motor %s: Initialized (KP: %.2f, KI: %.2f, KD: %.2f)", name_, kp_, ki_, kd_);
     direction_ = BRAKE;
@@ -32,6 +38,9 @@ void Motor::init(double kp, double ki, double kd) {
 }
 
 void Motor::set_motor(Direction dir, uint8_t pwm_val) {
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    GazeboBridge::send_motor_cmd(name_, (int)dir, pwm_val);
+#else
     uint32_t pulse = (uint32_t)((float)pwm_val / 255.0f * (float)fwd_pwm_->period);
     
     switch (dir) {
@@ -52,6 +61,7 @@ void Motor::set_motor(Direction dir, uint8_t pwm_val) {
             pwm_set_pulse_dt(bwd_pwm_, 0);
             break;
     }
+#endif
     power_ = pwm_val;
 }
 
@@ -63,7 +73,7 @@ void Motor::loop() {
     if (delta_time == 0) delta_time = 1; // Prevent division by zero
     previous_timestamp_ = current_time;
 
-    if (direction_ == FREE) {
+    if (direction_ == FREE || manual_mode_) {
         return;
     }
 
@@ -116,6 +126,7 @@ void Motor::turn_on(Direction dir) {
 }
 
 void Motor::turn_off() {
+    manual_mode_ = false;
     direction_ = FREE;
     set_motor(FREE, 0);
 }
@@ -128,7 +139,14 @@ int32_t Motor::get_position() {
     return read_encoder();
 }
 
+void Motor::set_manual_power(Direction dir, uint8_t power) {
+    manual_mode_ = true;
+    direction_ = dir;
+    set_motor(dir, power);
+}
+
 void Motor::set_target(int32_t target) {
+    manual_mode_ = false;
     target_ = target;
     eintegral_ = 0;
     previous_error_ = 0;
