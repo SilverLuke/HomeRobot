@@ -279,6 +279,9 @@ void Robot::send_telemetry() {
         proto_handler_.send_encoders_data(now, enc_sx_.get_total_ticks(), enc_dx_.get_total_ticks());
         last_fast_telemetry_ms_ = now;
 
+        // LiDAR Loop
+        lidar_.loop(&proto_handler_);
+
         // Serial log for IMU - 1000ms
         if (now - last_imu_log_ms_ >= 1000) {
             if (imu_ok) {

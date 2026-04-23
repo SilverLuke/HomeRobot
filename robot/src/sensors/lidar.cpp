@@ -6,7 +6,7 @@
 #include "../bridge/gazebo_bridge.h"
 #endif
 
-LOG_MODULE_REGISTER(lidar, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(lidar, LOG_LEVEL_DBG);
 
 Lidar::Lidar(const struct device* uart_dev, const struct gpio_dt_spec* motor_gpio)
     : uart_dev_(uart_dev), motor_gpio_(motor_gpio), rx_idx_(0) {

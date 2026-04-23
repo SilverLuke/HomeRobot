@@ -95,12 +95,13 @@ class GazeboBridge:
                 self.gz_node.subscribe(IMU, '/model/homerobot/imu', self.on_gz_imu)
                 self.gz_node.subscribe(GzLidarScan, '/model/homerobot/lidar', self.on_gz_lidar)
                 print("Gazebo Sim API connection initialized.")
+                self.use_cli_fallback = False
             except Exception as e:
                 print(f"Gazebo Sim API initialization failed: {e}")
                 self.use_cli_fallback = True
         else:
-            print("Falling back to CLI/Mock mode.")
             self.use_cli_fallback = True
+            print("Falling back to CLI/Mock mode.")
 
         print(f"UDP Bridge started. Listening on UDP {ZEPHYR_TX_PORT}, Sending to {ZEPHYR_RX_PORT}")
 
@@ -185,7 +186,6 @@ class GazeboBridge:
                     rp = cmd.right_power * cmd.right_angle
                 
                 if lp is not None and rp is not None:
-                    print(f"[BRIDGE] Received Motor Cmd: L={lp}, R={rp}")
                     self.target_linear_x = (lp + rp) / 200.0 
                     self.target_angular_z = (rp - lp) / 100.0
                 
@@ -231,97 +231,96 @@ class GazeboBridge:
         env = os.environ.copy()
         env["GZ_IP"] = "127.0.0.1"
         env["GZ_PARTITION"] = "homerobot_sim"
+        
+        # Ensure resource path is there
+        if "simulation" not in env.get("GZ_SIM_RESOURCE_PATH", ""):
+             env["GZ_SIM_RESOURCE_PATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "simulation")) + ":" + env.get("GZ_SIM_RESOURCE_PATH", "")
 
         while self.running:
             if hasattr(self, 'use_cli_fallback') and self.use_cli_fallback:
+                # 1. POLL ODOMETRY
                 try:
-                    # Get Odom via CLI
                     res = subprocess.check_output('gz topic -t /model/homerobot/odometry -e -n 1', 
                                                  shell=True, timeout=1.0, env=env).decode()
                     if "position {" in res:
                         # Extract x, y from position
-                        x = float(re.search(r'x:\s*([-0-9.eE+]+)', res).group(1))
-                        y = float(re.search(r'y:\s*([-0-9.eE+]+)', res).group(1))
-                        
-                        # Extract orientation quaternion using a more specific pattern
-                        # Looking for orientation { ... z: ... w: ... }
-                        oz_match = re.search(r'orientation\s*\{[^}]*z:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                        ow_match = re.search(r'orientation\s*\{[^}]*w:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                        ox_match = re.search(r'orientation\s*\{[^}]*x:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                        oy_match = re.search(r'orientation\s*\{[^}]*y:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                        
-                        if oz_match and ow_match:
-                            oz = float(oz_match.group(1))
-                            ow = float(ow_match.group(1))
-                            ox = float(ox_match.group(1)) if ox_match else 0.0
-                            oy = float(oy_match.group(1)) if oy_match else 0.0
+                        x_match = re.search(r'x:\s*([-0-9.eE+]+)', res)
+                        y_match = re.search(r'y:\s*([-0-9.eE+]+)', res)
+                        if x_match and y_match:
+                            x, y = float(x_match.group(1)), float(y_match.group(1))
                             
-                            siny_cosp = 2 * (ow * oz + ox * oy)
-                            cosy_cosp = 1 - 2 * (oy * oy + oz * oz)
-                            theta = math.atan2(siny_cosp, cosy_cosp)
+                            # Extract orientation quaternion
+                            oz_match = re.search(r'orientation\s*\{[^}]*z:\s*([-0-9.eE+]+)', res, re.DOTALL)
+                            ow_match = re.search(r'orientation\s*\{[^}]*w:\s*([-0-9.eE+]+)', res, re.DOTALL)
+                            ox_match = re.search(r'orientation\s*\{[^}]*x:\s*([-0-9.eE+]+)', res, re.DOTALL)
+                            oy_match = re.search(r'orientation\s*\{[^}]*y:\s*([-0-9.eE+]+)', res, re.DOTALL)
                             
-                            if self.first_odom:
-                                self.last_x, self.last_y, self.last_theta = x, y, theta
-                                self.first_odom = False
-                            else:
-                                dx, dy = x - self.last_x, y - self.last_y
-                                dtheta = theta - self.last_theta
-                                while dtheta > math.pi: dtheta -= 2 * math.pi
-                                while dtheta < -math.pi: dtheta += 2 * math.pi
-
-                                avg_theta = self.last_theta + (dtheta / 2.0)
-                                d_center = dx * math.cos(avg_theta) + dy * math.sin(avg_theta)
-
-                                if abs(d_center) < 0.0001 and abs(dtheta) < 0.0001:
+                            if oz_match and ow_match:
+                                oz, ow = float(oz_match.group(1)), float(ow_match.group(1))
+                                ox = float(ox_match.group(1)) if ox_match else 0.0
+                                oy = float(oy_match.group(1)) if oy_match else 0.0
+                                
+                                siny_cosp = 2 * (ow * oz + ox * oy)
+                                cosy_cosp = 1 - 2 * (oy * oy + oz * oz)
+                                theta = math.atan2(siny_cosp, cosy_cosp)
+                                
+                                if self.first_odom:
                                     self.last_x, self.last_y, self.last_theta = x, y, theta
-                                    continue
+                                    self.first_odom = False
+                                else:
+                                    dx, dy = x - self.last_x, y - self.last_y
+                                    dtheta = theta - self.last_theta
+                                    while dtheta > math.pi: dtheta -= 2 * math.pi
+                                    while dtheta < -math.pi: dtheta += 2 * math.pi
 
-                                dist_l = d_center - (dtheta * WHEEL_BASE / 2.0)
-                                dist_r = d_center + (dtheta * WHEEL_BASE / 2.0)
+                                    avg_theta = self.last_theta + (dtheta / 2.0)
+                                    d_center = dx * math.cos(avg_theta) + dy * math.sin(avg_theta)
 
-                                self.total_dist_l += dist_l
-                                self.total_dist_r += dist_r
-                                
-                                self.encoder_left = int(self.total_dist_l * TICKS_PER_METER)
-                                self.encoder_right = int(self.total_dist_r * TICKS_PER_METER)
-
-                                self.last_x, self.last_y, self.last_theta = x, y, theta
-                    
-                    # Get Lidar via CLI - only if active
-                    if self.running and hasattr(self, 'lidar_active') and self.lidar_active:
-                        try:
-                            # Use a shorter timeout and run in a way that doesn't block the loop if it hangs
-                            # We also only take the last message (-n 1)
-                            lidar_res = subprocess.check_output('gz topic -t /model/homerobot/lidar -e -n 1', 
-                                                               shell=True, timeout=0.5, stderr=subprocess.DEVNULL, env=os.environ).decode()
-                            
-                            # Use a more efficient search for the ranges array
-                            bracket_match = re.search(r'ranges:\s+\[(.*?)\]', lidar_res)
-                            if bracket_match:
-                                range_list = bracket_match.group(1).split(',')
-                                processed_ranges = []
-                                for r in range_list:
-                                    try:
-                                        val = float(r.strip())
-                                        if math.isinf(val) or math.isnan(val):
-                                            processed_ranges.append(0.0)
-                                        else:
-                                            processed_ranges.append(val)
-                                    except:
-                                        processed_ranges.append(0.0)
-                                
-                                ml = MockLidar()
-                                ml.ranges = processed_ranges
-                                self.lidar_scan = ml
-                        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-                            # If Gazebo is slow or command fails, just keep going with last data
-                            pass
-                        except Exception as e:
-                            print(f"Lidar Poll Error: {e}")
-                        
+                                    if not (abs(d_center) < 0.0001 and abs(dtheta) < 0.0001):
+                                        dist_l = d_center - (dtheta * WHEEL_BASE / 2.0)
+                                        dist_r = d_center + (dtheta * WHEEL_BASE / 2.0)
+                                        self.total_dist_l += dist_l
+                                        self.total_dist_r += dist_r
+                                        self.encoder_left = int(self.total_dist_l * TICKS_PER_METER)
+                                        self.encoder_right = int(self.total_dist_r * TICKS_PER_METER)
+                                        self.last_x, self.last_y, self.last_theta = x, y, theta
                 except Exception as e:
-                    pass # Ignore timeouts/errors during poll
-            time.sleep(0.1) # 10Hz polling
+                    pass
+
+                # 2. POLL LIDAR
+                if hasattr(self, 'lidar_active') and self.lidar_active:
+                    try:
+                        lidar_res = subprocess.check_output('gz topic -t /model/homerobot/lidar -e -n 1', 
+                                                           shell=True, timeout=1.0, env=env).decode()
+                        
+                        processed_ranges = []
+                        # Try bracket format first
+                        bracket_match = re.search(r'ranges:\s+\[(.*?)\]', lidar_res)
+                        if bracket_match:
+                            range_list = bracket_match.group(1).split(',')
+                            for r in range_list:
+                                try:
+                                    val = float(r.strip())
+                                    processed_ranges.append(0.0 if math.isinf(val) or math.isnan(val) else val)
+                                except: processed_ranges.append(0.0)
+                        else:
+                            # Try multi-line format
+                            ranges = re.findall(r'ranges:\s+([-+0-9.eE|inf|nan]+)', lidar_res)
+                            for r in ranges:
+                                try:
+                                    val = float(r)
+                                    processed_ranges.append(0.0 if math.isinf(val) or math.isnan(val) else val)
+                                except: processed_ranges.append(0.0)
+                        
+                        if processed_ranges:
+                            class MockLidar: pass
+                            ml = MockLidar()
+                            ml.ranges = processed_ranges
+                            self.lidar_scan = ml
+                    except Exception as e:
+                        pass
+            
+            time.sleep(0.1) # 10Hz polling loop
 
     def tx_loop(self):
         """Sends Telemetry to Zephyr"""
@@ -365,8 +364,6 @@ class GazeboBridge:
                 try:
                     data = telemetry.SerializeToString()
                     self.sock_tx.sendto(data, (ZEPHYR_ADDR, ZEPHYR_RX_PORT))
-                    if telemetry.encoder_left != 0 or len(telemetry.lidar.points) > 0:
-                        print(f"[BRIDGE] Data Flowing -> Zephyr (Lidar: {len(telemetry.lidar.points)} pts)")
                 except Exception as e:
                     print(f"Socket TX Error: {e}")
                 

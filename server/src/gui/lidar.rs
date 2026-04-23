@@ -44,7 +44,7 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         let state = GUI_STATE.lock().unwrap();
         let center_x = width as f64 / 2.0;
         let center_y = height as f64 / 2.0;
-        let scale = 0.1; // 1mm = 0.1px (1m = 100px)
+        let scale = 0.05; // 1mm = 0.05px (1m = 50px)
 
         cr.set_source_rgb(0.05, 0.05, 0.1);
         cr.paint().unwrap();
