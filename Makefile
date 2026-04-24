@@ -55,13 +55,11 @@ flash: ## Flash the current build to the ESP32
 	@echo "Flashing Zephyr app to $(ESP_DEVICE)..."
 	$(WEST) flash -d $(ZEPHYR_BUILD_DIR) --esp-device $(ESP_DEVICE)
 
-monitor: ## Open the serial monitor for the ESP32
-	@echo "Starting west espressif monitor on $(ESP_DEVICE)..."
-	cd $(ZEPHYR_BUILD_DIR) && $(WEST) espressif monitor -p $(ESP_DEVICE)
-
-snapshot-logs: ## Capture 5 seconds of logs to a file
-	@echo "Capturing $(or $(DURATION),5) seconds of logs from $(ESP_DEVICE)..."
-	./tools/read_esp32_logs.sh $(or $(DURATION),5) $(ESP_DEVICE)
+test: ## Run verification tests
+	@echo "Running Server unit tests..."
+	$(CARGO) test --manifest-path $(SERVER_DIR)/Cargo.toml
+	@echo "Running Regression tests..."
+	python3 tools/regression_test.py
 
 clean: ## Remove build artifacts
 	@echo "Cleaning server..."

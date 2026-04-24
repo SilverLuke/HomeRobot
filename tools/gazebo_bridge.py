@@ -172,8 +172,11 @@ class GazeboBridge:
                     msg.ParseFromString(data)
                     if msg.HasField('motor_move'):
                         cmd = msg.motor_move
-                        lp = cmd.left_power * cmd.left_angle
-                        rp = cmd.right_power * cmd.right_angle
+                        # Explicitly treat as integer power (0-255)
+                        lp_val = int(cmd.left_power) & 0xFF
+                        rp_val = int(cmd.right_power) & 0xFF
+                        lp = lp_val if cmd.left_angle >= 0 else -lp_val
+                        rp = rp_val if cmd.right_angle >= 0 else -rp_val
                     elif msg.HasField('stop_all'):
                         lp, rp = 0, 0
                     else:
@@ -182,12 +185,16 @@ class GazeboBridge:
                     # Fallback to raw MotorMoveCommand (Current Firmware behavior)
                     cmd = messages_pb2.MotorMoveCommand()
                     cmd.ParseFromString(data)
-                    lp = cmd.left_power * cmd.left_angle
-                    rp = cmd.right_power * cmd.right_angle
+                    lp_val = int(cmd.left_power) & 0xFF
+                    rp_val = int(cmd.right_power) & 0xFF
+                    lp = lp_val if cmd.left_angle >= 0 else -lp_val
+                    rp = rp_val if cmd.right_angle >= 0 else -rp_val
                 
                 if lp is not None and rp is not None:
-                    self.target_linear_x = (lp + rp) / 200.0 
-                    self.target_angular_z = (rp - lp) / 100.0
+                    # Fix: If Forward (W) causes -X movement, we negate both to align 
+                    # user intent with Gazebo's +X Forward convention.
+                    self.target_linear_x = -(lp + rp) / 254.0 
+                    self.target_angular_z = -(rp - lp) / 127.0
                 
             except Exception as e:
                 print(f"RX Error: {e}")
@@ -347,14 +354,26 @@ class GazeboBridge:
                     # Convert Gazebo LaserScan to our Protobuf format
                     try:
                         count = len(self.lidar_scan.ranges)
+                        # Gazebo Lidar typically goes from angle_min to angle_max.
+                        # For RP-Lidar simulation, it's often -PI to PI.
+                        # If we don't have angle_min/max from msg (mock mode), assume -PI to PI.
+                        angle_min = getattr(self.lidar_scan, 'angle_min', -math.pi)
+                        angle_max = getattr(self.lidar_scan, 'angle_max', math.pi)
+                        angle_step = (angle_max - angle_min) / count if count > 0 else 0
+                        
                         for i, dist in enumerate(self.lidar_scan.ranges):
-                            # Calculate the angle based on index (0 to 360)
-                            base_angle = (i / float(count)) * 360.0
-                            # Add random angular noise (e.g., +/- 0.5 degrees)
-                            angle_jitter = random.uniform(-0.5, 0.5)
+                            # Calculate the actual angle in radians
+                            angle_rad = angle_min + (i * angle_step)
+                            # Convert to degrees and normalize to [0, 360]
+                            angle_deg = math.degrees(angle_rad)
+                            while angle_deg < 0: angle_deg += 360.0
+                            while angle_deg >= 360.0: angle_deg -= 360.0
+                            
+                            # Add random angular noise (e.g., +/- 0.1 degrees)
+                            angle_jitter = random.uniform(-0.1, 0.1)
                             
                             p = telemetry.lidar.points.add()
-                            p.angle_deg = base_angle + angle_jitter
+                            p.angle_deg = angle_deg + angle_jitter
                             p.distance_mm = float(dist * 1000.0)
                             p.quality = 15
                             p.scan_completed = (i == count - 1)

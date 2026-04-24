@@ -38,6 +38,19 @@
                     <specular>0.5 0.5 0.5 1</specular>
                 </material>
             </visual>
+            <!-- Front Indicator (White box) -->
+            <visual name='front_indicator'>
+                <pose>0.12 0 0.05 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>0.05 0.05 0.01</size>
+                    </box>
+                </geometry>
+                <material>
+                    <ambient>1 1 1 1</ambient>
+                    <diffuse>1 1 1 1</diffuse>
+                </material>
+            </visual>
             <!-- IMU Sensor on base_link -->
             <sensor name='imu_sensor' type='imu'>
                 <always_on>1</always_on>
@@ -165,7 +178,7 @@
 
         <!-- Lidar Link -->
         <link name='lidar_link'>
-            <pose>0 0 0.08 0 0 0</pose>
+            <pose>0.05 0 0.08 0 0 0</pose>
             <inertial>
                 <mass>0.1</mass>
                 <inertia>
@@ -207,6 +220,11 @@
                         <max>12.0</max>
                         <resolution>0.01</resolution>
                     </range>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.01</stddev>
+                    </noise>
                 </lidar>
                 <always_on>1</always_on>
                 <visualize>true</visualize>
@@ -254,6 +272,19 @@
             name="gz::sim::systems::DiffDrive">
             <left_joint>left_wheel_joint</left_joint>
             <right_joint>right_wheel_joint</right_joint>
+            <wheel_separation>0.26</wheel_separation>
+            <wheel_radius>0.033</wheel_radius>
+            <odom_publish_frequency>50</odom_publish_frequency>
+            <topic>/model/homerobot/cmd_vel</topic>
+            <odom_topic>/model/homerobot/odometry</odom_topic>
+            <tf_topic>/model/homerobot/tf</tf_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_link</child_frame_id>
+        </plugin>
+
+    </model>
+</sdf>
+t>
             <wheel_separation>0.26</wheel_separation>
             <wheel_radius>0.033</wheel_radius>
             <odom_publish_frequency>50</odom_publish_frequency>

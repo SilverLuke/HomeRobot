@@ -197,6 +197,37 @@
                     <geometry><box><size>10 0.1 1</size></box></geometry>
                     <material><ambient>0.7 0.5 0.3 1</ambient></material>
                 </visual>
+
+                <!-- Internal Walls / Obstacles -->
+                <collision name="obs1">
+                    <pose>2 2 0 0 0 0.785</pose>
+                    <geometry><box><size>2 0.1 1</size></box></geometry>
+                </collision>
+                <visual name="obs1_visual">
+                    <pose>2 2 0 0 0 0.785</pose>
+                    <geometry><box><size>2 0.1 1</size></box></geometry>
+                    <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material> <!-- GREEN -->
+                </visual>
+
+                <collision name="obs2">
+                    <pose>-2 -2 0 0 0 0</pose>
+                    <geometry><box><size>0.5 3 1</size></box></geometry>
+                </collision>
+                <visual name="obs2_visual">
+                    <pose>-2 -2 0 0 0 0</pose>
+                    <geometry><box><size>0.5 3 1</size></box></geometry>
+                    <material><ambient>0.2 0.2 0.8 1</ambient><diffuse>0.2 0.2 0.8 1</diffuse></material> <!-- BLUE -->
+                </visual>
+
+                <collision name="obs3">
+                    <pose>0 0 0 0 0 0</pose>
+                    <geometry><cylinder><radius>0.5</radius><length>1</length></cylinder></geometry>
+                </collision>
+                <visual name="obs3_visual">
+                    <pose>0 0 0 0 0 0</pose>
+                    <geometry><cylinder><radius>0.5</radius><length>1</length></cylinder></geometry>
+                    <material><ambient>0.8 0.5 0.0 1</ambient><diffuse>0.8 0.5 0.0 1</diffuse></material> <!-- ORANGE -->
+                </visual>
             </link>
         </model>
 
@@ -204,7 +235,7 @@
         <include>
             <uri>model://homerobot</uri>
             <name>homerobot</name>
-            <pose>0 0 0.1 0 0 0</pose>
+            <pose>1 0 0.1 0 0 0</pose>
         </include>
     </world>
 </sdf>

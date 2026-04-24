@@ -5,11 +5,25 @@ use std::sync::Mutex;
 
 pub struct GuiState {
     pub display_scan: Vec<LidarPoint>,
+    pub robot_x: f32,
+    pub robot_y: f32,
+    pub robot_theta: f32,
+    pub trajectory: Vec<(f32, f32)>,
+    pub accel_history: std::collections::VecDeque<(f32, f32, f32)>,
+    pub gyro_history: std::collections::VecDeque<(f32, f32, f32)>,
+    pub mag_history: std::collections::VecDeque<(f32, f32, f32)>,
 }
 
 lazy_static::lazy_static! {
     pub static ref GUI_STATE: Mutex<GuiState> = Mutex::new(GuiState {
         display_scan: Vec::new(),
+        robot_x: 0.0,
+        robot_y: 0.0,
+        robot_theta: 0.0,
+        trajectory: Vec::new(),
+        accel_history: std::collections::VecDeque::with_capacity(100),
+        gyro_history: std::collections::VecDeque::with_capacity(100),
+        mag_history: std::collections::VecDeque::with_capacity(100),
     });
 }
 
@@ -42,37 +56,166 @@ pub fn update_scan(display_scan: &mut Vec<LidarPoint>, new_points: Vec<LidarPoin
 pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
     lidar_canvas.set_draw_func(move |_area, cr, width, height| {
         let state = GUI_STATE.lock().unwrap();
-        let center_x = width as f64 / 2.0;
-        let center_y = height as f64 / 2.0;
+        let world_center_x = width as f64 / 2.0;
+        let world_center_y = height as f64 / 2.0;
         let scale = 0.05; // 1mm = 0.05px (1m = 50px)
 
         cr.set_source_rgb(0.05, 0.05, 0.1);
         cr.paint().unwrap();
 
-        cr.set_source_rgb(0.2, 0.2, 0.3);
-        cr.set_line_width(1.0);
-        for i in 1..16 {
-            let r = i as f64 * 500.0 * scale;
-            cr.arc(center_x, center_y, r, 0.0, 2.0 * std::f64::consts::PI);
+        // Draw World Grid (Fixed)
+        cr.set_source_rgb(0.15, 0.15, 0.2);
+        cr.set_line_width(0.5);
+        for i in -10..=10 {
+            let pos = i as f64 * 1000.0 * scale; // 1m grid
+            cr.move_to(world_center_x + pos, 0.0);
+            cr.line_to(world_center_x + pos, height as f64);
+            cr.move_to(0.0, world_center_y + pos);
+            cr.line_to(width as f64, world_center_y + pos);
             cr.stroke().unwrap();
         }
 
+        // Draw Trajectory (Corrected)
+        cr.set_source_rgb(1.0, 1.0, 0.0);
+        cr.set_line_width(1.0);
+        cr.set_dash(&[5.0, 5.0], 0.0);
+        if let Some((first_x, first_y)) = state.trajectory.first() {
+            // wx = first_x, wy = first_y
+            cr.move_to(
+                world_center_x - (*first_y as f64 * 1000.0 * scale),
+                world_center_y - (*first_x as f64 * 1000.0 * scale)
+            );
+            for (tx, ty) in state.trajectory.iter().skip(1) {
+                cr.line_to(
+                    world_center_x - (*ty as f64 * 1000.0 * scale),
+                    world_center_y - (*tx as f64 * 1000.0 * scale)
+                );
+            }
+            cr.stroke().unwrap();
+        }
+        cr.set_dash(&[], 0.0);
+
+        // Calculate Robot Position on Canvas (Corrected for Screen Coordinates)
+        // Gazebo X (Forward) -> Screen -Y (Up)
+        // Gazebo Y (Left) -> Screen -X (Left)
+        let robot_draw_x = world_center_x - (state.robot_y as f64 * 1000.0 * scale);
+        let robot_draw_y = world_center_y - (state.robot_x as f64 * 1000.0 * scale);
+        
+        // Robot Theta 0 is +X (Forward/Up). 
+        // Screen orientation: Up is -PI/2.
+        // Because screen Y is inverted, increasing Theta (CCW) should move the 
+        // screen vector towards the Left (-PI).
+        let robot_theta = state.robot_theta as f64;
+        let screen_theta = -std::f64::consts::FRAC_PI_2 - robot_theta;
+
+        // Draw Robot
         cr.set_source_rgb(1.0, 0.3, 0.3);
-        cr.arc(center_x, center_y, 5.0, 0.0, 2.0 * std::f64::consts::PI);
+        cr.arc(robot_draw_x, robot_draw_y, 10.0, 0.0, 2.0 * std::f64::consts::PI);
         cr.fill().unwrap();
 
+        // Draw Robot Heading (White vector)
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.set_line_width(2.0);
+        cr.move_to(robot_draw_x, robot_draw_y);
+        cr.line_to(
+            robot_draw_x + (15.0 * screen_theta.cos()),
+            robot_draw_y + (15.0 * screen_theta.sin())
+        );
+        cr.stroke().unwrap();
+
+        // Draw current Lidar Scan (Corrected for Pose)
         cr.set_source_rgba(0.0, 1.0, 0.5, 0.8);
         for p in &state.display_scan {
             if p.distance_mm < 10.0 {
                 continue;
             }
-            let angle_rad = (p.angle_deg as f64).to_radians();
-            let x = center_x + (p.distance_mm as f64 * scale * angle_rad.sin());
-            let y = center_y - (p.distance_mm as f64 * scale * angle_rad.cos());
             
-            cr.arc(x, y, 2.0, 0.0, 2.0 * std::f64::consts::PI);
+            // Lidar point in robot frame (Lidar 0 is Front)
+            let angle_robot_rad = (p.angle_deg as f64).to_radians();
+            
+            // Total angle in world frame
+            let total_angle_world = robot_theta + angle_robot_rad;
+            
+            // Transform to World Coordinates (Gazebo Frame)
+            let wx = (state.robot_x as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.cos());
+            let wy = (state.robot_y as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.sin());
+            
+            // Project to Screen Coordinates
+            let dx = world_center_x - (wy * scale);
+            let dy = world_center_y - (wx * scale);
+            
+            cr.arc(dx, dy, 2.0, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
         }
+    });
+}
+
+pub fn draw_imu_plot(cr: &cairo::Context, width: f64, height: f64, history: &std::collections::VecDeque<(f32, f32, f32)>, auto_scale: bool) {
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.paint().unwrap();
+
+    if history.is_empty() { return; }
+
+    let dx = width / 100.0;
+    let mid_y = height / 2.0;
+
+    // Find Max for scaling
+    let mut max_val = 1.0f32;
+    if auto_scale {
+        for (x, y, z) in history {
+            max_val = max_val.max(x.abs()).max(y.abs()).max(z.abs());
+        }
+    } else {
+        max_val = 10.0; // Default for Accel (approx 1g)
+    }
+    let scale_y = (height / 2.0) / max_val as f64 * 0.8;
+
+    // Draw Zero line
+    cr.set_source_rgb(0.2, 0.2, 0.2);
+    cr.set_line_width(1.0);
+    cr.move_to(0.0, mid_y);
+    cr.line_to(width, mid_y);
+    cr.stroke().unwrap();
+
+    let draw_axis = |cr: &cairo::Context, axis_idx: usize, color: (f64, f64, f64)| {
+        cr.set_source_rgb(color.0, color.1, color.2);
+        cr.set_line_width(1.5);
+        for (i, sample) in history.iter().enumerate() {
+            let val = match axis_idx {
+                0 => sample.0,
+                1 => sample.1,
+                _ => sample.2,
+            };
+            let px = i as f64 * dx;
+            let py = mid_y - (val as f64 * scale_y);
+            if i == 0 { cr.move_to(px, py); } else { cr.line_to(px, py); }
+        }
+        cr.stroke().unwrap();
+    };
+
+    draw_axis(cr, 0, (1.0, 0.3, 0.3)); // X - Red
+    draw_axis(cr, 1, (0.3, 1.0, 0.3)); // Y - Green
+    draw_axis(cr, 2, (0.3, 0.3, 1.0)); // Z - Blue
+}
+
+pub fn setup_accel_plot(canvas: &DrawingArea) {
+    canvas.set_draw_func(move |_area, cr, width, height| {
+        let state = GUI_STATE.lock().unwrap();
+        draw_imu_plot(cr, width as f64, height as f64, &state.accel_history, false);
+    });
+}
+
+pub fn setup_gyro_plot(canvas: &DrawingArea) {
+    canvas.set_draw_func(move |_area, cr, width, height| {
+        let state = GUI_STATE.lock().unwrap();
+        draw_imu_plot(cr, width as f64, height as f64, &state.gyro_history, true);
+    });
+}
+
+pub fn setup_mag_plot(canvas: &DrawingArea) {
+    canvas.set_draw_func(move |_area, cr, width, height| {
+        let state = GUI_STATE.lock().unwrap();
+        draw_imu_plot(cr, width as f64, height as f64, &state.mag_history, true);
     });
 }
 

@@ -6,6 +6,7 @@ mod stats;
 mod gui;
 mod command;
 mod connection;
+mod odometry;
 
 pub mod homerobot {
     include!(concat!(env!("OUT_DIR"), "/homerobot.rs"));

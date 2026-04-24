@@ -12,8 +12,13 @@ use crate::gui::lidar::{setup_lidar_drawing, GUI_STATE};
 pub enum GuiUpdate {
     Battery { percentage: u32, voltage_mv: u32 },
     Encoders { left: i32, right: i32 },
+    Pose { x: f32, y: f32, theta: f32 },
     Lidar(Vec<LidarPoint>),
-    Imu { ax: f32, ay: f32, az: f32, gx: f32, gy: f32, gz: f32 },
+    Imu { 
+        ax: f32, ay: f32, az: f32, 
+        gx: f32, gy: f32, gz: f32,
+        mx: f32, my: f32, mz: f32
+    },
     Config(RobotConfig),
     Status(String),
 }
@@ -36,12 +41,25 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         let window: ApplicationWindow = builder.object("main_window").expect("Could not find object 'main_window' in UI definition");
         window.set_application(Some(app));
 
+        let sidebar_scroll: gtk4::ScrolledWindow = builder.object("sidebar_scroll").expect("Could not find sidebar_scroll");
+        let btn_toggle_sidebar: gtk4::ToggleButton = builder.object("btn_toggle_sidebar").expect("Could not find btn_toggle_sidebar");
+        let power_scale: gtk4::Scale = builder.object("global_power_scale").expect("Could not find global_power_scale");
         let lidar_canvas: DrawingArea = builder.object("lidar_canvas").expect("Could not find lidar_canvas");
         let battery_label: Label = builder.object("battery_label").expect("Could not find battery_label");
         let enc_left_label: Label = builder.object("enc_left_val").expect("Could not find enc_left_val");
         let enc_right_label: Label = builder.object("enc_right_val").expect("Could not find enc_right_val");
+        let pose_x_label: Label = builder.object("pose_x_val").expect("Could not find pose_x_val");
+        let pose_y_label: Label = builder.object("pose_y_val").expect("Could not find pose_y_val");
+        let pose_theta_label: Label = builder.object("pose_theta_val").expect("Could not find pose_theta_val");
         let accel_label: Label = builder.object("accel_label").expect("Could not find accel_label");
         let gyro_label: Label = builder.object("gyro_label").expect("Could not find gyro_label");
+        let mag_label: Label = builder.object("mag_label").expect("Could not find mag_label");
+        
+        let accel_canvas: DrawingArea = builder.object("accel_plot").expect("Could not find accel_plot");
+        let gyro_canvas: DrawingArea = builder.object("gyro_plot").expect("Could not find gyro_plot");
+        let mag_canvas: DrawingArea = builder.object("mag_plot").expect("Could not find mag_plot");
+        let btn_clear_path: Button = builder.object("btn_clear_path").expect("Could not find btn_clear_path");
+
         let apply_btn: Button = builder.object("apply_config").expect("Could not find apply_config");
 
         // Movement Buttons
@@ -82,6 +100,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
 
         // Set up LIDAR drawing
         setup_lidar_drawing(&lidar_canvas);
+        crate::gui::lidar::setup_accel_plot(&accel_canvas);
+        crate::gui::lidar::setup_gyro_plot(&gyro_canvas);
+        crate::gui::lidar::setup_mag_plot(&mag_canvas);
+
+        let lidar_canvas_clear = lidar_canvas.clone();
+        btn_clear_path.connect_clicked(move |_| {
+            let mut state = GUI_STATE.lock().unwrap();
+            state.trajectory.clear();
+            lidar_canvas_clear.queue_draw();
+            println!("GUI: Trajectory cleared.");
+        });
 
         // Custom CSS for Green Lidar Button
         let provider = gtk4::CssProvider::new();
@@ -100,24 +129,46 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         key_controller.set_propagation_phase(gtk4::PropagationPhase::Bubble);
         let rc_key = rc_clone.clone();
         let btn_lidar_clone = btn_lidar.clone();
+        let btn_toggle_sidebar_clone = btn_toggle_sidebar.clone();
+        let power_scale_clone = power_scale.clone();
+
         key_controller.connect_key_pressed(move |_, key, _, _| {
             let mut cmd = rc_key.lock().unwrap();
+            let current_power = power_scale_clone.value() as u8;
+
             match key {
                 Key::w | Key::W => {
-                    println!("GUI: Keyboard Move: Forward (Latched)");
-                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 127, right_angle: 1.0 };
+                    println!("GUI: Keyboard Move: Forward (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: current_power, left_angle: 1.0, 
+                        right_power: current_power, right_angle: 1.0 
+                    };
                 },
                 Key::s | Key::S => {
-                    println!("GUI: Keyboard Move: Backward (Latched)");
-                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: -1.0, right_power: 127, right_angle: -1.0 };
+                    println!("GUI: Keyboard Move: Backward (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: current_power, left_angle: -1.0, 
+                        right_power: current_power, right_angle: -1.0 
+                    };
                 },
                 Key::a | Key::A => {
-                    println!("GUI: Keyboard Move: Left (Latched)");
-                    *cmd = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: 127, right_angle: 1.0 };
+                    println!("GUI: Keyboard Move: Left (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: 0, left_angle: 0.0, 
+                        right_power: current_power, right_angle: 1.0 
+                    };
                 },
                 Key::d | Key::D => {
-                    println!("GUI: Keyboard Move: Right (Latched)");
-                    *cmd = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
+                    println!("GUI: Keyboard Move: Right (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: current_power, left_angle: 1.0, 
+                        right_power: 0, right_angle: 0.0 
+                    };
+                },
+                Key::h | Key::H => {
+                    let new_active = !btn_toggle_sidebar_clone.is_active();
+                    btn_toggle_sidebar_clone.set_active(new_active);
+                    println!("GUI: Sidebar visibility toggled via H: {}", new_active);
                 },
                 Key::l | Key::L => {
                     let new_state = !btn_lidar_clone.is_active();
@@ -139,31 +190,46 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
 
         // Removed key_controller.connect_key_released to keep robot moving until Stop is requested
         
+        let sidebar_scroll_btn = sidebar_scroll.clone();
+        btn_toggle_sidebar.connect_toggled(move |btn| {
+            let active = btn.is_active();
+            sidebar_scroll_btn.set_visible(active);
+            println!("GUI: Sidebar visibility changed: {}", active);
+        });
+
         window.add_controller(key_controller);
 
         // Connect Movement Buttons
         let rc_fwd = rc_clone.clone();
+        let ps_fwd = power_scale.clone();
         btn_forward.connect_clicked(move |_| {
-            println!("GUI: Button Move: Forward");
-            *rc_fwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 127, right_angle: 1.0 };
+            let p = ps_fwd.value() as u8;
+            println!("GUI: Button Move: Forward (Power: {})", p);
+            *rc_fwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: p, right_angle: 1.0 };
         });
 
         let rc_bwd = rc_clone.clone();
+        let ps_bwd = power_scale.clone();
         btn_backward.connect_clicked(move |_| {
-            println!("GUI: Button Move: Backward");
-            *rc_bwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: -1.0, right_power: 127, right_angle: -1.0 };
+            let p = ps_bwd.value() as u8;
+            println!("GUI: Button Move: Backward (Power: {})", p);
+            *rc_bwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: -1.0, right_power: p, right_angle: -1.0 };
         });
 
         let rc_left = rc_clone.clone();
+        let ps_left = power_scale.clone();
         btn_left.connect_clicked(move |_| {
-            println!("GUI: Button Move: Left");
-            *rc_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: 127, right_angle: 1.0 };
+            let p = ps_left.value() as u8;
+            println!("GUI: Button Move: Left (Power: {})", p);
+            *rc_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: p, right_angle: 1.0 };
         });
 
         let rc_right = rc_clone.clone();
+        let ps_right = power_scale.clone();
         btn_right.connect_clicked(move |_| {
-            println!("GUI: Button Move: Right");
-            *rc_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: 127, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
+            let p = ps_right.value() as u8;
+            println!("GUI: Button Move: Right (Power: {})", p);
+            *rc_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
         });
 
         let rc_stop = rc_clone.clone();
@@ -208,9 +274,16 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         let battery_label_c = battery_label.clone();
         let enc_left_label_c = enc_left_label.clone();
         let enc_right_label_c = enc_right_label.clone();
+        let pose_x_label_c = pose_x_label.clone();
+        let pose_y_label_c = pose_y_label.clone();
+        let pose_theta_label_c = pose_theta_label.clone();
         let accel_label_c = accel_label.clone();
         let gyro_label_c = gyro_label.clone();
+        let mag_label_c = mag_label.clone();
         let lidar_canvas_c = lidar_canvas.clone();
+        let accel_canvas_c = accel_canvas.clone();
+        let gyro_canvas_c = gyro_canvas.clone();
+        let mag_canvas_c = mag_canvas.clone();
         let window_c = window.clone();
         let rx_inner = rx.clone();
 
@@ -227,9 +300,48 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                             enc_left_label_c.set_text(&left.to_string());
                             enc_right_label_c.set_text(&right.to_string());
                         }
-                        GuiUpdate::Imu { ax, ay, az, gx, gy, gz } => {
+                        GuiUpdate::Pose { x, y, theta } => {
+                            pose_x_label_c.set_text(&format!("{:.2}", x));
+                            pose_y_label_c.set_text(&format!("{:.2}", y));
+                            pose_theta_label_c.set_text(&format!("{:.2}", theta));
+                            
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.robot_x = x;
+                            state.robot_y = y;
+                            state.robot_theta = theta;
+                            
+                            // Add to trajectory if moved enough
+                            let last = state.trajectory.last().cloned();
+                            if let Some((lx, ly)) = last {
+                                let dist = ((lx - x).powi(2) + (ly - y).powi(2)).sqrt();
+                                if dist > 0.02 {
+                                    state.trajectory.push((x, y));
+                                }
+                            } else {
+                                state.trajectory.push((x, y));
+                            }
+                            
+                            lidar_canvas_c.queue_draw();
+                        }
+                        GuiUpdate::Imu { ax, ay, az, gx, gy, gz, mx, my, mz } => {
                             accel_label_c.set_text(&format!("Accel: X: {:.2} Y: {:.2} Z: {:.2}", ax, ay, az));
                             gyro_label_c.set_text(&format!("Gyro: X: {:.2} Y: {:.2} Z: {:.2}", gx, gy, gz));
+                            mag_label_c.set_text(&format!("Mag: X: {:.2} Y: {:.2} Z: {:.2}", mx, my, mz));
+
+                            let mut state = GUI_STATE.lock().unwrap();
+                            
+                            let update_buffer = |buffer: &mut std::collections::VecDeque<(f32, f32, f32)>, val: (f32, f32, f32)| {
+                                if buffer.len() >= 100 { buffer.pop_front(); }
+                                buffer.push_back(val);
+                            };
+
+                            update_buffer(&mut state.accel_history, (ax, ay, az));
+                            update_buffer(&mut state.gyro_history, (gx, gy, gz));
+                            update_buffer(&mut state.mag_history, (mx, my, mz));
+
+                            accel_canvas_c.queue_draw();
+                            gyro_canvas_c.queue_draw();
+                            mag_canvas_c.queue_draw();
                         }
                         GuiUpdate::Lidar(points) => {
                             println!("[GUI] Received Lidar: {} points", points.len());
@@ -264,4 +376,46 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
     });
 
     (app, tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gtk4::Builder;
+    use glib::Object;
+
+    #[test]
+    fn test_ui_xml_loads_correctly() {
+        // Initialize GTK for the test
+        if let Err(e) = gtk4::init() {
+            println!("Skipping GTK test: No display found ({})", e);
+            return;
+        }
+
+        let builder = Builder::new();
+        let ui_str = include_str!("../main_window.ui");
+        
+        // This will panic if XML is invalid
+        builder.add_from_string(ui_str).expect("Failed to parse UI XML in tests");
+
+        // Verify critical objects exist
+        let objects = [
+            "main_window",
+            "sidebar_scroll",
+            "btn_toggle_sidebar",
+            "btn_clear_path",
+            "global_power_scale",
+            "lidar_canvas",
+            "accel_plot",
+            "gyro_plot",
+            "mag_plot",
+            "btn_forward",
+            "btn_stop",
+            "pose_x_val",
+        ];
+
+        for id in objects {
+            assert!(builder.object::<Object>(id).is_some(), "Object '{}' missing from UI definition", id);
+        }
+    }
 }

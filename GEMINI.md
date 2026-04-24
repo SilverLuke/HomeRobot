@@ -38,23 +38,25 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 
 ## Building and Running
 
+### Makefile Philosophy
+The `Makefile` is strictly reserved for **build, install, and flash** actions. It MUST NOT be used for operational tasks like starting simulation components, monitoring logs, or running tests. This ensures a clean separation between development/deployment and runtime operations.
+
 ### AI Agent Capabilities
 The AI coding agent has direct connectivity to the robot hardware via the local development environment. It can autonomously:
 - **Build**: Compile the Zephyr firmware and Rust server.
 - **Flash**: Deploy firmware to the ESP32-C6 via `make flash`.
-- **Monitor**: Capture and analyze real-time logs via `make monitor` or `make snapshot-logs`.
-- **Test**: Execute manual movement and diagnostic commands using the `cmd_sender` utility to verify hardware behavior.
+- **Verify**: Use dedicated tools (e.g., `tools/regression_test.py`, `cmd_sender`) to validate behavior.
 
 ### Key Commands
 
 #### Top-level (Makefile)
-- `make all`: Builds both the server and the Zephyr app (default 16MB flash).
+- `make all`: Builds proto, server, and ESP32-C6 firmware.
 - `make server`: Builds the Rust control server.
-- `make zephyr`: Builds the Zephyr-based robot application.
+- `make build-sim`: Builds the Zephyr-based robot application for native simulation.
 - `make build-c6 FLASH=8M`: Build specifically for 8MB flash hardware (defaults to 16M).
 - `make flash`: Flashes the Zephyr app to the ESP32-C6.
-- `make monitor`: Starts the serial monitor for the ESP32.
-- `make snapshot-logs`: Captures 5 seconds of logs from the ESP32 (useful for non-blocking status checks).
+- `make proto`: Generates Python Protobuf bindings.
+- `make test`: Runs server unit tests and Gazebo regression tests.
 
 #### Command Sender (Testing Utility)
 Navigate to `tools/cmd_sender/` to send direct Protobuf commands:
@@ -66,10 +68,11 @@ Navigate to `tools/cmd_sender/` to send direct Protobuf commands:
 
 #### Manual Verification Workflow
 To get immediate feedback after a code change (e.g., PID adjustment or sensor logic update):
-1. **Flash & Monitor**: Run `make flash monitor` to deploy the change and observe serial output.
-2. **Trigger Action**: In a separate terminal, use `cmd_sender` to move the robot (e.g., `cargo run -- move --left 50 --right 50`).
-3. **Analyze**: Observe the PID error and encoder ticks in the serial logs to verify the hardware response matches expectations.
-4. **Diagnostic**: Run `cargo run -- diag` to perform a comprehensive health check and verify that all systems are still operational.
+1. **Flash**: Run `make flash` to deploy the change.
+2. **Observe**: In a dedicated terminal, monitor the logs using `west espressif monitor` (hardware) or by checking the simulation logs in `logs/sim/`.
+3. **Trigger Action**: Use `cmd_sender` to move the robot (e.g., `cargo run -- move --left 50 --right 50`).
+4. **Analyze**: Observe the PID error and encoder ticks to verify the hardware response matches expectations.
+5. **Diagnostic**: Run `cargo run -- diag` to perform a comprehensive health check and verify that all systems are still operational.
 
 #### Control Server (Rust)
 Navigate to `server/`:

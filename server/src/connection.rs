@@ -23,6 +23,7 @@ pub fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotComman
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
 
     let mut protocol = reader::ProtocolManager::new(stream, stats.clone());
+    let mut odom = crate::odometry::Odometry::new();
     let start_time = Instant::now();
     let mut last_sent_command = RobotCommand::default();
     
@@ -38,13 +39,25 @@ pub fn handle_connection(stream: TcpStream, robot_command: Arc<Mutex<RobotComman
                             }
                             Payload::Encoders(enc) => {
                                 println!("[SERVER] Telemetry Heartbeat: Encoders L={} R={}", enc.left_encoder, enc.right_encoder);
+                                odom.update(enc.left_encoder, enc.right_encoder);
                                 let _ = gui_tx.send(GuiUpdate::Encoders { left: enc.left_encoder, right: enc.right_encoder });
+                                let _ = gui_tx.send(GuiUpdate::Pose { 
+                                    x: odom.pose.x, 
+                                    y: odom.pose.y, 
+                                    theta: odom.pose.theta 
+                                });
                             }
                             Payload::Imu(imu) => {
                                 if let (Some(a), Some(g)) = (imu.acceleration, imu.gyroscope) {
+                                    let (mx, my, mz) = if let Some(m) = imu.magnetometer {
+                                        (m.x, m.y, m.z)
+                                    } else {
+                                        (0.0, 0.0, 0.0)
+                                    };
                                     let _ = gui_tx.send(GuiUpdate::Imu { 
                                         ax: a.x, ay: a.y, az: a.z,
-                                        gx: g.x, gy: g.y, gz: g.z
+                                        gx: g.x, gy: g.y, gz: g.z,
+                                        mx, my, mz
                                     });
                                 }
                             }
