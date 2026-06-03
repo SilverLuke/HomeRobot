@@ -1,26 +1,19 @@
 #include "gazebo_bridge.h"
 #include <zephyr/logging/log.h>
-#include <zephyr/net/socket.h>
-#include <pb_encode.h>
-#include <pb_decode.h>
 #include <string.h>
-#include <errno.h>
+#include <math.h>
+#include "../actuator/motor.h"
 
 #if defined(CONFIG_BOARD_NATIVE_SIM)
-#include <zephyr/sys/byteorder.h>
-#include "../actuator/motor.h"
-#endif
 
 LOG_MODULE_REGISTER(gazebo_bridge, LOG_LEVEL_INF);
 
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-
-int GazeboBridge::sock_tx_ = -1;
-int GazeboBridge::sock_rx_ = -1;
-struct sockaddr_in GazeboBridge::addr_tx_;
-struct sockaddr_in GazeboBridge::addr_rx_;
-static K_THREAD_STACK_DEFINE(bridge_stack, 8192); // Increased stack for Lidar decoding
-struct k_thread GazeboBridge::bridge_thread_data;
+// Static member definitions
+gz::transport::Node GazeboBridge::node_;
+gz::transport::Node::Publisher GazeboBridge::pub_left_;
+gz::transport::Node::Publisher GazeboBridge::pub_right_;
+MotorModel GazeboBridge::motor_l_;
+MotorModel GazeboBridge::motor_r_;
 
 int32_t GazeboBridge::ticks_[2] = {0, 0};
 float GazeboBridge::accel_[3] = {0, 0, 0};
@@ -29,39 +22,31 @@ homerobot_LidarScan GazeboBridge::last_scan_ = homerobot_LidarScan_init_default;
 bool GazeboBridge::new_scan_available_ = false;
 struct k_mutex GazeboBridge::data_mutex;
 
-static homerobot_MotorMoveCommand current_motor_cmd = homerobot_MotorMoveCommand_init_default;
+static K_THREAD_STACK_DEFINE(bridge_stack, 16384);
+struct k_thread GazeboBridge::bridge_thread_data;
 
 bool GazeboBridge::init() {
     k_mutex_init(&data_mutex);
 
-    sock_tx_ = zsock_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock_tx_ < 0) {
-        LOG_ERR("Failed to create TX socket: %d", errno);
+    // Initialize Publishers (Capitalized for Gazebo Sim API)
+    pub_left_ = node_.Advertise<gz::msgs::Double>("/model/homerobot/joint/left_wheel_joint/cmd_force");
+    pub_right_ = node_.Advertise<gz::msgs::Double>("/model/homerobot/joint/right_wheel_joint/cmd_force");
+
+    // Initialize Subscribers
+    if (!node_.Subscribe("/model/homerobot/joint_state", &GazeboBridge::on_joint_state)) {
+        LOG_ERR("Failed to subscribe to joint_state");
+        return false;
+    }
+    if (!node_.Subscribe("/model/homerobot/imu", &GazeboBridge::on_imu)) {
+        LOG_ERR("Failed to subscribe to imu");
+        return false;
+    }
+    if (!node_.Subscribe("/model/homerobot/lidar", &GazeboBridge::on_lidar)) {
+        LOG_ERR("Failed to subscribe to lidar");
         return false;
     }
 
-    sock_rx_ = zsock_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock_rx_ < 0) {
-        LOG_ERR("Failed to create RX socket: %d", errno);
-        return false;
-    }
-
-    memset(&addr_tx_, 0, sizeof(addr_tx_));
-    addr_tx_.sin_family = AF_INET;
-    addr_tx_.sin_port = htons(6005);
-    zsock_inet_pton(AF_INET, "127.0.0.1", &addr_tx_.sin_addr);
-
-    memset(&addr_rx_, 0, sizeof(addr_rx_));
-    addr_rx_.sin_family = AF_INET;
-    addr_rx_.sin_port = htons(6006);
-    addr_rx_.sin_addr.s_addr = INADDR_ANY;
-
-    if (zsock_bind(sock_rx_, (struct sockaddr *)&addr_rx_, sizeof(addr_rx_)) < 0) {
-        LOG_ERR("Failed to bind RX socket: %d", errno);
-        return false;
-    }
-
-    LOG_INF("GazeboBridge initialized: TX port 6005, RX port 6006");
+    LOG_INF("Direct C++ Gazebo Link Initialized (0ms latency mode)");
     return true;
 }
 
@@ -73,28 +58,104 @@ void GazeboBridge::start() {
 }
 
 void GazeboBridge::send_motor_cmd(const char* name, int direction, uint8_t power) {
-    if (sock_tx_ < 0) return;
+    double p = (double)power / 255.0;
+    if (direction == (int)Direction::BACKWARD) p = -p;
+    
+    LOG_INF("Bridge Motor Cmd: %s Dir=%d Pwr=%u -> p=%.4f", name, direction, power, p);
 
     k_mutex_lock(&data_mutex, K_FOREVER);
-    
-    // Convert direction to angle for Protobuf (1.0 for forward, -1.0 for backward)
-    float angle = (direction == (int)Direction::BACKWARD) ? -1.0f : 1.0f;
-
     if (strcmp(name, "SX") == 0) {
-        current_motor_cmd.left_power = power;
-        current_motor_cmd.left_angle = angle;
+        motor_l_.set_power(p);
     } else if (strcmp(name, "DX") == 0) {
-        current_motor_cmd.right_power = power;
-        current_motor_cmd.right_angle = angle;
-    }
-
-    uint8_t buffer[128];
-    pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
-    
-    if (pb_encode(&stream, homerobot_MotorMoveCommand_fields, &current_motor_cmd)) {
-        zsock_sendto(sock_tx_, buffer, stream.bytes_written, 0, (struct sockaddr *)&addr_tx_, sizeof(addr_tx_));
+        motor_r_.set_power(p);
     }
     k_mutex_unlock(&data_mutex);
+}
+
+void GazeboBridge::on_joint_state(const gz::msgs::Model &msg) {
+    const double ticks_per_radian = 360.0 / (2.0 * M_PI);
+    
+    k_mutex_lock(&data_mutex, K_FOREVER);
+    for (int i = 0; i < msg.joint_size(); ++i) {
+        const auto &joint = msg.joint(i);
+        if (joint.name() == "left_wheel_joint") {
+            ticks_[0] = (int32_t)(joint.axis1().position() * ticks_per_radian);
+            motor_l_.set_velocity(joint.axis1().velocity());
+        } else if (joint.name() == "right_wheel_joint") {
+            ticks_[1] = (int32_t)(joint.axis1().position() * ticks_per_radian);
+            motor_r_.set_velocity(joint.axis1().velocity());
+        }
+    }
+    k_mutex_unlock(&data_mutex);
+}
+
+void GazeboBridge::on_imu(const gz::msgs::IMU &msg) {
+    k_mutex_lock(&data_mutex, K_FOREVER);
+    accel_[0] = msg.linear_acceleration().x();
+    accel_[1] = msg.linear_acceleration().y();
+    accel_[2] = msg.linear_acceleration().z();
+    gyro_[0] = msg.angular_velocity().x();
+    gyro_[1] = msg.angular_velocity().y();
+    gyro_[2] = msg.angular_velocity().z();
+    k_mutex_unlock(&data_mutex);
+}
+
+void GazeboBridge::on_lidar(const gz::msgs::LaserScan &msg) {
+    k_mutex_lock(&data_mutex, K_FOREVER);
+    
+    last_scan_.points_count = 0;
+    int count = msg.ranges_size();
+    if (count > 180) count = 180; // Bound to prj.conf limits
+
+    double angle_min = msg.angle_min();
+    double angle_step = msg.angle_step();
+
+    for (int i = 0; i < count; ++i) {
+        double dist = msg.ranges(i);
+        if (std::isinf(dist)) dist = 0;
+
+        double angle_rad = angle_min + (i * angle_step);
+        double angle_deg = angle_rad * (180.0 / M_PI);
+        while (angle_deg < 0) angle_deg += 360.0;
+        while (angle_deg >= 360.0) angle_deg -= 360.0;
+
+        last_scan_.points[i].distance_mm = (float)(dist * 1000.0);
+        last_scan_.points[i].angle_deg = (float)angle_deg;
+        last_scan_.points[i].quality = 15;
+        last_scan_.points[i].scan_completed = (i == count - 1);
+    }
+    last_scan_.points_count = count;
+    new_scan_available_ = true;
+    k_mutex_unlock(&data_mutex);
+}
+
+void GazeboBridge::bridge_thread() {
+    LOG_INF("Direct Control Loop started (100Hz)");
+    
+    while (true) {
+        k_mutex_lock(&data_mutex, K_FOREVER);
+        
+        // Calculate physics-accurate torque for both motors
+        double torque_l = motor_l_.calculate_torque();
+        double torque_r = motor_r_.calculate_torque();
+        
+        if (std::abs(torque_l) > 0.001 || std::abs(torque_r) > 0.001) {
+            LOG_INF("Torque: L=%.4f R=%.4f", torque_l, torque_r);
+        }
+        
+        // Publish directly to Gazebo (Capitalized for Gazebo Sim API)
+        gz::msgs::Double msg_l, msg_r;
+        msg_l.set_data(torque_l);
+        msg_r.set_data(torque_r);
+        
+        pub_left_.Publish(msg_l);
+        pub_right_.Publish(msg_r);
+        
+        k_mutex_unlock(&data_mutex);
+        
+        k_sleep(K_MSEC(10)); // 100Hz update rate
+        k_yield();
+    }
 }
 
 int32_t GazeboBridge::get_virtual_ticks(uint8_t unit_idx) {
@@ -121,41 +182,6 @@ bool GazeboBridge::get_virtual_lidar(homerobot_LidarScan* scan) {
     new_scan_available_ = false;
     k_mutex_unlock(&data_mutex);
     return true;
-}
-
-void GazeboBridge::bridge_thread() {
-    // Large buffer for Lidar scans (8KB to be safe for 180+ points)
-    static uint8_t buffer[8192]; 
-    struct sockaddr_in client_addr;
-    socklen_t addr_len = sizeof(client_addr);
-
-    while (true) {
-        int len = zsock_recvfrom(sock_rx_, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len);
-        if (len > 0) {
-            homerobot_Telemetry telemetry = homerobot_Telemetry_init_default;
-            pb_istream_t stream = pb_istream_from_buffer(buffer, len);
-
-            if (pb_decode(&stream, homerobot_Telemetry_fields, &telemetry)) {
-                k_mutex_lock(&data_mutex, K_FOREVER);
-                ticks_[0] = telemetry.encoder_left;
-                ticks_[1] = telemetry.encoder_right;
-                if (telemetry.has_imu) {
-                    accel_[0] = telemetry.imu.acceleration.x;
-                    accel_[1] = telemetry.imu.acceleration.y;
-                    accel_[2] = telemetry.imu.acceleration.z;
-                    gyro_[0] = telemetry.imu.gyroscope.x;
-                    gyro_[1] = telemetry.imu.gyroscope.y;
-                    gyro_[2] = telemetry.imu.gyroscope.z;
-                }
-                if (telemetry.has_lidar) {
-                    memcpy(&last_scan_, &telemetry.lidar, sizeof(homerobot_LidarScan));
-                    new_scan_available_ = true;
-                }
-                k_mutex_unlock(&data_mutex);
-            }
-        }
-        k_sleep(K_MSEC(10));
-    }
 }
 
 #endif

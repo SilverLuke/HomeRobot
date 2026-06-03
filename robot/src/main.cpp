@@ -30,6 +30,7 @@ extern "C" int main(void)
     while (1) {
         robot.loop();
         k_msleep(constants::MAIN_LOOP_DELAY_MS);
+        k_yield();
     }
 
 	return 0;

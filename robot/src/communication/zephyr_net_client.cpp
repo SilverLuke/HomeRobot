@@ -92,15 +92,16 @@ bool ZephyrNetClient::connect(const char* host, uint16_t port) {
   }
 
   LOG_INF( "Connecting to %s:%d...", host, port);
-  if (zsock_connect(sock_fd_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    LOG_ERR( "Connection failed: %d", errno);
+  int connect_res = zsock_connect(sock_fd_, (struct sockaddr *)&addr, sizeof(addr));
+  if (connect_res < 0) {
+    LOG_ERR( "Connection failed: %d (errno=%d)", connect_res, errno);
     zsock_close(sock_fd_);
     sock_fd_ = -1;
     return false;
   }
 
   connected_ = true;
-  LOG_INF( "Connected successfully");
+  LOG_INF( "Connected successfully (sock_fd=%d)", sock_fd_);
   return true;
 #else
   return false;

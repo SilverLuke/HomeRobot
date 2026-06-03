@@ -49,7 +49,8 @@ build-c6: ## Build main robot firmware for ESP32-C6
 
 build-sim: ## Build robot firmware for native_sim (Gazebo)
 	@echo "Building Zephyr app for simulation ($(ZEPHYR_BOARD_SIM))..."
-	$(WEST) build -p -b $(ZEPHYR_BOARD_SIM) -d $(ZEPHYR_BUILD_DIR) $(ZEPHYR_APP_DIR) -- -DKCONFIG_WERROR=OFF -DCONF_FILE="prj.conf;boards/native_sim.conf"
+	@export ZEPHYR_BASE=$$(pwd)/zephyrproject/zephyr; \
+	$(WEST) build -p -b $(ZEPHYR_BOARD_SIM) -d $(ZEPHYR_BUILD_DIR)/sim $(ZEPHYR_APP_DIR) -- -DKCONFIG_WERROR=OFF -DCONF_FILE="prj.conf;boards/native_sim.conf"
 
 flash: ## Flash the current build to the ESP32
 	@echo "Flashing Zephyr app to $(ESP_DEVICE)..."

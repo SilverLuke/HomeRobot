@@ -228,6 +228,8 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
         int rp = (int)msg.payload.motor_move.right_power;
         float la = msg.payload.motor_move.left_angle;
         float ra = msg.payload.motor_move.right_angle;
+        
+        LOG_INF("MOVE: L=%d (%.1f) R=%d (%.1f)", lp, (double)la, rp, (double)ra);
 
         if (lp == 0) motor_sx_.set_manual_power(BRAKE, 0);
         else motor_sx_.set_manual_power(la >= 0 ? FORWARD : BACKWARD, (uint8_t)lp);

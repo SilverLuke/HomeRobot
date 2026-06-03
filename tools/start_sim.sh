@@ -9,82 +9,128 @@ MODEL_PATH="$SIM_DIR"
 SERVER_BIN="$PROJECT_ROOT/server/target/debug/server"
 LOG_DIR="$PROJECT_ROOT/logs/sim"
 
-# Ensure environment is fully loaded for background sub-shells
-export PATH=$PATH
-export PKG_CONFIG_PATH=$PKG_CONFIG_PATH
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
-
 mkdir -p "$LOG_DIR"
 
-echo "--- HomeRobot Headless Simulation (Data-Stream Mode) ---"
-
-# 1. Force Cleanup and Archive Logs
-echo "[0/4] Cleaning up and archiving logs..."
-mkdir -p "$LOG_DIR/previous"
-mv "$LOG_DIR"/*.log "$LOG_DIR/previous/" 2>/dev/null || true
-
-pkill -9 -f "zephyr.exe" || true
-pkill -9 -f "gazebo_bridge.py" || true
-pkill -9 -f "gz sim" || true
-pkill -9 -f "$SERVER_BIN" || true
-sleep 2
-
-# 2. Start the Rust Server
-echo "[1/4] Starting Rust Server (Dashboard UI)..."
-if [ ! -f "$SERVER_BIN" ]; then
-    echo "Building server first..."
-    cd "$PROJECT_ROOT/server" && cargo build && cd "$PROJECT_ROOT"
-fi
-# Use stdbuf to ensure logs are written immediately
-stdbuf -oL -eL "$SERVER_BIN" > "$LOG_DIR/server.log" 2>&1 &
-SERVER_PID=$!
-
-# Wait for server to start listening
-echo "Waiting for dashboard to bind to port 12345..."
-MAX_RETRIES=20
-RETRY_COUNT=0
-while ! ss -lnt | grep -q :12345; do
-    sleep 1
-    ((RETRY_COUNT++))
-    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-        echo "ERROR: Dashboard UI failed to start. See $LOG_DIR/server.log"
-        exit 1
+# Parse arguments
+HEADLESS_MODE=false
+for arg in "$@"; do
+    if [ "$arg" = "--headless" ]; then
+        HEADLESS_MODE=true
     fi
 done
 
-# 3. Start Gazebo Sim (GUI Mode)
-echo "[2/4] Starting Gazebo Physics Server..."
-export GZ_SIM_RESOURCE_PATH="$MODEL_PATH:$GZ_SIM_RESOURCE_PATH"
-gz sim -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
-GZ_PID=$!
-
-echo "Waiting for Physics Server to stabilize (10s)..."
-sleep 10
-
-# 4. Start the UDP Bridge
-echo "[3/4] Starting Gazebo-Zephyr UDP Bridge..."
-python3 -u "$PROJECT_ROOT/tools/gazebo_bridge.py" > "$LOG_DIR/bridge.log" 2>&1 &
-BRIDGE_PID=$!
-
-# 5. Start Zephyr (native_sim)
-echo "[4/4] Starting Zephyr native_sim..."
-# Rebuild since we changed native_sim.conf
-make build-sim > /dev/null 2>&1
-ZEPHYR_EXE="$PROJECT_ROOT/build/sim/zephyr/zephyr.exe"
-if [ -f "$ZEPHYR_EXE" ]; then
-    echo "--------------------------------------------------------"
-    echo "SUCCESS: HEADLESS SIMULATION ACTIVE."
-    echo "Use WASD in your GTK window to move the robot."
-    echo "Logs available in: $LOG_DIR"
-    echo "--------------------------------------------------------"
-    stdbuf -oL -eL "$ZEPHYR_EXE" > "$LOG_DIR/zephyr.log" 2>&1 &
-    ZEPHYR_PID=$!
+if [ "$HEADLESS_MODE" = true ]; then
+    echo "--- HomeRobot Headless Simulation (Direct Link Mode) ---"
 else
-    echo "ERROR: Zephyr executable not found."
+    echo "--- HomeRobot Native Simulation (Direct Link Mode) ---"
 fi
 
-# Cleanup on exit
-trap "kill -9 $GZ_PID $BRIDGE_PID $SERVER_PID $ZEPHYR_PID" EXIT
+# 1. Force Cleanup
+echo "[0/4] Cleaning up old processes..."
+pkill -9 -f "zephyr.exe" || true
+pkill -f "[g]z sim" || true
+pkill -9 -f "gazebo_bridge.main" || true
+pkill -9 -f "$SERVER_BIN" || true
+sleep 1
 
-# Keep script alive to maintain cleanup trap
+XWAYLAND_PID=""
+
+# 2. Start Xwayland if needed (non-headless, Wayland session, no DISPLAY)
+if [ "$HEADLESS_MODE" = false ] && [ -n "$WAYLAND_DISPLAY" ]; then
+    # Gazebo's Ogre2 renderer uses GLX which requires an X11 display.
+    # On Wayland-only compositors (like niri), we need Xwayland to bridge.
+    XWAYLAND_DISPLAY=:99
+    echo "[1/4] Starting Xwayland on $XWAYLAND_DISPLAY for Ogre2 GLX..."
+
+    # Clean stale socket
+    rm -f "/tmp/.X11-unix/X${XWAYLAND_DISPLAY#:}" 2>/dev/null || true
+
+    Xwayland $XWAYLAND_DISPLAY -ac -noreset > /dev/null 2>&1 &
+    XWAYLAND_PID=$!
+    sleep 2
+
+    if ps -p $XWAYLAND_PID > /dev/null 2>&1; then
+        export DISPLAY=$XWAYLAND_DISPLAY
+        export LIBGL_ALWAYS_SOFTWARE=1
+        export GALLIUM_DRIVER=llvmpipe
+        echo "  Xwayland running (PID=$XWAYLAND_PID, DISPLAY=$DISPLAY)"
+    else
+        echo "  WARNING: Xwayland failed to start. Gazebo GUI may not work."
+        XWAYLAND_PID=""
+    fi
+else
+    echo "[1/4] Display setup: using existing DISPLAY=$DISPLAY"
+fi
+
+# 3. Start the Rust Server (Dashboard)
+if [ "$HEADLESS_MODE" = true ]; then
+    echo "[2/4] Starting Headless Rust Server..."
+    if [ ! -f "$SERVER_BIN" ]; then
+        echo "Building server first..."
+        cd "$PROJECT_ROOT/server" && cargo build && cd "$PROJECT_ROOT"
+    fi
+    HEADLESS=1 stdbuf -oL -eL "$SERVER_BIN" > "$LOG_DIR/server.log" 2>&1 &
+    SERVER_PID=$!
+else
+    echo "[2/4] Starting Rust Server..."
+    if [ ! -f "$SERVER_BIN" ]; then
+        echo "Building server first..."
+        cd "$PROJECT_ROOT/server" && cargo build && cd "$PROJECT_ROOT"
+    fi
+    stdbuf -oL -eL "$SERVER_BIN" > "$LOG_DIR/server.log" 2>&1 &
+    SERVER_PID=$!
+fi
+
+# Wait for server
+sleep 2
+
+# 4. Start Gazebo Sim
+export GZ_SIM_RESOURCE_PATH="$MODEL_PATH:$GZ_SIM_RESOURCE_PATH"
+
+if [ "$HEADLESS_MODE" = true ]; then
+    echo "[3/4] Starting Headless Gazebo Physics Server..."
+    gz sim -r -s "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
+    GZ_PID=$!
+else
+    echo "[3/4] Starting Gazebo Physics Server & GUI..."
+    gz sim -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
+    GZ_PID=$!
+fi
+
+echo "Waiting for Physics Server to stabilize..."
+if [ "$HEADLESS_MODE" = true ]; then
+    sleep 5
+else
+    sleep 8
+fi
+
+# 5. Start Zephyr (native_sim)
+echo "[4/4] Starting Zephyr native_sim (Direct Link)..."
+ZEPHYR_EXE="$PROJECT_ROOT/build/sim/sim/zephyr/zephyr.exe"
+if [ ! -f "$ZEPHYR_EXE" ]; then
+    echo "Building Zephyr Sim..."
+    make build-sim
+fi
+
+stdbuf -oL -eL "$ZEPHYR_EXE" > "$LOG_DIR/zephyr.log" 2>&1 &
+ZEPHYR_PID=$!
+
+echo "--------------------------------------------------------"
+if [ "$HEADLESS_MODE" = true ]; then
+    echo "SUCCESS: HEADLESS DIRECT LINK SIMULATION ACTIVE."
+    echo "PIDs: Server=$SERVER_PID, GZ=$GZ_PID, Zephyr=$ZEPHYR_PID"
+    echo "Telemetry is being recorded to logs/sim/simulation.rrd"
+else
+    echo "SUCCESS: DIRECT LINK SIMULATION ACTIVE."
+    echo "Use WASD in your GTK window to move the robot."
+fi
+echo "--------------------------------------------------------"
+
+# Cleanup on exit (include Xwayland if we started it)
+cleanup() {
+    kill -9 $GZ_PID $SERVER_PID $ZEPHYR_PID 2>/dev/null
+    [ -n "$XWAYLAND_PID" ] && kill -9 $XWAYLAND_PID 2>/dev/null
+}
+trap cleanup EXIT
 wait
+

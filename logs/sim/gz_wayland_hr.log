@@ -1,0 +1,52 @@
+QSocketNotifier: Can only be used with threads started with QThread
+(2026-05-20 18:44:01.678) [error] [Ogre2RenderEngine.cc:752] Unable to load Ogre Plugin[/nix/store/lvvajnk8dzpq9ilvhmhq1rljxq0q32d1-ogre-next-2.3.3/lib/OGRE-Next/RenderSystem_GL3Plus]. Rendering will not be possible.Make sure you have installed OGRE properly.
+(2026-05-20 18:44:01.685) [error] [Ogre2RenderEngine.cc:803] unable to find OpenGL 3+ Rendering Subsystem. OGRE is probably installed incorrectly. Double check the OGRE cmake output, and make sure OpenGL is enabled.
+Stack trace (most recent call last) in thread 176836:
+#12   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#11   Object "/nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66/lib/libc.so.6", at 0x7a853e71bdbb, in 
+#10   Object "/nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66/lib/libc.so.6", at 0x7a853e697e62, in 
+#9    Object "/nix/store/7c0v0kbrrdc2cqgisi78jdqxn73n3401-gcc-14.2.1.20250322-lib/lib/libstdc++.so.6", at 0x7a8522eed063, in 
+#8    Object "/nix/store/4xm7983kcb2l4sklw3m5a2077svz0pcb-gz-sim9-9.1.0/lib/gz-sim-9/plugins/libgz-sim-sensors-system.so", at 0x7a84e23d6a6c, in 
+#7    Object "/nix/store/4xm7983kcb2l4sklw3m5a2077svz0pcb-gz-sim9-9.1.0/lib/gz-sim-9/plugins/libgz-sim-sensors-system.so", at 0x7a84e23d4e4b, in 
+#6    Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-sim9-rendering.so.9", at 0x7a84d839bf35, in gz::sim::v9::RenderUtil::Init()
+#5    Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-rendering9.so.9", at 0x7a85224d0369, in gz::rendering::v9::RenderEngineManager::Engine(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#4    Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-rendering9.so.9", at 0x7a85224d006b, in 
+#3    Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-rendering9.so.9", at 0x7a85224dafa4, in gz::rendering::v9::BaseRenderEngine::Load(std::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > > const&)
+#2    Object "/nix/store/ni3rb4wyyva0g98rlzw09zwdcz5l4dff-gz-rendering9-9.1.0/lib/gz-rendering-9/engine-plugins/libgz-rendering-ogre2.so", at 0x7a84cc461cc3, in gz::rendering::v9::Ogre2RenderEngine::LoadImpl(std::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > > const&)
+#1    Object "/nix/store/ni3rb4wyyva0g98rlzw09zwdcz5l4dff-gz-rendering9-9.1.0/lib/gz-rendering-9/engine-plugins/libgz-rendering-ogre2.so", at 0x7a84cc46170b, in gz::rendering::v9::Ogre2RenderEngine::LoadAttempt()
+#0    Object "/nix/store/ni3rb4wyyva0g98rlzw09zwdcz5l4dff-gz-rendering9-9.1.0/lib/gz-rendering-9/engine-plugins/libgz-rendering-ogre2.so", at 0x7a84cc45c467, in gz::rendering::v9::Ogre2RenderEngine::CreateRenderSystem()
+Segmentation fault (Address not mapped to object [(nil)])
+Stack trace (most recent call last):
+#31   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ed2fce1, in rb_yield
+#30   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ed2a748, in 
+#29   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ed266cf, in 
+#28   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ed18a61, in 
+#27   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ed12ce2, in 
+#26   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/ruby/3.3.0/x86_64-linux/fiddle.so", at 0x7a853e81786b, in 
+#25   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a853ecd394a, in rb_nogvl
+#24   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/ruby/3.3.0/x86_64-linux/fiddle.so", at 0x7a853e816ff7, in 
+#23   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a852315856d, in ffi_call
+#22   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a85231575cc, in 
+#21   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a8523159051, in 
+#20   Object "/nix/store/4xm7983kcb2l4sklw3m5a2077svz0pcb-gz-sim9-9.1.0/lib/libgz-sim9-gz.so.9.1.0", at 0x7a85230f468f, in runGui
+#19   Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-sim9-gui.so.9", at 0x7a852223adfb, in gz::sim::v9::gui::runGui(int&, char**, char const*, char const*, int, char const*, char const*)
+#18   Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a851c700ee1, in QCoreApplication::exec()
+#17   Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a851c6f7ff1, in QEventLoop::exec(QFlags<QEventLoop::ProcessEventsFlag>)
+#16   Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a851c757468, in QEventDispatcherGlib::processEvents(QFlags<QEventLoop::ProcessEventsFlag>)
+#15   Object "/nix/store/bkpj51fz88rbyjd60i6lrp0xdax1b24g-glib-2.84.1/lib/libglib-2.0.so.0", at 0x7a85133042bb, in g_main_context_iteration
+#14   Object "/nix/store/bkpj51fz88rbyjd60i6lrp0xdax1b24g-glib-2.84.1/lib/libglib-2.0.so.0", at 0x7a8513303a8f, in 
+#13   Object "/nix/store/bkpj51fz88rbyjd60i6lrp0xdax1b24g-glib-2.84.1/lib/libglib-2.0.so.0", at 0x7a851330181d, in 
+#12   Object "/nix/store/d3ax532x18rjvvl2r79vnnza8q7n1x64-qtwayland-5.15.16/lib/libQt5WaylandClient.so.5", at 0x7a84e076026f, in 
+#11   Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a851cb04573, in QWindowSystemInterface::sendWindowSystemEvents(QFlags<QEventLoop::ProcessEventsFlag>)
+#10   Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a851cb359dc, in QGuiApplicationPrivate::processExposeEvent(QWindowSystemInterfacePrivate::ExposeEvent*)
+#9    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a851c6f97d7, in QCoreApplication::notifyInternal2(QObject*, QEvent*)
+#8    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Widgets.so.5", at 0x7a851d3714cd, in QApplicationPrivate::notify_helper(QObject*, QEvent*)
+#7    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a851cb40ab4, in QWindow::event(QEvent*)
+#6    Object "/nix/store/px91vhkz00diphs2z3b7hqs6fkbrn3pm-qtdeclarative-5.15.16/lib/libQt5Quick.so.5", at 0x7a851ea38fb7, in 
+#5    Object "/nix/store/px91vhkz00diphs2z3b7hqs6fkbrn3pm-qtdeclarative-5.15.16/lib/libQt5Quick.so.5", at 0x7a851ea37fd3, in 
+#4    Object "/nix/store/px91vhkz00diphs2z3b7hqs6fkbrn3pm-qtdeclarative-5.15.16/lib/libQt5Quick.so.5", at 0x7a851ea8439c, in QQuickWindowPrivate::syncSceneGraph()
+#3    Object "/nix/store/px91vhkz00diphs2z3b7hqs6fkbrn3pm-qtdeclarative-5.15.16/lib/libQt5Quick.so.5", at 0x7a851ea8282a, in QQuickWindowPrivate::updateDirtyNodes()
+#2    Object "/nix/store/px91vhkz00diphs2z3b7hqs6fkbrn3pm-qtdeclarative-5.15.16/lib/libQt5Quick.so.5", at 0x7a851ea8221f, in QQuickWindowPrivate::updateDirtyNode(QQuickItem*)
+#1    Object "/nix/store/9m9rhk6c3m7b1fp3p67dj9jgzp1n6937-gz-gui9-9.0.1/lib/gz-gui-9/plugins/libMinimalScene.so", at 0x7a84d859ffa9, in 
+#0    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a851cb80b59, in QOpenGLContext::doneCurrent()
+Segmentation fault (Address not mapped to object [0x8])

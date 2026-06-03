@@ -1,0 +1,24 @@
+free(): invalid pointer
+Stack trace (most recent call last) in thread 713107:
+#20   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#19   Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146d2563b, in 
+#18   Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146c9dd52, in 
+#17   Object "/nix/store/chqq8mpmpyfi9kgsngya71akv5xicn03-gcc-15.2.0-lib/lib/libstdc++.so.6", at 0x7f61470f2fa3, in 
+#16   Object "/nix/store/2wi0g7v2p01r04qcg424fx4k39mnikys-gz-sim10-10.3.0/lib/gz-sim-10/plugins/libgz-sim-sensors-system.so", at 0x7f60eae29a3f, in 
+#15   Object "/nix/store/2wi0g7v2p01r04qcg424fx4k39mnikys-gz-sim10-10.3.0/lib/gz-sim-10/plugins/libgz-sim-sensors-system.so", at 0x7f60eae25404, in 
+#14   Object "/nix/store/lrshiq417g6bvi3bqxig34pqnv2x7rb5-gz-sim_10/lib/libgz-sim-rendering.so.10", at 0x7f60ead5df4a, in gz::sim::v10::RenderUtil::Init()
+#13   Object "/nix/store/lrshiq417g6bvi3bqxig34pqnv2x7rb5-gz-sim_10/lib/libgz-rendering.so.10", at 0x7f614d7ad65e, in virtual thunk to gz::rendering::v10::BaseRenderEngine::CreateScene(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#12   Object "/nix/store/lrshiq417g6bvi3bqxig34pqnv2x7rb5-gz-sim_10/lib/libgz-rendering.so.10", at 0x7f614d7af996, in gz::rendering::v10::BaseRenderEngine::CreateScene(unsigned int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#11   Object "/nix/store/lrshiq417g6bvi3bqxig34pqnv2x7rb5-gz-sim_10/lib/libgz-rendering.so.10", at 0x7f614d7c002e, in gz::rendering::v10::BaseScene::CreateMaterials()
+#10   Object "/nix/store/kj7cdi22rvk7k6dalhq8k8vkxy3cf3pi-gz-rendering10-10.0.1/lib/libgz-rendering-ogre2.so", at 0x7f60e9229c6b, in gz::rendering::v10::Ogre2Material::SetTextureMapImpl(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, Ogre::PbsTextureTypes)
+#9    Object "/nix/store/chgizw2mvjcfx87fzw7rxrlbl16vbq3i-ogre-next-2.3.3/lib/libOgreNextMain.so.2.3.3", at 0x7f60e8d45e5c, in Ogre::TextureGpuManager::_waitFor(Ogre::TextureGpu*, bool)
+#8    Object "/nix/store/chgizw2mvjcfx87fzw7rxrlbl16vbq3i-ogre-next-2.3.3/lib/libOgreNextMain.so.2.3.3", at 0x7f60e8d45773, in Ogre::TextureGpuManager::_update(bool)
+#7    Object "/nix/store/chgizw2mvjcfx87fzw7rxrlbl16vbq3i-ogre-next-2.3.3/lib/libOgreNextMain.so.2.3.3", at 0x7f60e8b8686b, in Ogre::ObjCmdBuffer::clear()
+#6    Object "/nix/store/chgizw2mvjcfx87fzw7rxrlbl16vbq3i-ogre-next-2.3.3/lib/libOgreNextMain.so.2.3.3", at 0x7f60e8a1f89c, in Ogre::Exception::~Exception()
+#5    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146caaa37, in 
+#4    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146caaa14, in 
+#3    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146c2a3c7, in 
+#2    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146c2934f, in abort
+#1    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146c4265d, in gsignal
+#0    Object "/nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6", at 0x7f6146c9fdcc, in 
+Aborted (Signal sent by tkill() 713045 1000)

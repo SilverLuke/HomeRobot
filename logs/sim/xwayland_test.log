@@ -1,0 +1,71 @@
+(2026-05-20 18:11:30.670) [info] [Gui.cc:332] Gazebo Sim GUI    v9.1.0
+(2026-05-20 18:11:30.772) [info] [gz.cc:170] Received world [/home/luca/Projects/robotica/homeRobot/software/simulation/sim.world] from the GUI.
+(2026-05-20 18:11:30.773) [info] [gz.cc:337] Gazebo Sim Server v9.1.0
+qt.qpa.xcb: could not connect to display :0
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
+This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
+
+Available platform plugins are: wayland-egl, wayland, wayland-xcomposite-egl, wayland-xcomposite-glx, eglfs, linuxfb, minimal, minimalegl, offscreen, vnc, xcb.
+
+Stack trace (most recent call last):
+#31   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed6f2c7f2, in ruby_run_node
+#30   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed6f260b8, in 
+#29   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed712a845, in 
+#28   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed71266cf, in 
+#27   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed7118a61, in 
+#26   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed7111b2a, in 
+#25   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed702213a, in 
+#24   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed6f2a956, in rb_protect
+#23   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed712fce1, in rb_yield
+#22   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed712a748, in 
+#21   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed71266cf, in 
+#20   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed7118a61, in 
+#19   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed7112ce2, in 
+#18   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/ruby/3.3.0/x86_64-linux/fiddle.so", at 0x7a7ed691786b, in 
+#17   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/libruby-3.3.8.so.3.3", at 0x7a7ed70d394a, in rb_nogvl
+#16   Object "/nix/store/9jslgkvdkn42hlc52mr25f37jsa5rxga-ruby-3.3.8/lib/ruby/3.3.0/x86_64-linux/fiddle.so", at 0x7a7ed6916ff7, in 
+#15   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a7ed68f856d, in ffi_call
+#14   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a7ed68f75cc, in 
+#13   Object "/nix/store/90c412b9wqhfny300rg5s2gpsbrqb31q-libffi-3.4.8/lib/libffi.so.8", at 0x7a7ed68f9051, in 
+#12   Object "/nix/store/4xm7983kcb2l4sklw3m5a2077svz0pcb-gz-sim9-9.1.0/lib/libgz-sim9-gz.so.9.1.0", at 0x7a7ebb46868f, in runGui
+#11   Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-sim9-gui.so.9", at 0x7a7eba43ade6, in gz::sim::v9::gui::runGui(int&, char**, char const*, char const*, int, char const*, char const*)
+#10   Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-sim9-gui.so.9", at 0x7a7eba4379a7, in gz::sim::v9::gui::createGui(int&, char**, char const*, char const*, bool, char const*, int, char const*, char const*)
+#9    Object "/nix/store/0br7mc9sy7hnz35hycxqpfi16h2vda9r-gz-sim_9/lib/libgz-gui9.so.9", at 0x7a7eb9f6e475, in gz::gui::Application::Application(int&, char**, gz::gui::WindowType, char const*)
+#8    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Widgets.so.5", at 0x7a7eb5576768, in QApplicationPrivate::init()
+#7    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a7eb4d2e709, in QGuiApplicationPrivate::init()
+#6    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a7eb4900b24, in QCoreApplicationPrivate::init()
+#5    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a7eb4d2b697, in QGuiApplicationPrivate::createEventDispatcher()
+#4    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Gui.so.5", at 0x7a7eb4d2b0ef, in QGuiApplicationPrivate::createPlatformIntegration()
+#3    Object "/nix/store/x39ids55l0q41haifyqgjkcalnah21b3-qtbase-5.15.16/lib/libQt5Core.so.5", at 0x7a7eb469a2ea, in QMessageLogger::fatal(char const*, ...) const
+#2    Object "/nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66/lib/libc.so.6", at 0x7a7ed6a28939, in abort
+#1    Object "/nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66/lib/libc.so.6", at 0x7a7ed6a413c5, in gsignal
+#0    Object "/nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66/lib/libc.so.6", at 0x7a7ed6a99cdc, in 
+Aborted (Signal sent by tkill() 157368 1000)
+(2026-05-20 18:11:30.813) [info] [Server.cc:145] Loading SDF world file[/home/luca/Projects/robotica/homeRobot/software/simulation/sim.world].
+(2026-05-20 18:11:31.187) [info] [SystemManager.cc:54] Serving entity system service on [/entity/system/add]
+(2026-05-20 18:11:31.724) [info] [UserCommands.cc:664] Create service on [/world/homerobot_world/create]
+(2026-05-20 18:11:31.725) [info] [UserCommands.cc:671] Remove service on [/world/homerobot_world/remove]
+(2026-05-20 18:11:31.725) [info] [UserCommands.cc:678] Pose service on [/world/homerobot_world/set_pose]
+(2026-05-20 18:11:31.725) [info] [UserCommands.cc:686] Pose service on [/world/homerobot_world/set_pose_vector]
+(2026-05-20 18:11:31.725) [info] [UserCommands.cc:693] Light configuration service on [/world/homerobot_world/light_config]
+(2026-05-20 18:11:31.725) [info] [UserCommands.cc:719] Physics service on [/world/homerobot_world/set_physics]
+(2026-05-20 18:11:31.726) [info] [UserCommands.cc:727] SphericalCoordinates service on [/world/homerobot_world/set_spherical_coordinates]
+(2026-05-20 18:11:31.726) [info] [UserCommands.cc:736] Enable collision service on [/world/homerobot_world/enable_collision]
+(2026-05-20 18:11:31.726) [info] [UserCommands.cc:745] Disable collision service on [/world/homerobot_world/disable_collision]
+(2026-05-20 18:11:31.726) [info] [UserCommands.cc:754] Material service on [/world/homerobot_world/visual_config]
+(2026-05-20 18:11:31.726) [info] [UserCommands.cc:762] Material service on [/world/homerobot_world/wheel_slip]
+(2026-05-20 18:11:31.914) [info] [ApplyJointForce.cc:123] ApplyJointForce subscribing to Double messages on [/model/homerobot/joint/left_wheel_joint/cmd_force]
+(2026-05-20 18:11:31.915) [info] [ApplyJointForce.cc:123] ApplyJointForce subscribing to Double messages on [/model/homerobot/joint/right_wheel_joint/cmd_force]
+(2026-05-20 18:11:31.955) [info] [LevelManager.cc:641] Loaded level [default]
+(2026-05-20 18:11:31.957) [info] [SimulationRunner.cc:260] Serving world controls on [/world/homerobot_world/control], [/world/homerobot_world/control/state] and [/world/homerobot_world/playback/control]
+(2026-05-20 18:11:31.958) [info] [SimulationRunner.cc:286] Serving GUI information on [/world/homerobot_world/gui/info]
+(2026-05-20 18:11:31.958) [info] [SimulationRunner.cc:289] World [homerobot_world] initialized with [1ms] physics profile.
+(2026-05-20 18:11:31.958) [info] [SimulationRunner.cc:296] Serving world SDF generation service on [/world/homerobot_world/generate_world_sdf]
+(2026-05-20 18:11:31.958) [info] [ServerPrivate.cc:334] Serving world names on [/gazebo/worlds]
+(2026-05-20 18:11:31.958) [info] [ServerPrivate.cc:347] Resource path add service on [/gazebo/resource_paths/add].
+(2026-05-20 18:11:31.958) [info] [ServerPrivate.cc:360] Resource path get service on [/gazebo/resource_paths/get].
+(2026-05-20 18:11:31.958) [info] [ServerPrivate.cc:375] Resource path resolve service on [/gazebo/resource_paths/resolve].
+(2026-05-20 18:11:31.959) [info] [ServerPrivate.cc:389] Resource paths published on [/gazebo/resource_paths].
+(2026-05-20 18:11:31.959) [info] [ServerPrivate.cc:402] Server control service on [/server_control].
+(2026-05-20 18:11:32.668) [info] [SimulationRunner.cc:743] Found no publishers on /stats, adding root stats topic
+(2026-05-20 18:11:32.668) [info] [SimulationRunner.cc:777] Found no publishers on /clock, adding root clock topic

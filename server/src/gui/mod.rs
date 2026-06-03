@@ -13,6 +13,10 @@ pub enum GuiUpdate {
     Battery { percentage: u32, voltage_mv: u32 },
     Encoders { left: i32, right: i32 },
     Pose { x: f32, y: f32, theta: f32 },
+    SlamPose { x: f32, y: f32, theta: f32 },
+    Map { width: usize, height: usize, data: Vec<i16> },
+    Frontiers(Vec<crate::mapping::Frontier>),
+    Path(Vec<(f32, f32)>),
     Lidar(Vec<LidarPoint>),
     Imu { 
         ax: f32, ay: f32, az: f32, 
@@ -23,7 +27,7 @@ pub enum GuiUpdate {
     Status(String),
 }
 
-pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::Sender<GuiUpdate>) {
+pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Application, mpsc::Sender<GuiUpdate>) {
     let (tx, rx) = mpsc::channel::<GuiUpdate>();
     let rx = Arc::new(Mutex::new(rx));
 
@@ -32,8 +36,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         .build();
 
     let rc_clone = robot_command.clone();
+    let rec_clone = rec.clone();
     
     app.connect_activate(move |app| {
+        let rec = rec_clone.clone();
         println!("GUI: Initializing GTK components...");
         let builder = Builder::new();
         builder.add_from_string(include_str!("../main_window.ui")).expect("Failed to parse UI XML");
@@ -68,7 +74,9 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         let btn_left: Button = builder.object("btn_left").expect("Could not find btn_left");
         let btn_right: Button = builder.object("btn_right").expect("Could not find btn_right");
         let btn_stop: Button = builder.object("btn_stop").expect("Could not find btn_stop");
+        let btn_save_map: Button = builder.object("btn_save_map").expect("Could not find btn_save_map");
         let btn_lidar: gtk4::ToggleButton = builder.object("btn_lidar").expect("Could not find btn_lidar");
+        let btn_explore: gtk4::ToggleButton = builder.object("btn_explore").expect("Could not find btn_explore");
 
         // PID SpinButtons
         let kp_left: SpinButton = builder.object("kp_left").expect("Could not find kp_left");
@@ -78,6 +86,12 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         let ki_right: SpinButton = builder.object("ki_right").expect("Could not find ki_right");
         let kd_right: SpinButton = builder.object("kd_right").expect("Could not find kd_right");
 
+        // New UI controls
+        let btn_start_rerun: Button = builder.object("btn_start_rerun").expect("Could not find btn_start_rerun");
+        let btn_lock_pid: gtk4::ToggleButton = builder.object("btn_lock_pid").expect("Could not find btn_lock_pid");
+        let btn_rotate_left: Button = builder.object("btn_rotate_left").expect("Could not find btn_rotate_left");
+        let btn_rotate_right: Button = builder.object("btn_rotate_right").expect("Could not find btn_rotate_right");
+
         // Explicitly disable focus for input widgets to prevent them from stealing WASD keys
         kp_left.set_focusable(false);
         ki_left.set_focusable(false);
@@ -86,6 +100,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
         ki_right.set_focusable(false);
         kd_right.set_focusable(false);
         apply_btn.set_focusable(false);
+        btn_start_rerun.set_focusable(false);
+        btn_lock_pid.set_focusable(false);
+        btn_rotate_left.set_focusable(false);
+        btn_rotate_right.set_focusable(false);
 
         #[allow(deprecated)]
         {
@@ -96,6 +114,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
             ki_right.set_can_focus(false);
             kd_right.set_can_focus(false);
             apply_btn.set_can_focus(false);
+            btn_start_rerun.set_can_focus(false);
+            btn_lock_pid.set_can_focus(false);
+            btn_rotate_left.set_can_focus(false);
+            btn_rotate_right.set_can_focus(false);
         }
 
         // Set up LIDAR drawing
@@ -112,11 +134,13 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
             println!("GUI: Trajectory cleared.");
         });
 
-        // Custom CSS for Green Lidar Button
+        // Custom CSS for Buttons
         let provider = gtk4::CssProvider::new();
-        provider.load_from_data("
+        provider.load_from_string("
             .lidar-on { background-color: #2ecc71; color: white; }
             .lidar-on:checked { background-color: #27ae60; color: white; }
+            .explore-on { background-color: #e74c3c; color: white; }
+            .explore-on:checked { background-color: #c0392b; color: white; }
         ");
         gtk4::style_context_add_provider_for_display(
             &gdk4::Display::default().expect("Could not connect to a display."),
@@ -124,6 +148,15 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
         btn_lidar.add_css_class("lidar-on");
+        btn_explore.add_css_class("explore-on");
+
+        let rc_explore = rc_clone.clone();
+        btn_explore.connect_toggled(move |btn| {
+            let mut cmd = rc_explore.lock().unwrap();
+            let enabled = btn.is_active();
+            println!("GUI: Exploration {}", if enabled { "ENABLED" } else { "DISABLED" });
+            *cmd = RobotCommand::AutonomousExploration { enabled };
+        });
 
         let key_controller = EventControllerKey::new();
         key_controller.set_propagation_phase(gtk4::PropagationPhase::Bubble);
@@ -165,6 +198,20 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                         right_power: 0, right_angle: 0.0 
                     };
                 },
+                Key::q | Key::Q => {
+                    println!("GUI: Keyboard Move: Rotate Left (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: current_power, left_angle: -1.0, 
+                        right_power: current_power, right_angle: 1.0 
+                    };
+                },
+                Key::e | Key::E => {
+                    println!("GUI: Keyboard Move: Rotate Right (Power: {})", current_power);
+                    *cmd = RobotCommand::MotorAngle { 
+                        left_power: current_power, left_angle: 1.0, 
+                        right_power: current_power, right_angle: -1.0 
+                    };
+                },
                 Key::h | Key::H => {
                     let new_active = !btn_toggle_sidebar_clone.is_active();
                     btn_toggle_sidebar_clone.set_active(new_active);
@@ -182,6 +229,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                 Key::space => {
                     println!("GUI: Keyboard STOP");
                     *cmd = RobotCommand::StopMoving;
+                },
+                Key::t | Key::T => {
+                    println!("GUI: Keyboard Trigger Diagnostics");
+                    *cmd = RobotCommand::RunDiagnostic;
                 },
                 _ => {}
             }
@@ -232,10 +283,32 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
             *rc_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
         });
 
+        let rc_rot_left = rc_clone.clone();
+        let ps_rot_left = power_scale.clone();
+        btn_rotate_left.connect_clicked(move |_| {
+            let p = ps_rot_left.value() as u8;
+            println!("GUI: Button Move: Rotate Left (Power: {})", p);
+            *rc_rot_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: -1.0, right_power: p, right_angle: 1.0 };
+        });
+
+        let rc_rot_right = rc_clone.clone();
+        let ps_rot_right = power_scale.clone();
+        btn_rotate_right.connect_clicked(move |_| {
+            let p = ps_rot_right.value() as u8;
+            println!("GUI: Button Move: Rotate Right (Power: {})", p);
+            *rc_rot_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: p, right_angle: -1.0 };
+        });
+
         let rc_stop = rc_clone.clone();
         btn_stop.connect_clicked(move |_| {
             println!("GUI: Button STOP");
             *rc_stop.lock().unwrap() = RobotCommand::StopMoving;
+        });
+
+        let rc_save = rc_clone.clone();
+        btn_save_map.connect_clicked(move |_| {
+            println!("GUI: Button Save Map");
+            *rc_save.lock().unwrap() = RobotCommand::SaveMap;
         });
 
         let rc_lidar = rc_clone.clone();
@@ -249,7 +322,125 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
             println!("GUI: Lidar toggled: {}", active);
         });
 
-        // Apply config button
+        // Start Rerun on-demand button
+        let rec_btn = rec.clone();
+        let btn_start_rerun_clone = btn_start_rerun.clone();
+        btn_start_rerun.connect_clicked(move |_| {
+            let mut stream = rec_btn.lock().unwrap();
+            if stream.is_enabled() {
+                println!("GUI: Rerun is already running!");
+                return;
+            }
+            println!("GUI: Starting Rerun viewer on-demand...");
+            match rerun::RecordingStreamBuilder::new("home-robot").spawn() {
+                Ok(new_stream) => {
+                    *stream = new_stream;
+                    println!("GUI: Rerun viewer spawned successfully.");
+                    btn_start_rerun_clone.set_sensitive(false);
+                }
+                Err(e) => {
+                    eprintln!("GUI: Failed to spawn Rerun: {:?}", e);
+                }
+            }
+        });
+
+        // PID Lock Logic and Apply Config Button
+        let is_updating = std::rc::Rc::new(std::cell::Cell::new(false));
+
+        let kp_left_c = kp_left.clone();
+        let kp_right_c = kp_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        kp_left.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                kp_right_c.set_value(kp_left_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let kp_left_c = kp_left.clone();
+        let kp_right_c = kp_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        kp_right.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                kp_left_c.set_value(kp_right_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let ki_left_c = ki_left.clone();
+        let ki_right_c = ki_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        ki_left.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                ki_right_c.set_value(ki_left_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let ki_left_c = ki_left.clone();
+        let ki_right_c = ki_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        ki_right.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                ki_left_c.set_value(ki_right_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let kd_left_c = kd_left.clone();
+        let kd_right_c = kd_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        kd_left.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                kd_right_c.set_value(kd_left_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let kd_left_c = kd_left.clone();
+        let kd_right_c = kd_right.clone();
+        let btn_lock_pid_c = btn_lock_pid.clone();
+        let is_updating_c = is_updating.clone();
+        kd_right.connect_value_changed(move |_| {
+            if btn_lock_pid_c.is_active() && !is_updating_c.get() {
+                is_updating_c.set(true);
+                kd_left_c.set_value(kd_right_c.value());
+                is_updating_c.set(false);
+            }
+        });
+
+        let kp_left_c = kp_left.clone();
+        let kp_right_c = kp_right.clone();
+        let ki_left_c = ki_left.clone();
+        let ki_right_c = ki_right.clone();
+        let kd_left_c = kd_left.clone();
+        let kd_right_c = kd_right.clone();
+        let is_updating_c = is_updating.clone();
+        btn_lock_pid.connect_toggled(move |btn| {
+            if btn.is_active() {
+                is_updating_c.set(true);
+                kp_right_c.set_value(kp_left_c.value());
+                ki_right_c.set_value(ki_left_c.value());
+                kd_right_c.set_value(kd_left_c.value());
+                is_updating_c.set(false);
+                btn.set_label("🔒");
+                println!("GUI: PID configuration locked. Parameters synchronized.");
+            } else {
+                btn.set_label("🔓");
+                println!("GUI: PID configuration unlocked.");
+            }
+        });
+
         let rc_conf = rc_clone.clone();
         let kpl = kp_left.clone();
         let kil = ki_left.clone();
@@ -323,6 +514,28 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                             
                             lidar_canvas_c.queue_draw();
                         }
+                        GuiUpdate::SlamPose { x, y, theta } => {
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.slam_x = x;
+                            state.slam_y = y;
+                            state.slam_theta = theta;
+                            // For now, we don't update the UI labels, just the internal state
+                        }
+                        GuiUpdate::Map { width, height, data } => {
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.map_width = width;
+                            state.map_height = height;
+                            state.map_data = data;
+                        }
+                        GuiUpdate::Frontiers(f) => {
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.frontiers = f;
+                        }
+                        GuiUpdate::Path(p) => {
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.current_path = p;
+                            lidar_canvas_c.queue_draw();
+                        }
                         GuiUpdate::Imu { ax, ay, az, gx, gy, gz, mx, my, mz } => {
                             accel_label_c.set_text(&format!("Accel: X: {:.2} Y: {:.2} Z: {:.2}", ax, ay, az));
                             gyro_label_c.set_text(&format!("Gyro: X: {:.2} Y: {:.2} Z: {:.2}", gx, gy, gz));
@@ -352,6 +565,8 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                             }
                         }
                         GuiUpdate::Config(conf) => {
+                            let is_updating_recv = is_updating.clone();
+                            is_updating_recv.set(true);
                             if let Some(left) = conf.left_motor {
                                 kp_left.set_value(left.kp as f64);
                                 ki_left.set_value(left.ki as f64);
@@ -362,6 +577,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
                                 ki_right.set_value(right.ki as f64);
                                 kd_right.set_value(right.kd as f64);
                             }
+                            is_updating_recv.set(false);
                         }
                         GuiUpdate::Status(msg) => {
                             window_c.set_title(Some(&format!("HomeRobot Control Center - {}", msg)));
@@ -380,7 +596,6 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>) -> (Application, mpsc::
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use gtk4::Builder;
     use glib::Object;
 
@@ -412,6 +627,11 @@ mod tests {
             "btn_forward",
             "btn_stop",
             "pose_x_val",
+            "btn_rotate_left",
+            "btn_rotate_right",
+            "btn_lock_pid",
+            "btn_start_rerun",
+            "btn_lidar",
         ];
 
         for id in objects {

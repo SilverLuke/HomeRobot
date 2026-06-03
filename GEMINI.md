@@ -17,15 +17,19 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 
 ## Hardware Stack
 - **MCU**: ESP32-C6 (Main controller)
+- **Motor Driver**: L298N H-bridge
 - **LiDAR**: RP-Lidar A1M8 (360-degree point cloud)
   - **UART**: UART1 (TX: GPIO 6, RX: GPIO 7)
   - **Motor Enable**: GPIO 15
 - **IMU**: BMI160 (6-axis Accel/Gyro)
   - **I2C**: I2C0 (SDA: GPIO 4, SCL: GPIO 5)
-- **Actuators**: 2x DC Motors (Differential Drive)
+- **Actuators**: 2x LEGO NXT 9842 Interactive Servo Motors (Differential Drive)
+  - **Gear Ratio**: 1:48 (internal reduction)
+  - **Torque**: 16.7 N·cm (stall at 9V)
   - **Motor SX**: Forward: GPIO 19 (PWM), Backward: GPIO 18 (PWM)
   - **Motor DX**: Forward: GPIO 11 (PWM), Backward: GPIO 10 (PWM)
-- **Encoders**: 2x Incremental Encoders (PCNT)
+- **Encoders**: 2x Incremental Encoders (Internal to NXT Motors)
+  - **Resolution**: 360 ticks per revolution (1 degree per tick)
   - **Encoder SX**: A: GPIO 21, B: GPIO 20 (PCNT Unit 0)
   - **Encoder DX**: A: GPIO 23, B: GPIO 22 (PCNT Unit 1)
 - **Power**: 4x Li-Ion 26650 batteries (4S configuration)
@@ -33,7 +37,8 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 
 ### Driver Notes
 - **Encoders**: Uses a C wrapper (`pcnt_reader.c`) to access low-level ESP32-C6 PCNT hardware units directly, bypassing Zephyr's Unit 0 limitation.
-- **Motors**: 2-pin PWM scheme (PWM on FWD or BWD pin, other pin LOW).
+- **Motors (L298N)**: 2-pin PWM scheme (PWM on FWD or BWD pin, other pin LOW).
+  - **Stop Behavior**: Implements "Coast" stopping (both pins LOW). No active electromagnetic braking is currently used; deceleration depends on the mechanical friction of the 1:48 gearboxes.
 - **Console**: UART0 (GPIO 0/1) via CH343 USB bridge.
 
 ## Building and Running
@@ -97,10 +102,9 @@ Navigate to `server/`:
 - **Config Sync**: The robot is programmed to transmit its current `RobotConfig` (PID gains, etc.) immediately upon a successful TCP connection. This ensures the Server Dashboard is always synchronized with the hardware state without manual querying.
 
 ## Dashboard Architecture (GTK4 + Rust)
-- **Threading Model**: 
-    - **Main Thread**: Dedicated exclusively to the GTK4 Event Loop (`app.run()`).
-    - **Background Thread 1 (Networking)**: Manages the TCP listener and per-connection `handle_connection` loops.
-    - **Background Thread 2 (Input)**: Manages legacy SDL2 joystick and terminal `crossterm` events.
+- **Main Thread**: Dedicated exclusively to the GTK4 Event Loop (`app.run()`).
+- **Background Thread (Networking)**: Manages the TCP listener and per-connection `handle_connection` loops.
+- **Input Handling**: Managed via GTK `EventControllerKey` on the main window. Supports WASD for movement, 'L' for LiDAR, and 'T' for Diagnostics.
 - **Async Bridge**: Since `glib::MainContext::channel` is deprecated in `glib-rs 0.20`, the server uses a standard `std::sync::mpsc` channel. The GTK thread polls this channel every 33ms (approx. 30 FPS) using `glib::timeout_add_local`.
 - **Memory Safety**: To share GTK widgets (labels, canvas) with the polling closure, widgets must be **cloned** (incrementing the GObject reference count) before being moved into the closure.
 
@@ -110,8 +114,10 @@ Navigate to `server/`:
 - **LiDAR Streaming**: Sent as batches of points. The Dashboard uses a custom `GtkDrawingArea` with a scale of `0.05 px/mm` and renders a 50cm-interval polar grid for spatial reference.
 
 ## Development Gotchas
-- **Nix Dev Headers**: GTK4 compilation in Nix requires the `.dev` output of libraries (e.g., `gtk4.dev`, `glib.dev`) to be present in `nativeBuildInputs` so that `pkg-config` can locate the `.pc` files.
-- **Stop Logic**: Due to firmware-side tag limitations, the "Stop" command (sent on WASD release) is implemented as a `MotorMoveCommand` with `power=0`, rather than a dedicated boolean flag, to ensure cross-version compatibility.
+- **Nix Dev Headers**: GTK4 compilation in Nix requires the `.dev` output of libraries (e.g., `gtk4.dev`, `glib.dev`) to be present in `nativeBuildInputs`.
+- **Rust Toolchain**: The project uses `rust-overlay` in `shell.nix` to ensure the latest stable Rust (1.92+) is available, which is required by the Rerun SDK.
+- **Rerun SDK (v0.32.1)**: Integrated for 3D visualization and time-travel debugging. Spawns the viewer automatically on server start.
+- **Stop Logic**: Due to firmware-side tag limitations, the "Stop" command is implemented as a `MotorMoveCommand` with `power=0`.
 
 ### Remote Diagnostics
 - **Trigger**: Press 'T' in the Rust server CLI to trigger a full hardware self-test.
@@ -124,6 +130,23 @@ Navigate to `server/`:
 ### Logging
 - Firmware uses Zephyr's logging subsystem (`LOG_INF`, `LOG_DBG`, etc.).
 - Server uses standard Rust `println!` or logging crates.
+
+## Direct Link Simulation & Protobuf Architecture
+
+### The Direct Link Approach
+To achieve high-fidelity simulation, the system uses a **Direct Link** between the Zephyr firmware and the Gazebo physics engine. By linking C++ directly to C++, we eliminate the latency (previously ~300ms) inherent in multi-process communication.
+- **0ms Latency**: Commands and telemetry move through shared memory.
+- **Atomic Synchronization**: Both wheel torques are processed in the exact same physics step, ensuring perfect movement.
+- **Deterministic Debugging**: Allows for step-by-step verification of the robot's state machine.
+
+### Protobuf & Binary Compatibility
+Gazebo Ionic (and Jetty) rely on **Google Protocol Buffers** as their native language for data exchange. To maintain binary compatibility with the Gazebo ecosystem:
+- **Firmware Requirement**: The Zephyr firmware MUST use **Protobuf 31.1** to match the Gazebo `libgz-transport` and `libgz-msgs` libraries in Jetty.
+- **Compatibility**: Previously, older Gazebo versions required Protobuf 3.21.x (Binary Version 30). Gazebo Jetty 10 uses Protobuf 31.x.
+
+### Simulation Verification
+- **Binary**: `build/sim/zephyr/zephyr.exe`
+- **Verification**: Run `./tools/start_sim.sh` and monitor `logs/sim/zephyr.log`. Look for the log entry: `<inf> gazebo_bridge: Direct C++ Gazebo Link Initialized (0ms latency mode)`.
 
 ## AI Agent Mandates
 

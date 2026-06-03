@@ -1,0 +1,63 @@
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Could not resolve keysym XF86OK
+> Warning:          Could not resolve keysym XF86GoTo
+> Warning:          Could not resolve keysym XF86VendorLogo
+> Warning:          Could not resolve keysym XF86MediaSelectProgramGuide
+> Warning:          Could not resolve keysym XF86MediaSelectProgramGuide
+> Warning:          Could not resolve keysym XF86MediaSelectHome
+> Warning:          Could not resolve keysym XF86MediaLanguageMenu
+> Warning:          Could not resolve keysym XF86MediaTitleMenu
+> Warning:          Could not resolve keysym XF86AudioChannelMode
+> Warning:          Could not resolve keysym XF86MediaSelectPC
+> Warning:          Could not resolve keysym XF86MediaSelectTV
+> Warning:          Could not resolve keysym XF86MediaSelectCable
+> Warning:          Could not resolve keysym XF86MediaSelectVCR
+> Warning:          Could not resolve keysym XF86MediaSelectVCRPlus
+> Warning:          Could not resolve keysym XF86MediaSelectSatellite
+> Warning:          Could not resolve keysym XF86MediaSelectCD
+> Warning:          Could not resolve keysym XF86MediaSelectTape
+> Warning:          Could not resolve keysym XF86MediaSelectRadio
+> Warning:          Could not resolve keysym XF86MediaSelectTuner
+> Warning:          Could not resolve keysym XF86MediaPlayer
+> Warning:          Could not resolve keysym XF86MediaSelectTeletext
+> Warning:          Could not resolve keysym XF86MediaSelectAuxiliary
+> Warning:          Could not resolve keysym XF86MediaPlaySlow
+> Warning:          Could not resolve keysym XF86NumberEntryMode
+> Warning:          Could not resolve keysym XF86RefreshRateToggle
+> Warning:          Could not resolve keysym XF86Accessibility
+> Warning:          Could not resolve keysym XF86DoNotDisturb
+Errors from xkbcomp are not fatal to the X server
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Unsupported maximum keycode 708, clipping.
+>                   X11 cannot support keycodes above 255.
+> Warning:          Virtual modifier Hyper multiply defined
+>                   Using 0, ignoring 0
+> Warning:          Virtual modifier ScrollLock multiply defined
+>                   Using 0, ignoring 0
+> Warning:          Could not resolve keysym XF86OK
+> Warning:          Could not resolve keysym XF86GoTo
+> Warning:          Could not resolve keysym XF86VendorLogo
+> Warning:          Could not resolve keysym XF86MediaSelectProgramGuide
+> Warning:          Could not resolve keysym XF86MediaSelectProgramGuide
+> Warning:          Could not resolve keysym XF86MediaSelectHome
+> Warning:          Could not resolve keysym XF86MediaLanguageMenu
+> Warning:          Could not resolve keysym XF86MediaTitleMenu
+> Warning:          Could not resolve keysym XF86AudioChannelMode
+> Warning:          Could not resolve keysym XF86MediaSelectPC
+> Warning:          Could not resolve keysym XF86MediaSelectTV
+> Warning:          Could not resolve keysym XF86MediaSelectCable
+> Warning:          Could not resolve keysym XF86MediaSelectVCR
+> Warning:          Could not resolve keysym XF86MediaSelectVCRPlus
+> Warning:          Could not resolve keysym XF86MediaSelectSatellite
+> Warning:          Could not resolve keysym XF86MediaSelectTape
+> Warning:          Could not resolve keysym XF86MediaSelectRadio
+> Warning:          Could not resolve keysym XF86MediaSelectTuner
+> Warning:          Could not resolve keysym XF86MediaPlayer
+> Warning:          Could not resolve keysym XF86MediaSelectTeletext
+> Warning:          Could not resolve keysym XF86MediaSelectAuxiliary
+> Warning:          Could not resolve keysym XF86MediaPlaySlow
+> Warning:          Could not resolve keysym XF86NumberEntryMode
+> Warning:          Could not resolve keysym XF86RefreshRateToggle
+> Warning:          Could not resolve keysym XF86Accessibility
+> Warning:          Could not resolve keysym XF86DoNotDisturb
+Errors from xkbcomp are not fatal to the X server

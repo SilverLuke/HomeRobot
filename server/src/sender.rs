@@ -14,41 +14,33 @@ pub fn send_manual_command(
     last_sent_command: &mut RobotCommand,
     stats: Arc<Stats>)
 {
-    let mut new_command = None;
-    match robot_command.try_lock() {
-        Ok(current_command) => {
-            new_command = Some(current_command.clone());
+    let current_command = match robot_command.try_lock() {
+        Ok(cmd) => cmd.clone(),
+        Err(_) => return, // Lock busy, try again in 10ms
+    };
+
+    if current_command != *last_sent_command {
+        let millis = start_time.elapsed().as_millis() as u32;
+
+        let msg = ServerToRobotMessage {
+            sequence_millis: millis,
+            payload: current_command.into_payload(),
+        };
+
+        let mut buf = Vec::new();
+        msg.encode(&mut buf).unwrap();
+
+        // Add 2-byte length prefix
+        let len = buf.len() as u16;
+        let mut final_packet = len.to_be_bytes().to_vec();
+        final_packet.extend(buf);
+
+        if let Err(e) = protocol.send_packet(&final_packet) {
+            eprintln!("Error sending motor command: {:?}\r", e);
+        } else {
+            stats.log(&format!("[CMD] Sent: {:?}", current_command));
         }
-        Err(_) => {
-            // Lock busy, we'll try again next iteration (10ms)
-            return;
-        }
-    }
 
-    if let Some(current_command) = new_command {
-        if current_command != *last_sent_command {
-            let millis = start_time.elapsed().as_millis() as u32;
-
-            let msg = ServerToRobotMessage {
-                sequence_millis: millis,
-                payload: current_command.into_payload(),
-            };
-
-            let mut buf = Vec::new();
-            msg.encode(&mut buf).unwrap();
-
-            // Add 2-byte length prefix
-            let len = buf.len() as u16;
-            let mut final_packet = len.to_be_bytes().to_vec();
-            final_packet.extend(buf);
-
-            if let Err(e) = protocol.send_packet(&final_packet) {
-                eprintln!("Error sending motor command: {:?}\r", e);
-            } else {
-                stats.log(&format!("[CMD] Sent: {:?}", current_command));
-            }
-
-            *last_sent_command = current_command;
-        }
+        *last_sent_command = current_command;
     }
 }

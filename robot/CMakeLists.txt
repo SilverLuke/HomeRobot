@@ -25,7 +25,45 @@ target_sources(app PRIVATE
 )
 
 if(CONFIG_BOARD_NATIVE_SIM)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GZ_TRANSPORT REQUIRED IMPORTED_TARGET gz-transport)
+    pkg_check_modules(GZ_MSGS REQUIRED IMPORTED_TARGET gz-msgs)
+    
+    # Get Protobuf include directory explicitly to force it first for Gazebo compatibility
+    pkg_check_modules(GZ_PROTOBUF REQUIRED protobuf)
+    target_include_directories(app BEFORE PRIVATE ${GZ_PROTOBUF_INCLUDE_DIRS})
+    
     target_sources(app PRIVATE src/bridge/gazebo_bridge.cpp)
+    
+    # Provide include directories for Gazebo headers
+    target_include_directories(app PRIVATE 
+        ${GZ_TRANSPORT_INCLUDE_DIRS} 
+        ${GZ_MSGS_INCLUDE_DIRS}
+    )
+
+    # Enable C++17 for Gazebo headers
+    target_compile_features(app PRIVATE cxx_std_17)
+    
+    # Prevent Protobuf version check errors
+    target_compile_definitions(app PRIVATE 
+        PROTOBUF_USE_DLLS
+    )
+    
+    # Link Gazebo libraries using absolute paths for the native_simulator Makefile
+    foreach(lib ${GZ_TRANSPORT_LIBRARIES} ${GZ_MSGS_LIBRARIES})
+        find_library(LIB_PATH_${lib} NAMES ${lib} HINTS ${GZ_TRANSPORT_LIBRARY_DIRS} ${GZ_MSGS_LIBRARY_DIRS})
+        if(LIB_PATH_${lib})
+            set_property(TARGET native_simulator APPEND PROPERTY RUNNER_LINK_LIBRARIES ${LIB_PATH_${lib}})
+        endif()
+    endforeach()
+
+    # Also link Protobuf and its dependencies explicitly as they are required by Gazebo
+    foreach(lib ${GZ_PROTOBUF_LIBRARIES})
+        find_library(LIB_PATH_${lib} NAMES ${lib} HINTS ${GZ_PROTOBUF_LIBRARY_DIRS})
+        if(LIB_PATH_${lib})
+            set_property(TARGET native_simulator APPEND PROPERTY RUNNER_LINK_LIBRARIES ${LIB_PATH_${lib}})
+        endif()
+    endforeach()
 endif()
 
 zephyr_nanopb_sources(app ../proto/messages.proto)

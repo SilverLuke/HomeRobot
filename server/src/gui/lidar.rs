@@ -8,6 +8,14 @@ pub struct GuiState {
     pub robot_x: f32,
     pub robot_y: f32,
     pub robot_theta: f32,
+    pub slam_x: f32,
+    pub slam_y: f32,
+    pub slam_theta: f32,
+    pub map_width: usize,
+    pub map_height: usize,
+    pub map_data: Vec<i16>,
+    pub frontiers: Vec<crate::mapping::Frontier>,
+    pub current_path: Vec<(f32, f32)>,
     pub trajectory: Vec<(f32, f32)>,
     pub accel_history: std::collections::VecDeque<(f32, f32, f32)>,
     pub gyro_history: std::collections::VecDeque<(f32, f32, f32)>,
@@ -20,6 +28,14 @@ lazy_static::lazy_static! {
         robot_x: 0.0,
         robot_y: 0.0,
         robot_theta: 0.0,
+        slam_x: 0.0,
+        slam_y: 0.0,
+        slam_theta: 0.0,
+        map_width: 0,
+        map_height: 0,
+        map_data: Vec::new(),
+        frontiers: Vec::new(),
+        current_path: Vec::new(),
         trajectory: Vec::new(),
         accel_history: std::collections::VecDeque::with_capacity(100),
         gyro_history: std::collections::VecDeque::with_capacity(100),
@@ -35,8 +51,8 @@ pub fn update_scan(display_scan: &mut Vec<LidarPoint>, new_points: Vec<LidarPoin
         return;
     }
 
-    let first_angle = new_points.first().unwrap().angle_deg - 1.0;
-    let last_angle = new_points.last().unwrap().angle_deg + 1.0;
+    let first_angle = new_points.first().unwrap().angle_deg;
+    let last_angle = new_points.last().unwrap().angle_deg;
 
     // Remove old points that fall within the new sector (with margin)
     if first_angle <= last_angle {
@@ -63,6 +79,39 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         cr.set_source_rgb(0.05, 0.05, 0.1);
         cr.paint().unwrap();
 
+        // Draw Map (Occupancy Grid)
+        if !state.map_data.is_empty() {
+            let res = 0.05; // 5cm
+            let m_scale = res as f64 * 1000.0 * scale; // pixels per grid cell
+            
+            for y in 0..state.map_height {
+                for x in 0..state.map_width {
+                    let val = state.map_data[y * state.map_width + x];
+                    if val == 0 { continue; } // Unknown
+
+                    let color = if val > 0 { 
+                        // Probability of occupied (Gray to Black)
+                        let intensity = 0.8 - (val as f64 / 100.0 * 0.7);
+                        (intensity, intensity, intensity)
+                    } else { 
+                        // Probability of free (Dark Blue)
+                        (0.05, 0.05, 0.15) 
+                    };
+                    cr.set_source_rgb(color.0, color.1, color.2);
+
+                    // Map origin is at the center of the grid
+                    let world_x = (x as f64 - state.map_width as f64 / 2.0) * res as f64;
+                    let world_y = (y as f64 - state.map_height as f64 / 2.0) * res as f64;
+
+                    let dx = world_center_x - (world_y * 1000.0 * scale);
+                    let dy = world_center_y - (world_x * 1000.0 * scale);
+
+                    cr.rectangle(dx - m_scale/2.0, dy - m_scale/2.0, m_scale, m_scale);
+                    cr.fill().unwrap();
+                }
+            }
+        }
+
         // Draw World Grid (Fixed)
         cr.set_source_rgb(0.15, 0.15, 0.2);
         cr.set_line_width(0.5);
@@ -72,6 +121,33 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
             cr.line_to(world_center_x + pos, height as f64);
             cr.move_to(0.0, world_center_y + pos);
             cr.line_to(width as f64, world_center_y + pos);
+            cr.stroke().unwrap();
+        }
+
+        // Draw Frontiers (Yellow points)
+        cr.set_source_rgb(1.0, 1.0, 0.0);
+        for f in &state.frontiers {
+            let dx = world_center_x - (f.centroid_y as f64 * 1000.0 * scale);
+            let dy = world_center_y - (f.centroid_x as f64 * 1000.0 * scale);
+            cr.arc(dx, dy, 3.0, 0.0, 2.0 * std::f64::consts::PI);
+            cr.fill().unwrap();
+        }
+
+        // Draw Planned Path (Blue line)
+        if !state.current_path.is_empty() {
+            cr.set_source_rgb(0.0, 0.5, 1.0);
+            cr.set_line_width(2.0);
+            let mut first = true;
+            for p in &state.current_path {
+                let dx = world_center_x - (p.1 as f64 * 1000.0 * scale);
+                let dy = world_center_y - (p.0 as f64 * 1000.0 * scale);
+                if first {
+                    cr.move_to(dx, dy);
+                    first = false;
+                } else {
+                    cr.line_to(dx, dy);
+                }
+            }
             cr.stroke().unwrap();
         }
 

@@ -4,10 +4,6 @@ use crate::homerobot::{server_to_robot_message, MotorMoveCommand};
 pub enum RobotCommand {
     StopAll,
     StopMoving,
-    MotorDirect { 
-        left_speed: i16,
-        right_speed: i16,
-    },
     MotorAngle { 
         left_power: u8, 
         left_angle: f32,
@@ -26,8 +22,9 @@ pub enum RobotCommand {
         right_ki: f32,
         right_kd: f32,
     },
-    RequestData,
     RunDiagnostic,
+    SaveMap,
+    AutonomousExploration { enabled: bool },
 }
 
 impl Default for RobotCommand {
@@ -64,14 +61,6 @@ impl RobotCommand {
                     right_angle: 0.0,
                 }))
             }
-            RobotCommand::MotorDirect { left_speed, right_speed } => {
-                Some(server_to_robot_message::Payload::MotorMove(MotorMoveCommand {
-                    left_power: left_speed.abs() as u32,
-                    left_angle: if *left_speed >= 0 { 1.0 } else { -1.0 },
-                    right_power: right_speed.abs() as u32,
-                    right_angle: if *right_speed >= 0 { 1.0 } else { -1.0 },
-                }))
-            }
             RobotCommand::MotorAngle { left_power, left_angle, right_power, right_angle } => {
                 Some(server_to_robot_message::Payload::MotorMove(MotorMoveCommand {
                     left_power: *left_power as u32,
@@ -103,9 +92,8 @@ impl RobotCommand {
                     lidar_frequency: 5.0,
                 }))
             }
-            RobotCommand::RequestData => {
-                Some(server_to_robot_message::Payload::RequestData(true))
-            }
+            RobotCommand::SaveMap => None,
+            RobotCommand::AutonomousExploration { .. } => None,
         }
     }
 }

@@ -134,7 +134,6 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
     }
 #else
     uint8_t rx_byte;
-...
 
     int bytes_in_this_loop = 0;
     while (uart_poll_in(uart_dev_, &rx_byte) == 0) {

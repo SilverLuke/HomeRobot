@@ -1,0 +1,743 @@
+evaluation warning: Dependency of package 'gz-cmake5' uses a nested list in attribute 'propagatedBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: Dependency of package 'gz-math9' uses a nested list in attribute 'propagatedNativeBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: Dependency of package 'gz-common7' uses a nested list in attribute 'propagatedBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: Dependency of package 'gz-common7' uses a nested list in attribute 'propagatedBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: Dependency of package 'gz-msgs12' uses a nested list in attribute 'nativeBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: The xorg package set has been deprecated, 'xorg.libX11' has been renamed to 'libx11'
+evaluation warning: The xorg package set has been deprecated, 'xorg.libXext' has been renamed to 'libxext'
+evaluation warning: The xorg package set has been deprecated, 'xorg.libXt' has been renamed to 'libxt'
+evaluation warning: The xorg package set has been deprecated, 'xorg.libXaw' has been renamed to 'libxaw'
+evaluation warning: Dependency of package 'gz-transport15' uses a nested list in attribute 'buildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: Dependency of package 'gz-transport15' uses a nested list in attribute 'propagatedBuildInputs'.
+                    This is deprecated as of Nixpkgs release 26.05, and support will
+                    be removed in a future nixpkgs release.
+evaluation warning: `mesa.drivers` is deprecated, use `mesa` instead
+these 10 derivations will be built:
+  /nix/store/nyhb4sicfhrrximn5dvfw72j7wx574a5-gz-common7-7.1.1.drv
+  /nix/store/4f0cjfwmfakg9vxn3l65glkh4lpixlld-gz-fuel-tools11-11.0.0.drv
+  /nix/store/k8hgrmw1nixw1sh69mr7b4vy2g8crrjh-ogre-1.9.1.drv
+  /nix/store/pnn64vj3wmgk4485afbpzxlfndvc2239-ogre-next-2.3.3.drv
+  /nix/store/z6jhi3cbybyc7pjna5b9927gwj01ihi7-gz-rendering10-10.0.1.drv
+  /nix/store/5dwzyi726qgwj55h1w9bymlhxm03hcs1-gz-gui10-10.0.0.drv
+  /nix/store/h48lj9s2jmd4g52pc7qhmn9klk5fi06z-gz-physics9-9.3.0.drv
+  /nix/store/nx02y6frs04gap3k0y4xy9nh7c9pkmkw-gz-sensors10-10.0.1.drv
+  /nix/store/57ixc8gxmdn35wgcwwrl0sj8vz0s106k-gz-sim10-10.3.0.drv
+  /nix/store/mnvwb0da1478xf0klrqb6xrlyyxdy0cy-gz-sim_10.drv
+building '/nix/store/pnn64vj3wmgk4485afbpzxlfndvc2239-ogre-next-2.3.3.drv' on 'ssh://nix-builder@pcluca.home.arpa'...
+building '/nix/store/nyhb4sicfhrrximn5dvfw72j7wx574a5-gz-common7-7.1.1.drv' on 'ssh://nix-builder@pcluca.home.arpa'...
+building '/nix/store/k8hgrmw1nixw1sh69mr7b4vy2g8crrjh-ogre-1.9.1.drv' on 'ssh://nix-builder@pcluca.home.arpa'...
+copying 0 paths...
+copying 0 paths...
+copying 1 paths...
+copying path '/nix/store/74r6imvf64yclq2bzb64mz7f84446wmi-ogre-next-2.3.3' from 'ssh://nix-builder@pcluca.home.arpa'...
+copying 0 paths...
+copying 1 paths...
+copying path '/nix/store/a3ha24dq214zns2d6gcmqq4wrcsnf08c-gz-common7-7.1.1' from 'ssh://nix-builder@pcluca.home.arpa'...
+building '/nix/store/4f0cjfwmfakg9vxn3l65glkh4lpixlld-gz-fuel-tools11-11.0.0.drv' on 'ssh://nix-builder@pcluca.home.arpa'...
+building '/nix/store/h48lj9s2jmd4g52pc7qhmn9klk5fi06z-gz-physics9-9.3.0.drv' on 'ssh://nix-builder@pcluca.home.arpa'...
+copying 0 paths...
+Running phase: unpackPhase
+unpacking source archive /nix/store/678n6rbbkl4vrfg6d9d2378ljv6mxr1k-gz-fuel-tools11_11.0.0-source
+source root is gz-fuel-tools11_11.0.0-source
+Running phase: patchPhase
+Running phase: updateAutotoolsGnuConfigScriptsPhase
+Running phase: configurePhase
+cmake flags: -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_EXPORT_NO_PACKAGE_REGISTRY=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DCMAKE_INSTALL_LOCALEDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/locale -DCMAKE_INSTALL_LIBEXECDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/libexec -DCMAKE_INSTALL_LIBDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib -DCMAKE_INSTALL_DOCDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/doc/gz-fuel_tools -DCMAKE_INSTALL_INFODIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/info -DCMAKE_INSTALL_MANDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/man -DCMAKE_INSTALL_INCLUDEDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include -DCMAKE_INSTALL_SBINDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/sbin -DCMAKE_INSTALL_BINDIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/bin -DCMAKE_INSTALL_NAME_DIR=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib -DCMAKE_STRIP=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/strip -DCMAKE_RANLIB=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/ranlib -DCMAKE_AR=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/ar -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_INSTALL_PREFIX=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0 -DCMAKE_INSTALL_LIBDIR=\'lib\' -DPROTOC_EXE=/nix/store/bsj8l52nfqn7awdk2w4hamjxkwsk2phg-protobuf-31.1/bin/protoc -DProtobuf_PROTOC_EXE=/nix/store/bsj8l52nfqn7awdk2w4hamjxkwsk2phg-protobuf-31.1/bin/protoc -DProtobuf_PROTOC_EXECUTABLE=/nix/store/bsj8l52nfqn7awdk2w4hamjxkwsk2phg-protobuf-31.1/bin/protoc
+copying 0 paths...
+-- The C compiler identification is GNU 15.2.0
+-- The CXX compiler identification is GNU 15.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+Running phase: unpackPhase
+unpacking source archive /nix/store/9q8yj4khiyh8szprzg5riqbn0das5g6b-gz-physics9_9.3.0-source
+source root is gz-physics9_9.3.0-source
+Running phase: patchPhase
+Running phase: updateAutotoolsGnuConfigScriptsPhase
+Running phase: configurePhase
+cmake flags: -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_EXPORT_NO_PACKAGE_REGISTRY=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DCMAKE_INSTALL_LOCALEDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/share/locale -DCMAKE_INSTALL_LIBEXECDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/libexec -DCMAKE_INSTALL_LIBDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib -DCMAKE_INSTALL_DOCDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/share/doc/gz-physics -DCMAKE_INSTALL_INFODIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/share/info -DCMAKE_INSTALL_MANDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/share/man -DCMAKE_INSTALL_INCLUDEDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include -DCMAKE_INSTALL_SBINDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/sbin -DCMAKE_INSTALL_BINDIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/bin -DCMAKE_INSTALL_NAME_DIR=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib -DCMAKE_STRIP=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/strip -DCMAKE_RANLIB=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/ranlib -DCMAKE_AR=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/ar -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_INSTALL_PREFIX=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0 -DCMAKE_INSTALL_LIBDIR=\'lib\'
+-- Check for working C compiler: /nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- The C compiler identification is GNU 15.2.0
+-- Detecting CXX compiler ABI info - done
+-- The CXX compiler identification is GNU 15.2.0
+-- Detecting C compiler ABI info
+-- Check for working CXX compiler: /nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info - done
+-- gz-fuel_tools version 11.0.0
+-- Operating system is Linux
+-- Checking for module 'tinyxml2'
+--   Found tinyxml2, version 11.0.0
+-- Check for working C compiler: /nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Looking for tinyxml2 - found
+
+-- Found CURL: /nix/store/xm1x557414bq1lgrx18gvb7cbz1qrdy8-curl-8.20.0/lib/libcurl.so (found version "8.20.0")
+-- Looking for curl - found
+
+-- Checking for module 'jsoncpp'
+--   Found jsoncpp, version 1.9.7
+-- Found JSONCPP: TRUE
+-- Looking for JSONCPP - found
+
+-- Checking for module 'yaml-0.1'
+--   Found yaml-0.1, version 0.2.5
+-- Found YAML: TRUE
+-- Looking for YAML - found
+
+-- Checking for module 'libzip'
+--   Found libzip, version 1.11.4
+-- Found ZIP: TRUE
+-- Looking for ZIP - found
+
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for dependencies of gz-utils
+-- Looking for gz-utils - found
+
+-- Looking for gz-common -- found version 7.1.1
+-- Searching for dependencies of gz-common
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for dependencies of gz-utils
+-- Searching for <gz-utils> component [log]
+-- Looking for gz-utils-log -- found version 4.0.0
+-- Searching for dependencies of gz-utils-log
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Detecting CXX compiler ABI info
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Checking for module 'uuid'
+--   Found uuid, version 2.42.0
+-- Found UUID: TRUE
+-- Searching for <gz-common> component [testing]
+-- Looking for gz-common-testing -- found version 7.1.1
+-- Searching for dependencies of gz-common-testing
+-- Detecting CXX compiler ABI info - done
+-- Looking for gz-common - found
+
+-- Looking for gz-math -- found version 9.1.0
+-- Searching for dependencies of gz-math
+-- Looking for gz-utils -- found version 4.0.0
+-- Looking for gz-math - found
+
+-- Looking for gz-msgs -- found version 12.0.1
+-- Searching for dependencies of gz-msgs
+-- Found ZLIB: /nix/store/61a1nwx3w6rqyaisj5rn1sal1981apm7-zlib-1.3.2/lib/libz.so (found version "1.3.2")
+-- Check for working CXX compiler: /nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for dependencies of gz-utils
+-- Searching for <gz-utils> component [cli]
+-- Looking for gz-utils-cli -- found version 4.0.0
+-- Searching for dependencies of gz-utils-cli
+-- Looking for gz-math -- found version 9.1.0
+-- Looking for gz-msgs - found
+
+-- gz-physics version 9.3.0
+-- Operating system is Linux
+-- 
+
+-- ====== Finding Dependencies ======
+-- Looking for gz-common -- found version 7.1.1
+-- Searching for dependencies of gz-common
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for dependencies of gz-utils
+-- Searching for <gz-utils> component [log]
+-- Looking for gz-utils-log -- found version 4.0.0
+-- Searching for dependencies of gz-utils-log
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Checking for module 'uuid'
+--   Found uuid, version 2.42.0
+-- Found UUID: TRUE
+-- Searching for <gz-common> component [geospatial]
+-- Looking for gz-common-geospatial -- found version 7.1.1
+-- Searching for dependencies of gz-common-geospatial
+-- Looking for gz-math -- found version 9.1.0
+-- Searching for dependencies of gz-math
+-- Looking for gz-utils -- found version 4.0.0
+-- Looking for gz-common -- found version 7.1.1
+-- Searching for dependencies of gz-common
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for <gz-common> component [graphics]
+-- Looking for gz-common-graphics -- found version 7.1.1
+-- Searching for dependencies of gz-common-graphics
+-- Looking for gz-math -- found version 9.1.0
+-- Found GzAssimp: TRUE (found version "6.0.4")
+-- Searching for <gz-common> component [graphics]
+-- Searching for <gz-common> component [profiler]
+-- Looking for gz-common-profiler -- found version 7.1.1
+-- Searching for dependencies of gz-common-profiler
+-- Looking for gz-common - found
+
+-- Looking for gz-common -- found version 7.1.1
+-- Searching for dependencies of gz-common
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for <gz-common> component [testing]
+-- Looking for gz-common-testing -- found version 7.1.1
+-- Searching for dependencies of gz-common-testing
+-- Looking for gz-common - found
+
+-- Looking for gz-math -- found version 9.1.0
+-- Searching for dependencies of gz-math
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for <gz-math> component [eigen3]
+-- Looking for gz-math-eigen3 -- found version 9.1.0
+-- Searching for dependencies of gz-math-eigen3
+-- Looking for gz-math - found
+
+-- Looking for gz-plugin -- found version 4.0.0
+-- Searching for dependencies of gz-plugin
+-- Looking for gz-utils -- found version 4.0.0
+-- Searching for dependencies of gz-utils
+-- Searching for <gz-utils> component [cli]
+-- Looking for gz-utils-cli -- found version 4.0.0
+-- Searching for dependencies of gz-utils-cli
+-- Searching for <gz-plugin> component [all]
+-- Looking for all libraries of gz-plugin -- found version 4.0.0
+-- Looking for gz-plugin -- found version 4.0.0
+-- Looking for gz-plugin-loader -- found version 4.0.0
+-- Searching for dependencies of gz-plugin-loader
+-- Looking for gz-plugin-register -- found version 4.0.0
+-- Searching for dependencies of gz-plugin-register
+-- Looking for gz-plugin - found
+
+-- Looking for gz-utils -- found version 4.0.0
+-- Looking for gz-utils - found
+
+-- Looking for EIGEN3 - found
+
+-- Looking for sdformat -- found version 16.0.1
+-- Searching for dependencies of sdformat
+-- Checking for module 'tinyxml2'
+--   Found tinyxml2, version 11.0.0
+-- Looking for gz-math -- found version 9.1.0
+-- Looking for gz-utils -- found version 4.0.0
+-- Looking for sdformat - found
+
+-- Found assimp: /nix/store/k04065s9h642x5vwcbp38lmm597mn6xw-assimp-6.0.4-dev/include;/nix/store/k04065s9h642x5vwcbp38lmm597mn6xw-assimp-6.0.4-dev/include (found version "6.0.4")
+-- Found DART: /nix/store/ic84vgvydrf4h6mmdzmm0cq1m8xhwc2d-libdart-6.13.2/include (Required is at least version "6.10") found components: collision-bullet collision-ode utils utils-urdf dart
+-- Looking for DART - found
+
+-- Found Bullet: /nix/store/x998g5lg858fbfvyf2lcjnkh9f8hqi3p-bullet-3.25/lib/libBulletDynamics.so
+-- Looking for GzBullet - found
+
+-- -------------------------------------------
+
+-- 
+-- Searching for host SSE information
+-- SSE2 found
+-- SSE3 found
+-- SSE4.1 found
+-- SSE4.2 found
+-- Configuring library: gz-fuel_tools
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR - Success
+-- Testing is disabled -- skipping UNIT tests
+-- Found Python3: /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/bin/python3.13 (found version "3.13.13") found components: Interpreter
+-- The program [cppcheck] was not found! Skipping codecheck setup
+-- Build configuration successful
+-- Build type: Release
+-- Install prefix: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0
+-- Could NOT find Doxygen (missing: DOXYGEN_EXECUTABLE) 
+-- Configuring done (6.0s)
+-- Generating done (0.0s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_EXPORT_NO_PACKAGE_REGISTRY
+    PROTOC_EXE
+    Protobuf_PROTOC_EXE
+    Protobuf_PROTOC_EXECUTABLE
+
+
+-- Build files have been written to: /build/gz-fuel-tools11_11.0.0-source/build
+cmake: enabled parallel building
+cmake: enabled parallel installing
+Running phase: buildPhase
+build flags: -j24 SHELL=/nix/store/gik3rh1vz2jlgnifb9dh6vc6sxwwz9jj-bash-5.3p9/bin/bash
+[  5%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/CollectionIdentifier.cc.o
+[ 16%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/ClientConfig.cc.o
+[ 16%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/FuelClient.cc.o
+[ 22%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/Helpers.cc.o
+[ 27%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/LocalCache.cc.o
+[ 33%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/gz.cc.o
+[ 38%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/ModelIter.cc.o
+[ 44%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/Interface.cc.o
+[ 55%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/Model.cc.o
+[ 55%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/JSONParser.cc.o
+[ 61%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/ModelIdentifier.cc.o
+[ 66%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/RestClient.cc.o
+[ 72%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/WorldIdentifier.cc.o
+[ 77%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/Zip.cc.o
+[ 88%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/Result.cc.o
+[ 88%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/ServerConfig.cc.o
+[ 94%] Building CXX object src/CMakeFiles/gz-fuel_tools.dir/WorldIter.cc.o
+-- 
+-- Searching for host SSE information
+-- SSE2 found
+-- SSE3 found
+-- SSE4.1 found
+-- SSE4.2 found
+-- Configuring library: gz-physics
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR - Success
+-- Testing is disabled -- skipping UNIT tests
+-- Configuring library: gz-physics-sdf
+-- Configuring library: gz-physics-heightmap
+-- Configuring library: gz-physics-mesh
+-- Configuring library: gz-physics-dartsim
+-- Configuring library: gz-physics-dartsim-plugin
+-- Looking for C++ include dart/constraint/ContactSurface.hpp
+-- Looking for C++ include dart/constraint/ContactSurface.hpp - found
+-- Testing is disabled -- skipping UNIT tests
+-- Configuring library: gz-physics-tpelib
+-- Testing is disabled -- skipping UNIT_tpelib tests
+-- Configuring library: gz-physics-tpe
+-- Configuring library: gz-physics-tpe-plugin
+-- Testing is disabled -- skipping UNIT_tpe tests
+-- Configuring library: gz-physics-bullet
+-- Configuring library: gz-physics-bullet-plugin
+-- Configuring library: gz-physics-bullet-featherstone
+-- Configuring library: gz-physics-bullet-featherstone-plugin
+-- Found Python3: /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/bin/python3.13 (found version "3.13.13") found components: Interpreter
+-- The program [cppcheck] was not found! Skipping codecheck setup
+-- Build configuration successful
+-- Build type: Release
+-- Install prefix: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0
+-- Could NOT find Doxygen (missing: DOXYGEN_EXECUTABLE) 
+-- Configuring done (8.6s)
+-- Generating done (0.0s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_EXPORT_NO_PACKAGE_REGISTRY
+
+
+-- Build files have been written to: /build/gz-physics9_9.3.0-source/build
+cmake: enabled parallel building
+cmake: enabled parallel installing
+Running phase: buildPhase
+build flags: -j24 SHELL=/nix/store/gik3rh1vz2jlgnifb9dh6vc6sxwwz9jj-bash-5.3p9/bin/bash
+[  1%] Building CXX object src/CMakeFiles/gz-physics.dir/CanReadData.cc.o
+[  2%] Building CXX object src/CMakeFiles/gz-physics.dir/CanWriteData.cc.o
+[  4%] Building CXX object src/CMakeFiles/gz-physics.dir/CompositeData.cc.o
+[  7%] Building CXX object src/CMakeFiles/gz-physics.dir/DataStatusMask.cc.o
+[  7%] Building CXX object src/CMakeFiles/gz-physics.dir/FrameID.cc.o
+[  8%] Building CXX object src/CMakeFiles/gz-physics.dir/InstallationDirectories.cc.o
+[  9%] Building CXX object src/CMakeFiles/gz-physics.dir/Identity.cc.o
+[ 11%] Building CXX object src/CMakeFiles/gz-physics.dir/gz-physics_get_install_prefix_impl.cc.o
+[ 12%] Linking CXX shared library ../lib/libgz-physics.so
+[ 12%] Built target gz-physics
+[ 18%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/CustomConeMeshShape.cc.o
+[ 18%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/AddedMassFeatures.cc.o
+[ 18%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/FreeGroupFeatures.cc.o
+[ 18%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/AABBTree.cc.o
+[ 21%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/JointFeatures.cc.o
+[ 21%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Collision.cc.o
+[ 22%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/CustomFeatures.cc.o
+[ 25%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Engine.cc.o
+[ 25%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/CollisionDetector.cc.o
+[ 26%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/SDFFeatures.cc.o
+[ 29%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/CustomMeshShape.cc.o
+[ 29%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/CustomHeightmapShape.cc.o
+[ 30%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/KinematicsFeatures.cc.o
+[ 32%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/EntityManagementFeatures.cc.o
+[ 33%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/ShapeFeatures.cc.o
+[ 35%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/SimulationFeatures.cc.o
+[ 36%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Entity.cc.o
+[ 38%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/JointFeatures.cc.o
+[ 39%] Building CXX object bullet/CMakeFiles/gz-physics-bullet-plugin.dir/src/plugin.cc.o
+[ 40%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/FreeGroupFeatures.cc.o
+[ 42%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/EntityManagementFeatures.cc.o
+[ 43%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/GzCollisionDetector.cc.o
+[ 45%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Link.cc.o
+[ 46%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/Base.cc.o
+[ 47%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/EntityManagementFeatures.cc.o
+[ 49%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Model.cc.o
+[ 50%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/KinematicsFeatures.cc.o
+[ 52%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/LinkFeatures.cc.o
+[ 53%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/FreeGroupFeatures.cc.o
+[ 54%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/JointFeatures.cc.o
+[ 56%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Shape.cc.o
+[ 57%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/Utils.cc.o
+[ 59%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/World.cc.o
+[ 60%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/KinematicLinkFeatures.cc.o
+[ 61%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/ModelFeatures.cc.o
+[ 63%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/SDFFeatures.cc.o
+[ 64%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/KinematicsFeatures.cc.o
+[ 66%] Building CXX object tpe/lib/CMakeFiles/gz-physics-tpelib.dir/src/aabb_tree/AABB.cc.o
+[ 67%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/LinkFeatures.cc.o
+[ 69%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/ModelFeatures.cc.o
+[ 70%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/SDFFeatures.cc.o
+[ 71%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/ShapeFeatures.cc.o
+[ 73%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/SimulationFeatures.cc.o
+[ 74%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/WorldFeatures.cc.o
+[100%] Linking CXX shared library ../lib/libgz-fuel_tools.so
+[ 76%] Building CXX object dartsim/CMakeFiles/gz-physics-dartsim-plugin.dir/src/plugin.cc.o
+[100%] Built target gz-fuel_tools
+Running phase: glibPreInstallPhase
+Running phase: installPhase
+install flags: -j24 SHELL=/nix/store/gik3rh1vz2jlgnifb9dh6vc6sxwwz9jj-bash-5.3p9/bin/bash gsettingsschemadir=/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/gsettings-schemas/gz-fuel-tools11-11.0.0/glib-2.0/schemas/ install
+[ 77%] Linking CXX shared library ../../lib/libgz-physics-tpelib.so
+[100%] Built target gz-fuel_tools
+Install the project...
+-- Install configuration: "Release"
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/detail/Export.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Export.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/libgz-fuel_tools.so.11.0.0
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/libgz-fuel_tools.so.11
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/libgz-fuel_tools.so
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools/gz-fuel_tools-config.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools/gz-fuel_tools-config-version.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools/gz-fuel_tools-targets.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools/gz-fuel_tools-targets-release.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/pkgconfig/gz-fuel_tools.pc
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/ruby/gz/cmdfuel11.rb
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/gz/gz2.completion.d/fuel11.bash_completion.sh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/ClientConfig.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/CollectionIdentifier.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/FuelClient.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Helpers.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/HttpMethod.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Interface.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/JSONParser.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Model.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/ModelIdentifier.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/ModelIter.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/RestClient.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Result.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/ResultType.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/ServerConfig.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/WorldIdentifier.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/WorldIter.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/Zip.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/include/gz/fuel_tools11/gz/fuel_tools/config.hh
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools-all/gz-fuel_tools-all-config.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools-all/gz-fuel_tools-all-config-version.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/cmake/gz-fuel_tools-all/gz-fuel_tools-all-targets.cmake
+-- Installing: /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/share/gz/fuel11.yaml
+Running phase: fixupPhase
+shrinking RPATHs of ELF executables and libraries in /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0
+shrinking /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib/libgz-fuel_tools.so.11.0.0
+checking for references to /build/ in /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0...
+patching script interpreter paths in /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0
+stripping (with command strip and flags -S -p) in  /nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0/lib
+[ 78%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/ShapeFeatures.cc.o
+[ 78%] Built target gz-physics-tpelib
+[ 80%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/SimulationFeatures.cc.o
+[ 81%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/WorldFeatures.cc.o
+[ 83%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/CustomFeatures.cc.o
+[ 84%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/EntityManagementFeatures.cc.o
+[ 85%] Building CXX object bullet-featherstone/CMakeFiles/gz-physics-bullet-featherstone-plugin.dir/src/plugin.cc.o
+copying 1 paths...
+copying path '/nix/store/5kzp6x7ij58aga5g7ncv1ccz7g47iw16-gz-fuel-tools11-11.0.0' from 'ssh://nix-builder@pcluca.home.arpa'...
+[ 87%] Linking CXX shared library ../lib/libgz-physics-bullet-plugin.so
+[ 88%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/FreeGroupFeatures.cc.o
+[ 88%] Built target gz-physics-bullet-plugin
+[ 90%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/KinematicsFeatures.cc.o
+[ 91%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/SDFFeatures.cc.o
+[ 92%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/ShapeFeatures.cc.o
+[ 94%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/SimulationFeatures.cc.o
+[ 95%] Building CXX object tpe/plugin/CMakeFiles/gz-physics-tpe-plugin.dir/src/plugin.cc.o
+[ 97%] Linking CXX shared library ../../lib/libgz-physics-tpe-plugin.so
+[ 97%] Built target gz-physics-tpe-plugin
+[ 98%] Linking CXX shared library ../lib/libgz-physics-bullet-featherstone-plugin.so
+[ 98%] Built target gz-physics-bullet-featherstone-plugin
+[100%] Linking CXX shared library ../lib/libgz-physics-dartsim-plugin.so
+[100%] Built target gz-physics-dartsim-plugin
+Running phase: glibPreInstallPhase
+Running phase: installPhase
+install flags: -j24 SHELL=/nix/store/gik3rh1vz2jlgnifb9dh6vc6sxwwz9jj-bash-5.3p9/bin/bash gsettingsschemadir=/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/share/gsettings-schemas/gz-physics9-9.3.0/glib-2.0/schemas/ install
+[ 12%] Built target gz-physics
+[ 29%] Built target gz-physics-tpelib
+[ 42%] Built target gz-physics-bullet-plugin
+[ 61%] Built target gz-physics-bullet-featherstone-plugin
+[ 74%] Built target gz-physics-tpe-plugin
+[100%] Built target gz-physics-dartsim-plugin
+Install the project...
+-- Install configuration: "Release"
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics.so.9
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics/gz-physics-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics/gz-physics-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics/gz-physics-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics/gz-physics-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/BoxShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/CanReadData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/CanWriteData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/CapsuleShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Cloneable.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/CompositeData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/ConeShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/ConstructEmpty.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/ContactProperties.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/CylinderShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/DeclareDerivedType.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/EllipsoidShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Entity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/EntityStorage.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FeatureList.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FindFeatures.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FixedJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FrameData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FrameSemantics.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FreeGroup.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/FreeJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/GetBoundingBox.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/GetContacts.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/GetEntities.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/GetRayIntersection.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Gravity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Identity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/InspectFeatures.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Joint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/KinematicLink.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Link.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Model.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/OperateOnSpecifiedData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/PlaneShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/PrismaticJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/PrivateSpecifyData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Register.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RegisterStatic.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RelativeQuantity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RemoveEntities.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RequestEngine.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RequestFeatures.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/RevoluteJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/Shape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/SpecifyData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/SphereShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/detail/World.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/AddedMass.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/BoxShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/CanReadData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/CanWriteData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/CapsuleShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Cloneable.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/CompositeData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/ConeShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/ConstructEmpty.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/ContactProperties.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/CylinderShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/DataStatusMask.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/DeclareJointType.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/DeclareShapeType.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/EllipsoidShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Entity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Feature.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FeatureList.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FeaturePolicy.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FindFeatures.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FixedJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/ForwardStep.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FrameData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FrameID.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FrameSemantics.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FreeGroup.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/FreeJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Geometry.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/GetBoundingBox.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/GetContacts.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/GetEntities.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/GetRayIntersection.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Gravity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Implements.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/InstallationDirectories.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Joint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/KinematicLink.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Link.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Model.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/OperateOnSpecifiedData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/PlaneShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/PrismaticJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Register.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RegisterMore.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RegisterStatic.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RelativeQuantity.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RemoveEntities.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RequestEngine.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RequestFeatures.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/RevoluteJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/Shape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/SpecifyData.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/SphereShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/TemplateHelpers.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/World.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/config.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-sdf/gz-physics-sdf-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-sdf/gz-physics-sdf-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-sdf/gz-physics-sdf-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-sdf.pc
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructCollision.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructJoint.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructLink.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructModel.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructNestedModel.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructVisual.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/sdf/ConstructWorld.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-heightmap/gz-physics-heightmap-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-heightmap/gz-physics-heightmap-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-heightmap/gz-physics-heightmap-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-heightmap.pc
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/heightmap
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/heightmap/HeightmapShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/heightmap/detail
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/heightmap/detail/HeightmapShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-mesh/gz-physics-mesh-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-mesh/gz-physics-mesh-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-mesh/gz-physics-mesh-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-mesh.pc
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz
+-- Up-to-date: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/mesh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/mesh/MeshShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/mesh/detail
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/mesh/detail/MeshShape.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim/gz-physics-dartsim-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim/gz-physics-dartsim-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim/gz-physics-dartsim-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-dartsim.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/dartsim-plugin/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/dartsim-plugin/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-dartsim-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-dartsim-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-dartsim-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-dartsim-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim-plugin/gz-physics-dartsim-plugin-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim-plugin/gz-physics-dartsim-plugin-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim-plugin/gz-physics-dartsim-plugin-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-dartsim-plugin/gz-physics-dartsim-plugin-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-dartsim-plugin.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-dartsim-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-dartsim-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-dartsim-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-dartsim-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/tpelib/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/tpelib/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpelib.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpelib.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpelib.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpelib.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpelib/gz-physics-tpelib-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpelib/gz-physics-tpelib-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpelib/gz-physics-tpelib-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpelib/gz-physics-tpelib-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-tpelib.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe/gz-physics-tpe-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe/gz-physics-tpe-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe/gz-physics-tpe-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-tpe.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/tpe-plugin/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/tpe-plugin/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpe-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpe-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpe-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpe-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe-plugin/gz-physics-tpe-plugin-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe-plugin/gz-physics-tpe-plugin-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe-plugin/gz-physics-tpe-plugin-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-tpe-plugin/gz-physics-tpe-plugin-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-tpe-plugin.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-tpe-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-tpe-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-tpe-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-tpe-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet/gz-physics-bullet-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet/gz-physics-bullet-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet/gz-physics-bullet-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-bullet.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/bullet-plugin/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/bullet-plugin/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-plugin/gz-physics-bullet-plugin-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-plugin/gz-physics-bullet-plugin-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-plugin/gz-physics-bullet-plugin-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-plugin/gz-physics-bullet-plugin-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-bullet-plugin.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone/gz-physics-bullet-featherstone-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone/gz-physics-bullet-featherstone-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone/gz-physics-bullet-featherstone-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-bullet-featherstone.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/bullet-featherstone-plugin/detail/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/include/gz/physics9/gz/physics/bullet-featherstone-plugin/Export.hh
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-featherstone-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-featherstone-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-featherstone-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-featherstone-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone-plugin/gz-physics-bullet-featherstone-plugin-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone-plugin/gz-physics-bullet-featherstone-plugin-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone-plugin/gz-physics-bullet-featherstone-plugin-targets.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-bullet-featherstone-plugin/gz-physics-bullet-featherstone-plugin-targets-release.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/pkgconfig/gz-physics-bullet-featherstone-plugin.pc
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-featherstone-plugin.so.9.3.0
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-featherstone-plugin.so.9
+-- Set non-toolchain portion of runtime path of "/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-featherstone-plugin.so.9.3.0" to ""
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-featherstone-plugin.so
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-all/gz-physics-all-config.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-all/gz-physics-all-config-version.cmake
+-- Installing: /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/cmake/gz-physics-all/gz-physics-all-targets.cmake
+Running phase: fixupPhase
+shrinking RPATHs of ELF executables and libraries in /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-dartsim-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-dartsim-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-tpe-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/gz-physics-9/engine-plugins/libgz-physics-bullet-featherstone-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpelib.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-tpe-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-plugin.so.9.3.0
+shrinking /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib/libgz-physics-bullet-featherstone-plugin.so.9.3.0
+checking for references to /build/ in /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0...
+patching script interpreter paths in /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0
+stripping (with command strip and flags -S -p) in  /nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0/lib
+copying 1 paths...
+copying path '/nix/store/1kwgi1wv7f738mrvp6mx8hkq7zwp1f50-gz-physics9-9.3.0' from 'ssh://nix-builder@pcluca.home.arpa'...
