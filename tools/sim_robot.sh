@@ -23,7 +23,7 @@ SERVER_PID=$!
 
 # 3. Start Zephyr
 echo "[2/2] Starting Zephyr Firmware (with Direct Gazebo Link)..."
-ZEPHYR_EXE="$PROJECT_ROOT/build/sim/zephyr/zephyr.exe"
+ZEPHYR_EXE="$PROJECT_ROOT/build/sim/sim/zephyr/zephyr.exe"
 stdbuf -oL -eL "$ZEPHYR_EXE" > "$LOG_DIR/zephyr.log" 2>&1 &
 ZEPHYR_PID=$!
 
