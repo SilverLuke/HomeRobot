@@ -96,13 +96,21 @@ sleep 2
 # 4. Start Gazebo Sim
 export GZ_SIM_RESOURCE_PATH="$MODEL_PATH:$GZ_SIM_RESOURCE_PATH"
 # DO NOT export GZ_SIM_DISABLE_RENDERING=1 here if we want screenshots!
+
+# Detect if nixGLIntel is available and wrap the Gazebo command to use host GPU drivers
+GZ_LAUNCH_CMD="gz sim"
+if command -v nixGLIntel >/dev/null 2>&1; then
+    echo "  [INFO] nixGLIntel detected, wrapping Gazebo with GPU acceleration wrapper."
+    GZ_LAUNCH_CMD="nixGLIntel gz sim"
+fi
+
 if [ "$HEADLESS_MODE" = true ]; then
     echo "[3/4] Starting Headless Gazebo Server..."
-    gz sim -s -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
+    $GZ_LAUNCH_CMD -s -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
     GZ_PID=$!
 else
     echo "[3/4] Starting Gazebo Physics Server & GUI..."
-    gz sim -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
+    $GZ_LAUNCH_CMD -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
     GZ_PID=$!
 fi
 
