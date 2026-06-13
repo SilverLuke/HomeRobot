@@ -1,0 +1,71 @@
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <zephyr/dt-bindings/pinctrl/esp32c6-pinctrl.h>
+
+/ {
+    chosen {
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
+
+    aliases {
+        lidar-uart = &uart1;
+        lidar-en = &lidar_en_gpio;
+    };
+
+    lidar_ctrl {
+        compatible = "gpio-leds";
+        lidar_en_gpio: lidar_en {
+            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            label = "Lidar Enable";
+        };
+    };
+};
+
+&pinctrl {
+    uart0_default: uart0_default {
+        group1 {
+            pinmux = <UART0_TX_GPIO0>,
+                     <UART0_RX_GPIO1>;
+        };
+    };
+
+    uart0_sleep: uart0_sleep {
+        group1 {
+            pinmux = <UART0_TX_GPIO0>,
+                     <UART0_RX_GPIO1>;
+        };
+    };
+
+    uart1_default: uart1_default {
+        group1 {
+            pinmux = <UART1_TX_GPIO6>;
+        };
+        group2 {
+            pinmux = <UART1_RX_GPIO7>;
+            bias-pull-up;
+        };
+    };
+
+    uart1_sleep: uart1_sleep {
+        group1 {
+            pinmux = <UART1_TX_GPIO6>,
+                     <UART1_RX_GPIO7>;
+        };
+    };
+};
+
+&uart0 {
+    status = "okay";
+    pinctrl-0 = <&uart0_default>;
+    pinctrl-1 = <&uart0_sleep>;
+    pinctrl-names = "default", "sleep";
+    current-speed = <115200>;
+};
+
+&uart1 {
+    status = "okay";
+    pinctrl-0 = <&uart1_default>;
+    pinctrl-1 = <&uart1_sleep>;
+    pinctrl-names = "default", "sleep";
+    current-speed = <115200>;
+};

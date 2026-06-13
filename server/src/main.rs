@@ -113,7 +113,7 @@ fn main() -> io::Result<()> {
     };
 
     let stats = Stats::new();
-    let robot_command = Arc::new(Mutex::new(RobotCommand::StopAll));
+    let robot_command = Arc::new(Mutex::new(RobotCommand::default()));
     let sig_count = Arc::new(AtomicUsize::new(0));
 
     // 1. Initialize GTK GUI (only if not headless)

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "robot-mcp": {
+      "command": "python3",
+      "args": [
+        "/home/luca/Projects/robotica/homeRobot/software/tools/robot_mcp.py"
+      ],
+      "trust": true
+    }
+  }
+}

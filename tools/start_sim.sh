@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # Robust project root detection
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+cd "$PROJECT_ROOT"
 SIM_DIR="$PROJECT_ROOT/simulation"
 WORLD_FILE="$SIM_DIR/sim.world"
 MODEL_PATH="$SIM_DIR"
@@ -58,13 +59,21 @@ if [ "$HEADLESS_MODE" = false ] && [ -n "$WAYLAND_DISPLAY" ]; then
         echo "  WARNING: Xwayland failed to start. Gazebo GUI may not work."
         XWAYLAND_PID=""
     fi
+elif [ "$HEADLESS_MODE" = true ]; then
+    echo "[1/4] Headless Display setup: Starting Xvfb on :99 for virtual X11 framebuffer"
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export GALLIUM_DRIVER=llvmpipe
+    Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+    XVFB_PID=$!
+    export DISPLAY=:99
+    sleep 2
 else
     echo "[1/4] Display setup: using existing DISPLAY=$DISPLAY"
 fi
 
 # 3. Start the Rust Server (Dashboard)
 if [ "$HEADLESS_MODE" = true ]; then
-    echo "[2/4] Starting Headless Rust Server..."
+    echo "[2/4] Starting Headless Rust Server in Xvfb..."
     if [ ! -f "$SERVER_BIN" ]; then
         echo "Building server first..."
         cd "$PROJECT_ROOT/server" && cargo build && cd "$PROJECT_ROOT"
@@ -86,10 +95,10 @@ sleep 2
 
 # 4. Start Gazebo Sim
 export GZ_SIM_RESOURCE_PATH="$MODEL_PATH:$GZ_SIM_RESOURCE_PATH"
-
+# DO NOT export GZ_SIM_DISABLE_RENDERING=1 here if we want screenshots!
 if [ "$HEADLESS_MODE" = true ]; then
-    echo "[3/4] Starting Headless Gazebo Physics Server..."
-    gz sim -r -s "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
+    echo "[3/4] Starting Headless Gazebo Server..."
+    gz sim -s -r "$WORLD_FILE" > "$LOG_DIR/gazebo.log" 2>&1 &
     GZ_PID=$!
 else
     echo "[3/4] Starting Gazebo Physics Server & GUI..."
@@ -133,4 +142,3 @@ cleanup() {
 }
 trap cleanup EXIT
 wait
-

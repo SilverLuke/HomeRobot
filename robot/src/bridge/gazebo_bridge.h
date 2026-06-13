@@ -2,6 +2,7 @@
 
 #include <zephyr/kernel.h>
 #include <messages.pb.h>
+#include <mutex>
 
 #if defined(CONFIG_BOARD_NATIVE_SIM)
 
@@ -79,7 +80,7 @@ private:
     static float gyro_[3];
     static homerobot_LidarScan last_scan_;
     static bool new_scan_available_;
-    static struct k_mutex data_mutex;
+    static std::mutex data_mutex_;
 };
 
 #endif

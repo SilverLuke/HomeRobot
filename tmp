@@ -1,0 +1,12 @@
+[lidar] Status: State=WAIT_HDR, BytesRcv=0, PtsRcv=0
+[00:00:48.090,000] <inf> robot: [IMU] Acc: X=-0.43 Y=-0.75 Z=-9.30 | Gyro: X=0.00 Y=0.02 Z=-0.03
+[00:00:48.321,000] <inf> lidar: Starting Lidar...
+[00:00:48.321,000] <inf> lidar: Lidar motor ENABLED
+[00:00:48.321,000] <inf> lidar: Sending RESET command...
+[00:00:49.327,000] <inf> lidar: Sending SCAN command...
+[00:00:49.327,000] <dbg> lidar: start: Sent byte: 0xa5
+[00:00:49.327,000] <dbg> lidar: start: Sent byte: 0x20
+[00:00:49.333,000] <inf> lidar: Lidar motor DISABLED
+[lidar] Status: State=IDLE, BytesRcv=5, PtsRcv=0
+[00:00:49.357,000] <inf> robot: [IMU] Acc: X=-0.21 Y=-0.49 Z=-9.29 | Gyro: X=0.00 Y=-0.00 Z=0.02
+[lidar] Status: State=IDLE, BytesRcv=0, PtsRcv=0

@@ -35,6 +35,7 @@ pub fn handle_connection(
     let mut slam = BasicSlam::new();
     let start_time = Instant::now();
     let mut last_sent_command = RobotCommand::default();
+    let mut min_front_dist = 10.0_f32;
     
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
         let elapsed = start_time.elapsed().as_secs_f64();
@@ -86,6 +87,15 @@ pub fn handle_connection(
                                 }
                             }
                             Payload::Lidar(scan) => {
+                                min_front_dist = 10.0;
+                                for p in &scan.points {
+                                    if p.angle_deg < 40.0 || p.angle_deg > 320.0 {
+                                        let d = p.distance_mm / 1000.0;
+                                        if d > 0.05 && d < min_front_dist {
+                                            min_front_dist = d;
+                                        }
+                                    }
+                                }
                                 let corrected_pose = slam.update(&scan.points, &odom.pose);
                                 let _ = gui_tx.send(GuiUpdate::Lidar(scan.points.clone()));
                                 let _ = gui_tx.send(GuiUpdate::SlamPose { 
@@ -187,7 +197,10 @@ pub fn handle_connection(
                                 while angle_diff > std::f32::consts::PI { angle_diff -= 2.0 * std::f32::consts::PI; }
                                 while angle_diff < -std::f32::consts::PI { angle_diff += 2.0 * std::f32::consts::PI; }
 
-                                let (l_pwr, r_pwr) = if angle_diff.abs() > 0.5 {
+                                let (l_pwr, r_pwr) = if min_front_dist < 0.35 {
+                                    // Obstacle too close! Rotate right to avoid
+                                    (100, 0)
+                                } else if angle_diff.abs() > 0.5 {
                                     // Rotate in place
                                     let pwr = 80;
                                     if angle_diff > 0.0 { (0, pwr) } else { (pwr, 0) }
@@ -198,19 +211,23 @@ pub fn handle_connection(
                                     ((pwr - turn).clamp(0, 255) as u8, (pwr + turn).clamp(0, 255) as u8)
                                 };
 
-                                // Apply command via the shared mutex
-                                // Note: We already have the lock, so we can just update it
-                                // This will be sent by the next send_manual_command call
-                                drop(cmd);
-                                if let Ok(mut cmd_update) = robot_command.lock() {
-                                    *cmd_update = RobotCommand::MotorAngle {
-                                        left_power: l_pwr,
-                                        left_angle: 1.0,
-                                        right_power: r_pwr,
-                                        right_angle: 1.0,
-                                    };
-                                }
-                                // Re-acquire if we need it later, but we're at the end
+                                // Send the command directly without overwriting the Exploration State!
+                                let temp_cmd = RobotCommand::MotorAngle {
+                                    left_power: l_pwr,
+                                    left_angle: 1.0,
+                                    right_power: r_pwr,
+                                    right_angle: 1.0,
+                                };
+                                let millis = start_time.elapsed().as_millis() as u32;
+                                let msg = crate::homerobot::ServerToRobotMessage {
+                                    sequence_millis: millis,
+                                    payload: temp_cmd.into_payload(),
+                                };
+                                let mut buf = Vec::new();
+                                prost::Message::encode(&msg, &mut buf).unwrap();
+                                let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                final_packet.extend(buf);
+                                let _ = protocol.send_packet(&final_packet);
                             }
                         }
                     }

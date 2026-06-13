@@ -20,7 +20,7 @@ impl Odometry {
             pose: Pose { x: 0.0, y: 0.0, theta: 0.0 },
             last_left_ticks: 0,
             last_right_ticks: 0,
-            ticks_per_meter: 5780.0, // Based on Gazebo bridge
+            ticks_per_meter: 1736.2, // 360 ticks / (2 * pi * 0.033m)
             wheel_base: 0.26,        // 26cm
             first_update: true,
         }

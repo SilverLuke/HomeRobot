@@ -28,6 +28,7 @@ pub struct BasicSlam {
     last_odom_pose: Option<Pose>,
     map: OccupancyGrid,
     update_count: usize,
+    reference_cloud: Vec<(f32, f32)>,
 }
 
 impl BasicSlam {
@@ -38,69 +39,95 @@ impl BasicSlam {
             // 30m x 30m map at 5cm resolution (600x600 pixels)
             map: OccupancyGrid::new(600, 600, 0.05),
             update_count: 0,
+            reference_cloud: Vec::new(),
         }
     }
 
-    /// Calculate how well a pose matches the current map
-    fn score_pose(&self, pose: &Pose, scan: &[LidarPoint]) -> f32 {
-        let mut score = 0.0;
+    fn get_cartesian_points(pose: &Pose, scan: &[LidarPoint]) -> Vec<(f32, f32)> {
+        let mut points = Vec::new();
         for p in scan {
             if p.distance_mm < 200.0 || p.distance_mm > 5000.0 { continue; }
-            
             let angle_rad = (p.angle_deg as f32).to_radians();
-            let total_angle = pose.theta + angle_rad;
-            
-            let ox = pose.x + (p.distance_mm / 1000.0) * total_angle.cos();
-            let oy = pose.y + (p.distance_mm / 1000.0) * total_angle.sin();
-            
-            if self.map.get_cell(ox, oy) == 100 {
-                score += 1.0;
-            } else if self.map.get_cell(ox, oy) == 0 {
-                score -= 0.5; // Penalty for hitting free space
-            }
+            let global_angle = pose.theta + angle_rad;
+            let dist_m = p.distance_mm / 1000.0;
+            let x = pose.x + dist_m * global_angle.cos();
+            let y = pose.y + dist_m * global_angle.sin();
+            points.push((x, y));
         }
-        score
+        points
     }
 
-    /// Refine the pose using a simple hill-climbing search
-    fn refine_pose(&self, start_pose: Pose, scan: &[LidarPoint]) -> Pose {
-        let mut best_pose = start_pose;
-        let mut best_score = self.score_pose(&best_pose, scan);
-
-        let steps_m = [0.01, 0.02, 0.05]; // 1cm, 2cm, 5cm
-        let steps_rad = [0.01, 0.02, 0.05]; // ~0.5, 1, 3 degrees
-
-        let mut improved = true;
-        let mut iterations = 0;
-
-        while improved && iterations < 20 {
-            improved = false;
-            iterations += 1;
-
-            for &dx in &[-1.0, 0.0, 1.0] {
-                for &dy in &[-1.0, 0.0, 1.0] {
-                    for &dt in &[-1.0, 0.0, 1.0] {
-                        if dx == 0.0 && dy == 0.0 && dt == 0.0 { continue; }
-
-                        for i in 0..steps_m.len() {
-                            let test_pose = Pose {
-                                x: best_pose.x + dx * steps_m[i],
-                                y: best_pose.y + dy * steps_m[i],
-                                theta: best_pose.theta + dt * steps_rad[i],
-                            };
-
-                            let score = self.score_pose(&test_pose, scan);
-                            if score > best_score {
-                                best_score = score;
-                                best_pose = test_pose;
-                                improved = true;
-                            }
-                        }
+    /// Refine pose using K-Nearest Neighbor Iterative Closest Point (ICP)
+    fn icp_match(&self, initial_pose: &Pose, scan: &[LidarPoint]) -> Pose {
+        if self.reference_cloud.is_empty() {
+            return *initial_pose;
+        }
+        let mut current_pose = *initial_pose;
+        for _iter in 0..15 {
+            let q_points = Self::get_cartesian_points(&current_pose, scan);
+            if q_points.is_empty() { break; }
+            let mut matched_p = Vec::new();
+            let mut matched_q = Vec::new();
+            for &q in &q_points {
+                let mut min_dist2 = f32::MAX;
+                let mut nearest_p = (0.0, 0.0);
+                for &p in &self.reference_cloud {
+                    let dist2 = (q.0 - p.0).powi(2) + (q.1 - p.1).powi(2);
+                    if dist2 < min_dist2 {
+                        min_dist2 = dist2;
+                        nearest_p = p;
                     }
                 }
+                if min_dist2 < 0.2_f32.powi(2) { // 20cm outlier rejection
+                    matched_q.push(q);
+                    matched_p.push(nearest_p);
+                }
             }
+            if matched_q.len() < 10 { break; }
+            let n = matched_q.len() as f32;
+            let mut mean_p = (0.0, 0.0);
+            let mut mean_q = (0.0, 0.0);
+            for i in 0..matched_q.len() {
+                mean_p.0 += matched_p[i].0;
+                mean_p.1 += matched_p[i].1;
+                mean_q.0 += matched_q[i].0;
+                mean_q.1 += matched_q[i].1;
+            }
+            mean_p.0 /= n; mean_p.1 /= n;
+            mean_q.0 /= n; mean_q.1 /= n;
+            let mut s_xx = 0.0;
+            let mut s_xy = 0.0;
+            let mut s_yx = 0.0;
+            let mut s_yy = 0.0;
+            for i in 0..matched_q.len() {
+                let p_prime = (matched_p[i].0 - mean_p.0, matched_p[i].1 - mean_p.1);
+                let q_prime = (matched_q[i].0 - mean_q.0, matched_q[i].1 - mean_q.1);
+                s_xx += p_prime.0 * q_prime.0;
+                s_xy += p_prime.0 * q_prime.1;
+                s_yx += p_prime.1 * q_prime.0;
+                s_yy += p_prime.1 * q_prime.1;
+            }
+            let dt = (s_yx - s_xy).atan2(s_xx + s_yy);
+            let cos_dt = dt.cos();
+            let sin_dt = dt.sin();
+            let dx = mean_p.0 - (mean_q.0 * cos_dt - mean_q.1 * sin_dt);
+            let dy = mean_p.1 - (mean_q.0 * sin_dt + mean_q.1 * cos_dt);
+            
+            // Add odometry spring penalty to avoid random walk on flat walls
+            // We pull dx, dy, dt slightly back towards 0
+            let pull = 0.95; 
+            let dx = dx * pull;
+            let dy = dy * pull;
+            let dt = dt * pull;
+
+            let old_x = current_pose.x;
+            let old_y = current_pose.y;
+            current_pose.x = old_x * cos_dt - old_y * sin_dt + dx;
+            current_pose.y = old_x * sin_dt + old_y * cos_dt + dy;
+            current_pose.theta += dt;
+            if dx.abs() < 0.0001 && dy.abs() < 0.0001 && dt.abs() < 0.0001 { break; }
         }
-        best_pose
+        current_pose
     }
 }
 
@@ -125,13 +152,23 @@ impl Slam for BasicSlam {
         self.last_odom_pose = Some(*odom_pose);
 
         // 2. Localization Refinement (Scan-to-Map Matching)
-        // Only refine if we have some map data (after first few scans)
-        if self.update_count > 5 {
-            self.current_pose = self.refine_pose(self.current_pose, scan);
+        // Only refine if we have some map data
+        if self.update_count > 1 {
+            self.current_pose = self.icp_match(&self.current_pose, scan);
         }
 
         // 3. Mapping Update
         self.map.update_from_scan(&self.current_pose, scan);
+
+        // 4. Update Reference Point Cloud
+        let q_points = BasicSlam::get_cartesian_points(&self.current_pose, scan);
+        for p in q_points {
+            self.reference_cloud.push(p);
+        }
+        if self.reference_cloud.len() > 1000 {
+            let excess = self.reference_cloud.len() - 1000;
+            self.reference_cloud.drain(0..excess);
+        }
 
         self.current_pose
     }

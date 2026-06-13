@@ -1,0 +1,22 @@
+   Compiling robot_proxy v0.1.0 (/home/luca/Projects/robotica/homeRobot/software/tools/robot_proxy)
+error[E0499]: cannot borrow `robot_stream` as mutable more than once at a time
+  --> src/main.rs:64:21
+   |
+40 | /             tokio::select! {
+41 | |                 // Read from Robot, send to Controller
+42 | |                 res = robot_stream.read(&mut buf) => {
+   | |                       ------------ first mutable borrow occurs here
+43 | |                     match res {
+...  |
+64 | |                 _ = async {
+   | |                     ^^^^^ second mutable borrow occurs here
+...  |
+74 | |                                 if let Err(e) = robot_stream.write_all(&cbuf[..n]).await {
+   | |                                                 ------------ second borrow occurs due to use of `robot_stream` in coroutine
+...  |
+86 | |                 } => {}
+87 | |             }
+   | |_____________- first borrow later used here
+
+For more information about this error, try `rustc --explain E0499`.
+error: could not compile `robot_proxy` (bin "robot_proxy") due to 1 previous error

@@ -57,7 +57,7 @@ pkgs.mkShell {
     SDL2 gtk4.dev glib.dev cairo.dev pango.dev gdk-pixbuf.dev graphene.dev libadwaita
     (rust-bin.stable.latest.default.override { extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ]; }) ccache cmake dfu-util dtc esptool file gcc gcovr git
     gperf libusb1 ncurses ninja pkg-config unzip wget which xz pythonEnv west2nix.west2nix
-    mesa-demos
+    mesa-demos xvfb-run imagemagick xorg-server
     
     # Critical for Qt6/Wayland/Ogre2 EGL
     libGL
@@ -73,15 +73,14 @@ pkgs.mkShell {
     export PYTHONPATH="${gz-jetty}/lib/python:$PYTHONPATH"
     
     # --- Robust OpenGL/EGL Environment for NixOS ---
+    export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.libglvnd pkgs.vulkan-loader pkgs.libGL pkgs.gtk4 pkgs.glib pkgs.graphene pkgs.pango pkgs.cairo pkgs.gdk-pixbuf pkgs.libadwaita pkgs.SDL2 ]}:${gz-jetty}/lib:$LD_LIBRARY_PATH"
     export LD_LIBRARY_PATH="/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH"
-    export LD_LIBRARY_PATH="${pkgs.libglvnd}/lib:${pkgs.vulkan-loader}/lib:${gz-jetty}/lib:$LD_LIBRARY_PATH"
     
     export LIBGL_DRIVERS_PATH="/run/opengl-driver/lib/dri"
     export __EGL_VENDOR_LIBRARY_FILENAMES="/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json"
-    export MESA_LOADER_DRIVER_OVERRIDE="iris"
     
-    [ -d "$LIBGL_DRIVERS_PATH" ] || export LIBGL_DRIVERS_PATH="${pkgs.mesa.drivers}/lib/dri"
-    [ -f "$__EGL_VENDOR_LIBRARY_FILENAMES" ] || export __EGL_VENDOR_LIBRARY_FILENAMES="${pkgs.mesa.drivers}/share/glvnd/egl_vendor.d/50_mesa.json"
+    [ -d "$LIBGL_DRIVERS_PATH" ] || export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
+    [ -f "$__EGL_VENDOR_LIBRARY_FILENAMES" ] || export __EGL_VENDOR_LIBRARY_FILENAMES="${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json"
 
     export GZ_PARTITION=homerobot_sim
     export GZ_IP=127.0.0.1
@@ -106,11 +105,11 @@ pkgs.mkShell {
     
     if [ -n "$WAYLAND_DISPLAY" ]; then
        echo "  [INFO] Wayland detected ($WAYLAND_DISPLAY). Using native Wayland/EGL stack."
-       export QT_QPA_PLATFORM="wayland"
-       export GDK_BACKEND="wayland"
+       export QT_QPA_PLATFORM="xcb"
+       export GDK_BACKEND="x11"
        export QT_QPA_PLATFORMTHEME="fusion"
-       export XDG_SESSION_TYPE="wayland"
-       export EGL_PLATFORM="surfaceless" # Force surfaceless for headless/tool stability
+       export XDG_SESSION_TYPE="x11"
+       # export EGL_PLATFORM="surfaceless" # Allow headless DRM to work correctly
     fi
 
     # Ensure Ogre2 can find its plugins and Media (Hlms)
