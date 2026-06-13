@@ -60,7 +60,9 @@
     </child>
 
     <child>
-      <object class="GtkPaned" id="main_paned">
+      <object class="GtkOverlay" id="main_overlay">
+        <child>
+          <object class="GtkPaned" id="main_paned">
         <property name="shrink-start-child">false</property>
         <property name="shrink-end-child">false</property>
         <property name="resize-start-child">false</property>
@@ -637,6 +639,57 @@ H: Toggle Sidebar</property>
                 <property name="focusable">true</property>
                 <property name="content-width">600</property>
                 <property name="content-height">600</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+        <child type="overlay">
+          <object class="GtkBox" id="loading_overlay">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <style>
+              <class name="loading-overlay-bg"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">24</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkSpinner" id="loading_spinner">
+                    <property name="spinning">true</property>
+                    <property name="width-request">80</property>
+                    <property name="height-request">80</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="loading_label">
+                    <property name="label">Waiting for Robot Connection...</property>
+                    <style>
+                      <class name="title-1"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="loading_instructions">
+                    <property name="label">To establish a connection, please start the robot firmware:
+
+• Hardware: Turn on the ESP32-C6 power switch (must be on the same Wi-Fi).
+• Simulation: Run `./tools/start_sim.sh` or launch the Zephyr `zephyr.exe` binary.
+
+The server is listening on port 12345.</property>
+                    <property name="justify">center</property>
+                    <style>
+                      <class name="body"/>
+                    </style>
+                  </object>
+                </child>
               </object>
             </child>
           </object>

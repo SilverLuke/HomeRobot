@@ -92,6 +92,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_rotate_left: Button = builder.object("btn_rotate_left").expect("Could not find btn_rotate_left");
         let btn_rotate_right: Button = builder.object("btn_rotate_right").expect("Could not find btn_rotate_right");
 
+        let loading_overlay: gtk4::Box = builder.object("loading_overlay").expect("Could not find loading_overlay");
+        let loading_spinner: gtk4::Spinner = builder.object("loading_spinner").expect("Could not find loading_spinner");
+        loading_spinner.start();
+
         // Explicitly disable focus for input widgets to prevent them from stealing WASD keys
         kp_left.set_focusable(false);
         ki_left.set_focusable(false);
@@ -134,13 +138,14 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             println!("GUI: Trajectory cleared.");
         });
 
-        // Custom CSS for Buttons
+        // Custom CSS for Buttons and Loading Overlay
         let provider = gtk4::CssProvider::new();
         provider.load_from_string("
             .lidar-on { background-color: #2ecc71; color: white; }
             .lidar-on:checked { background-color: #27ae60; color: white; }
             .explore-on { background-color: #e74c3c; color: white; }
             .explore-on:checked { background-color: #c0392b; color: white; }
+            .loading-overlay-bg { background-color: rgba(25, 25, 25, 0.96); color: white; }
         ");
         gtk4::style_context_add_provider_for_display(
             &gdk4::Display::default().expect("Could not connect to a display."),
@@ -477,6 +482,8 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let mag_canvas_c = mag_canvas.clone();
         let window_c = window.clone();
         let rx_inner = rx.clone();
+        let loading_overlay_c = loading_overlay.clone();
+        let loading_spinner_c = loading_spinner.clone();
 
         glib::timeout_add_local(Duration::from_millis(33), move || {
             if let Ok(rx_locked) = rx_inner.try_lock() {
@@ -581,6 +588,13 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                         }
                         GuiUpdate::Status(msg) => {
                             window_c.set_title(Some(&format!("HomeRobot Control Center - {}", msg)));
+                            if msg.contains("Connected") {
+                                loading_overlay_c.set_visible(false);
+                                loading_spinner_c.stop();
+                            } else if msg == "Idle" || msg == "Disconnected" {
+                                loading_overlay_c.set_visible(true);
+                                loading_spinner_c.start();
+                            }
                         }
                     }
                 }
