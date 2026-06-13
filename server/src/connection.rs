@@ -166,6 +166,43 @@ pub fn handle_connection(
                     stats.log("[SLAM] Map saved successfully!");
                 }
                 *cmd = RobotCommand::StopMoving;
+            } else if *cmd == RobotCommand::Reset {
+                stats.log("[SERVER] Resetting map, path, and odometry...");
+                odom = crate::odometry::Odometry::new();
+                slam = BasicSlam::new();
+                
+                // Clear all state in GUI_STATE
+                {
+                    let mut state = crate::gui::lidar::GUI_STATE.lock().unwrap();
+                    state.robot_x = 0.0;
+                    state.robot_y = 0.0;
+                    state.robot_theta = 0.0;
+                    state.slam_x = 0.0;
+                    state.slam_y = 0.0;
+                    state.slam_theta = 0.0;
+                    state.map_width = 0;
+                    state.map_height = 0;
+                    state.map_data.clear();
+                    state.display_scan.clear();
+                    state.frontiers.clear();
+                    state.current_path.clear();
+                    state.trajectory.clear();
+                    state.accel_history.clear();
+                    state.gyro_history.clear();
+                    state.mag_history.clear();
+                }
+
+                // Force UI updates to clean dashboard displays
+                let _ = gui_tx.send(GuiUpdate::Pose { x: 0.0, y: 0.0, theta: 0.0 });
+                let _ = gui_tx.send(GuiUpdate::SlamPose { x: 0.0, y: 0.0, theta: 0.0 });
+                let _ = gui_tx.send(GuiUpdate::Encoders { left: 0, right: 0 });
+                let _ = gui_tx.send(GuiUpdate::Map { width: 0, height: 0, data: vec![] });
+                let _ = gui_tx.send(GuiUpdate::Frontiers(vec![]));
+                let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                let _ = gui_tx.send(GuiUpdate::Lidar(vec![]));
+                
+                *cmd = RobotCommand::StopMoving;
+                stats.log("[SERVER] Reset completed.");
             } else if let RobotCommand::AutonomousExploration { enabled } = *cmd {
                 if enabled {
                     let frontiers = slam.get_frontiers();

@@ -77,6 +77,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_save_map: Button = builder.object("btn_save_map").expect("Could not find btn_save_map");
         let btn_lidar: gtk4::ToggleButton = builder.object("btn_lidar").expect("Could not find btn_lidar");
         let btn_explore: gtk4::ToggleButton = builder.object("btn_explore").expect("Could not find btn_explore");
+        let btn_reset: Button = builder.object("btn_reset").expect("Could not find btn_reset");
 
         // PID SpinButtons
         let kp_left: SpinButton = builder.object("kp_left").expect("Could not find kp_left");
@@ -108,6 +109,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         btn_lock_pid.set_focusable(false);
         btn_rotate_left.set_focusable(false);
         btn_rotate_right.set_focusable(false);
+        btn_reset.set_focusable(false);
 
         #[allow(deprecated)]
         {
@@ -122,6 +124,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             btn_lock_pid.set_can_focus(false);
             btn_rotate_left.set_can_focus(false);
             btn_rotate_right.set_can_focus(false);
+            btn_reset.set_can_focus(false);
         }
 
         // Set up LIDAR drawing
@@ -314,6 +317,12 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         btn_save_map.connect_clicked(move |_| {
             println!("GUI: Button Save Map");
             *rc_save.lock().unwrap() = RobotCommand::SaveMap;
+        });
+
+        let rc_reset = rc_clone.clone();
+        btn_reset.connect_clicked(move |_| {
+            println!("GUI: Button Reset Triggered");
+            *rc_reset.lock().unwrap() = RobotCommand::Reset;
         });
 
         let rc_lidar = rc_clone.clone();
@@ -646,6 +655,7 @@ mod tests {
             "btn_lock_pid",
             "btn_start_rerun",
             "btn_lidar",
+            "btn_reset",
         ];
 
         for id in objects {

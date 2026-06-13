@@ -50,6 +50,16 @@
             <property name="focusable">false</property>
           </object>
         </child>
+        <child type="start">
+          <object class="GtkButton" id="btn_reset">
+            <property name="icon-name">view-refresh-symbolic</property>
+            <property name="tooltip-text">Reset Simulation Pose &amp; Map</property>
+            <property name="focusable">false</property>
+            <style>
+              <class name="destructive-action"/>
+            </style>
+          </object>
+        </child>
         <child type="end">
           <object class="GtkLabel" id="battery_label">
             <property name="label">Battery: --% (-- mV)</property>

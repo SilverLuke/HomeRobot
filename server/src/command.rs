@@ -25,6 +25,7 @@ pub enum RobotCommand {
     RunDiagnostic,
     SaveMap,
     AutonomousExploration { enabled: bool },
+    Reset,
 }
 
 impl Default for RobotCommand {
@@ -94,6 +95,7 @@ impl RobotCommand {
             }
             RobotCommand::SaveMap => None,
             RobotCommand::AutonomousExploration { .. } => None,
+            RobotCommand::Reset => None,
         }
     }
 }
