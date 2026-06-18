@@ -69,6 +69,26 @@ enum Commands {
         #[arg(short, long)]
         enabled: bool,
     },
+    /// Navigate to coordinate X, Y
+    GoTo {
+        #[arg(allow_negative_numbers = true)]
+        x: f32,
+        #[arg(allow_negative_numbers = true)]
+        y: f32,
+    },
+    /// Execute high-level G-code style motion command
+    Motion {
+        #[arg(short, long)]
+        action: String,
+        #[arg(short, long, default_value_t = 0.0)]
+        distance: f32,
+        #[arg(long, default_value_t = 0.0)]
+        angle: f32,
+        #[arg(short, long, default_value_t = 0.0)]
+        radius: f32,
+        #[arg(short, long, default_value_t = 150)]
+        power: u32,
+    },
 }
 
 fn send_msg(stream: &mut TcpStream, payload: server_to_robot_message::Payload) -> anyhow::Result<()> {
@@ -237,6 +257,63 @@ fn main() -> anyhow::Result<()> {
                 method: if *enabled { "StartExplore".to_string() } else { "StopExplore".to_string() },
                 payload: vec![],
             }))?;
+        }
+        Commands::GoTo { x, y } => {
+            println!("Sending GoTo Request: X={}, Y={}", x, y);
+            let mut payload = Vec::new();
+            payload.extend_from_slice(&x.to_le_bytes());
+            payload.extend_from_slice(&y.to_le_bytes());
+            send_msg(&mut stream, server_to_robot_message::Payload::RpcRequest(homerobot::RpcRequest {
+                call_id: 4,
+                method: "NavigateTo".to_string(),
+                payload,
+            }))?;
+        }
+        Commands::Motion { action, distance, angle, radius, power } => {
+            println!("Sending Motion command: Action={}, Dist={}, Angle={}, Radius={}, Power={}", action, distance, angle, radius, power);
+            
+            let motion_type = match action.to_lowercase().as_str() {
+                "straight" => 0,
+                "rotate" => 1,
+                "arc" => 2,
+                _ => anyhow::bail!("Unknown action type: {}", action),
+            };
+            
+            let req = homerobot::MotionRequest {
+                r#type: motion_type,
+                distance: *distance,
+                angle: *angle,
+                radius: *radius,
+                max_power: *power,
+                left_ticks: 0,
+                right_ticks: 0,
+            };
+            
+            let mut payload = Vec::new();
+            req.encode(&mut payload)?;
+            
+            send_msg(&mut stream, server_to_robot_message::Payload::RpcRequest(homerobot::RpcRequest {
+                call_id: 5,
+                method: "ExecuteMotion".to_string(),
+                payload,
+            }))?;
+            
+            println!("Motion command sent. Waiting for completion response from server...");
+            
+            use std::io::Read;
+            let mut response = [0u8; 1];
+            match stream.read_exact(&mut response) {
+                Ok(_) => {
+                    if response[0] == 1 {
+                        println!("SUCCESS: Motion completed successfully.");
+                    } else {
+                        println!("FAILURE: Motion failed or timed out.");
+                    }
+                }
+                Err(e) => {
+                    println!("Error reading completion response: {}", e);
+                }
+            }
         }
     }
 
