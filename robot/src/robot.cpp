@@ -1,4 +1,5 @@
 #include "robot.h"
+#include <pb_decode.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include "secrets.h"
@@ -98,6 +99,27 @@ void Robot::loop() {
             handle_operational();
             break;
     }
+    motor_sx_.loop();
+    motor_dx_.loop();
+
+    if (motion_active_) {
+        if (motor_sx_.target_reached(false) && motor_dx_.target_reached(false)) {
+            LOG_INF("ExecuteMotion: Target reached successfully");
+            motor_sx_.target_reached(true);
+            motor_dx_.target_reached(true);
+            proto_handler_.send_rpc_response(k_uptime_get_32(), active_motion_call_id_, nullptr, 0);
+            motion_active_ = false;
+        } else if (k_uptime_get_32() - motion_start_time_ms_ > 10000) { // 10s timeout
+            LOG_WRN("ExecuteMotion: Safety timeout exceeded");
+            motor_sx_.target_reached(true);
+            motor_dx_.target_reached(true);
+            motor_sx_.set_motor(BRAKE, 0);
+            motor_dx_.set_motor(BRAKE, 0);
+            proto_handler_.send_rpc_response(k_uptime_get_32(), active_motion_call_id_, nullptr, 0, "Timeout");
+            motion_active_ = false;
+        }
+    }
+
     lidar_.loop(&proto_handler_);
     status_led_.update();
 }
@@ -248,8 +270,36 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
         }
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_rpc_request_tag) {
-        diagnostic_.run_rpc();
-        proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0);
+        if (strcmp(msg.payload.rpc_request.method, "ExecuteMotion") == 0) {
+            homerobot_MotionRequest motion_req = homerobot_MotionRequest_init_default;
+            pb_istream_t stream = pb_istream_from_buffer(
+                msg.payload.rpc_request.payload.bytes,
+                msg.payload.rpc_request.payload.size
+            );
+            if (pb_decode(&stream, homerobot_MotionRequest_fields, &motion_req)) {
+                LOG_INF("RPC ExecuteMotion: Type=%d L=%d R=%d MaxPower=%u",
+                        motion_req.type, motion_req.left_ticks, motion_req.right_ticks, motion_req.max_power);
+                
+                motor_sx_.config_set_limit(5, motion_req.max_power);
+                motor_dx_.config_set_limit(5, motion_req.max_power);
+                
+                int32_t current_sx = motor_sx_.get_position();
+                int32_t current_dx = motor_dx_.get_position();
+                
+                motor_sx_.set_target(current_sx + motion_req.left_ticks);
+                motor_dx_.set_target(current_dx + motion_req.right_ticks);
+                
+                motion_active_ = true;
+                active_motion_call_id_ = msg.payload.rpc_request.call_id;
+                motion_start_time_ms_ = k_uptime_get_32();
+            } else {
+                LOG_ERR("Failed to decode MotionRequest");
+                proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0, "Decode error");
+            }
+        } else {
+            diagnostic_.run_rpc();
+            proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0);
+        }
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_lidar_control_tag) {
         bool active = msg.payload.lidar_control.active;

@@ -71,6 +71,10 @@ private:
     uint32_t last_fast_telemetry_ms_ = 0;
     uint32_t last_imu_log_ms_ = 0;
 
+    bool motion_active_ = false;
+    uint32_t active_motion_call_id_ = 0;
+    uint32_t motion_start_time_ms_ = 0;
+
     // DT Specs (passed to constructors in initializer list)
     static const struct device *const lidar_uart_dev;
     static const struct gpio_dt_spec lidar_en_gpio;
