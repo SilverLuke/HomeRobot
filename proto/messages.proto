@@ -73,6 +73,18 @@ message DiagnosticResult {
   repeated DiagnosticCheck checks = 2;
 }
 
+message MotionRequest {
+  enum Type {
+    STRAIGHT = 0;
+    ROTATE = 1;
+    ARC = 2;
+  }
+  Type type = 1;
+  int32 left_ticks = 2;
+  int32 right_ticks = 3;
+  uint32 max_power = 4;
+}
+
 // RPC Envelope for sending requests to the Robot
 message RpcRequest {
   uint32 call_id = 1;
