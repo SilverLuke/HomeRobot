@@ -21,3 +21,8 @@ zephyr-port/zephyr-sdk-1.0.0
 zephyr-port/zephyr_led_app/build
 zephyrproject
 
+
+# Logs
+logs/**/*
+!logs/**/
+!logs/**/.gitkeep

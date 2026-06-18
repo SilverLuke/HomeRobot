@@ -36,11 +36,32 @@ pub fn handle_connection(
     let start_time = Instant::now();
     let mut last_sent_command = RobotCommand::default();
     let mut min_front_dist = 10.0_f32;
+
+    let mut current_pose = crate::odometry::Pose { x: 0.0, y: 0.0, theta: 0.0 };
+    let mut current_pose_initialized = false;
+    let mut active_path: Vec<(f32, f32)> = Vec::new();
+    let mut navigation_goal: Option<(f32, f32)> = None;
+    let mut last_replan_time = Instant::now() - Duration::from_secs(10); // force immediate replan on start
+
+    // Progress and blacklist tracking to handle unreachable targets/frontiers
+    let mut last_progress_time = Instant::now();
+    let mut last_progress_pose = crate::odometry::Pose { x: 0.0, y: 0.0, theta: 0.0 };
+    let mut blacklisted_frontiers: Vec<(f32, f32, Instant)> = Vec::new();
+
+    #[derive(Clone, PartialEq, Debug)]
+    enum NavMode {
+        None,
+        Exploration,
+        NavigateTo(f32, f32),
+    }
+    let mut last_mode = NavMode::None;
     
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
         let elapsed = start_time.elapsed().as_secs_f64();
         let rec = rec.lock().unwrap().clone();
         rec.set_time("realtime", std::time::Duration::from_secs_f64(elapsed));
+
+        let mut telemetry_received = false;
 
         loop {
             match protocol.read_message() {
@@ -53,8 +74,14 @@ pub fn handle_connection(
                                 rec.log("robot/battery", &rerun::Scalars::new([bat.percentage as f64])).ok();
                             }
                             Payload::Encoders(enc) => {
+                                telemetry_received = true;
                                 println!("[SERVER] Telemetry Heartbeat: Encoders L={} R={}", enc.left_encoder, enc.right_encoder);
                                 odom.update(enc.left_encoder, enc.right_encoder);
+                                slam.add_odom_pose(odom.pose, Instant::now());
+                                if !current_pose_initialized {
+                                    current_pose = odom.pose;
+                                    current_pose_initialized = true;
+                                }
                                 let _ = gui_tx.send(GuiUpdate::Encoders { left: enc.left_encoder, right: enc.right_encoder });
                                 let _ = gui_tx.send(GuiUpdate::Pose { 
                                     x: odom.pose.x, 
@@ -69,6 +96,7 @@ pub fn handle_connection(
                                 )).ok();
                             }
                             Payload::Imu(imu) => {
+                                telemetry_received = true;
                                 if let (Some(a), Some(g)) = (imu.acceleration, imu.gyroscope) {
                                     let (mx, my, mz) = if let Some(m) = imu.magnetometer {
                                         (m.x, m.y, m.z)
@@ -87,6 +115,7 @@ pub fn handle_connection(
                                 }
                             }
                             Payload::Lidar(scan) => {
+                                telemetry_received = true;
                                 min_front_dist = 10.0;
                                 for p in &scan.points {
                                     if p.angle_deg < 40.0 || p.angle_deg > 320.0 {
@@ -97,6 +126,8 @@ pub fn handle_connection(
                                     }
                                 }
                                 let corrected_pose = slam.update(&scan.points, &odom.pose);
+                                current_pose = corrected_pose;
+                                current_pose_initialized = true;
                                 let _ = gui_tx.send(GuiUpdate::Lidar(scan.points.clone()));
                                 let _ = gui_tx.send(GuiUpdate::SlamPose { 
                                     x: corrected_pose.x, 
@@ -203,57 +234,287 @@ pub fn handle_connection(
                 
                 *cmd = RobotCommand::StopMoving;
                 stats.log("[SERVER] Reset completed.");
-            } else if let RobotCommand::AutonomousExploration { enabled } = *cmd {
-                if enabled {
-                    let frontiers = slam.get_frontiers();
-                    let _ = gui_tx.send(GuiUpdate::Frontiers(frontiers.clone()));
+            } else {
+                // Determine the current navigation mode
+                let current_mode = match *cmd {
+                    RobotCommand::AutonomousExploration { enabled: true } => NavMode::Exploration,
+                    RobotCommand::NavigateTo { x, y } => NavMode::NavigateTo(x, y),
+                    _ => NavMode::None,
+                };
 
-                    // Log frontiers to Rerun (Yellow spheres)
-                    let frontier_points: Vec<[f32; 3]> = frontiers.iter().map(|f| [f.centroid_x, f.centroid_y, 0.1]).collect();
-                    rec.log("robot/exploration/frontiers", &rerun::Points3D::new(frontier_points)
-                        .with_colors(vec![rerun::Color::from_rgb(255, 255, 0)])
-                        .with_radii(vec![0.05])).ok();
+                // Track state transitions to reset variables cleanly
+                let mode_changed = match (&last_mode, &current_mode) {
+                    (NavMode::None, NavMode::None) => false,
+                    (NavMode::Exploration, NavMode::Exploration) => false,
+                    (NavMode::NavigateTo(x1, y1), NavMode::NavigateTo(x2, y2)) => (x1 - x2).abs() > 0.001 || (y1 - y2).abs() > 0.001,
+                    _ => true,
+                };
 
-                    if let Some(best_frontier) = frontiers.iter().max_by_key(|f| f.size) {
-                        if let Some(path) = slam.plan_path(best_frontier.centroid_x, best_frontier.centroid_y) {
-                            let _ = gui_tx.send(GuiUpdate::Path(path.clone()));
+                if mode_changed {
+                    stats.log("[NAV] Navigation mode/goal changed. Resetting path.");
+                    active_path.clear();
+                    navigation_goal = None;
+                    let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                    let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+                    last_mode = current_mode.clone();
+                    // Force immediate replan
+                    last_replan_time = Instant::now() - Duration::from_secs(10);
+                    last_progress_time = Instant::now();
+                    last_progress_pose = current_pose;
+                }
 
-                            // Log path to Rerun (Blue line)
-                            let path_points: Vec<[f32; 3]> = path.iter().map(|p| [p.0, p.1, 0.05]).collect();
-                            rec.log("robot/exploration/path", &rerun::LineStrips3D::new([path_points])
-                                .with_colors(vec![rerun::Color::from_rgb(0, 128, 255)])).ok();
+                // Event-driven check: Only run navigation planning and control if telemetry was received
+                // or if the mode/goal just changed. This avoids CPU spikes and running on stale data.
+                if telemetry_received || mode_changed {
+                    match current_mode {
+                        NavMode::None => {}
+                        NavMode::Exploration | NavMode::NavigateTo(..) => {
+                            // Check if we need to replan the path (throttled to 1Hz)
+                            let needs_replan = active_path.is_empty() || last_replan_time.elapsed() >= Duration::from_millis(1000);
                             
-                            if let Some(next_waypoint) = path.get(2).or_else(|| path.get(0)) {
-                                // Simple Controller
-                                let dx = next_waypoint.0 - odom.pose.x;
-                                let dy = next_waypoint.1 - odom.pose.y;
-                                let target_theta = dy.atan2(dx);
-                                let _dist = (dx*dx + dy*dy).sqrt();
+                            if needs_replan {
+                                // Clear old blacklisted frontiers to allow retrying them later
+                                blacklisted_frontiers.retain(|(_, _, time)| time.elapsed() < Duration::from_secs(45));
 
-                                let mut angle_diff = target_theta - odom.pose.theta;
+                                match current_mode {
+                                    NavMode::Exploration => {
+                                         let frontiers = slam.get_frontiers();
+                                         let _ = gui_tx.send(GuiUpdate::Frontiers(frontiers.clone()));
+
+                                         // Log frontiers to Rerun (Yellow spheres)
+                                         let frontier_points: Vec<[f32; 3]> = frontiers.iter().map(|f| [f.centroid_x, f.centroid_y, 0.1]).collect();
+                                         rec.log("robot/exploration/frontiers", &rerun::Points3D::new(frontier_points)
+                                             .with_colors(vec![rerun::Color::from_rgb(255, 255, 0)])
+                                             .with_radii(vec![0.05])).ok();
+
+                                         // GOAL PERSISTENCE HEURISTIC:
+                                         // If we already have a target goal, we stick to it and just replan the path to it.
+                                         // We only select a new best frontier target if our current target_goal is None
+                                         // (e.g. it was reached, became unreachable, or timed out due to lack of progress).
+                                         let mut target_goal = navigation_goal;
+
+                                         if target_goal.is_none() {
+                                             // Filter out frontiers close to blacklisted/unreachable locations,
+                                             // and frontiers too close to the robot (< 0.6m) to prevent tiny local oscillations.
+                                             let filtered_frontiers: Vec<_> = frontiers.iter().filter(|f| {
+                                                 let dist_to_robot = ((f.centroid_x - current_pose.x).powi(2) + (f.centroid_y - current_pose.y).powi(2)).sqrt();
+                                                 if dist_to_robot < 0.6 {
+                                                     return false;
+                                                 }
+                                                 !blacklisted_frontiers.iter().any(|(bx, by, _)| {
+                                                     let dx = f.centroid_x - bx;
+                                                     let dy = f.centroid_y - by;
+                                                     (dx*dx + dy*dy).sqrt() < 0.8
+                                                 })
+                                             }).collect();
+
+                                             if let Some(&best_frontier) = filtered_frontiers.iter().max_by_key(|f| f.size) {
+                                                 target_goal = Some((best_frontier.centroid_x, best_frontier.centroid_y));
+                                                 stats.log(&format!("[NAV] Exploration: Selected new best frontier target: X={:.2}, Y={:.2}", best_frontier.centroid_x, best_frontier.centroid_y));
+                                             }
+                                         }
+
+                                         if let Some((gx, gy)) = target_goal {
+                                             stats.log(&format!("[NAV] Exploration: Planning path to target: X={:.2}, Y={:.2}", gx, gy));
+                                             if let Some(path) = slam.plan_path(gx, gy) {
+                                                 active_path = path;
+                                                 navigation_goal = Some((gx, gy));
+                                                 let _ = gui_tx.send(GuiUpdate::Path(active_path.clone()));
+                                                 let _ = gui_tx.send(GuiUpdate::NavigationTarget(navigation_goal));
+                                                 
+                                                 // Log path to Rerun (Blue line)
+                                                 let path_points: Vec<[f32; 3]> = active_path.iter().map(|p| [p.0, p.1, 0.05]).collect();
+                                                 rec.log("robot/exploration/path", &rerun::LineStrips3D::new([path_points])
+                                                     .with_colors(vec![rerun::Color::from_rgb(0, 128, 255)])).ok();
+                                                 
+                                                 last_progress_time = Instant::now();
+                                                 last_progress_pose = current_pose;
+                                             } else {
+                                                 stats.log(&format!("[NAV] Exploration: A* failed to find path to X={:.2}, Y={:.2}. Blacklisting.", gx, gy));
+                                                 blacklisted_frontiers.push((gx, gy, Instant::now()));
+                                                 active_path.clear();
+                                                 navigation_goal = None;
+                                                 let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                                 let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+                                             }
+                                         } else {
+                                             stats.log("[NAV] Exploration: No reachable frontiers found.");
+                                             active_path.clear();
+                                             navigation_goal = None;
+                                             let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                             let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+                                         }
+                                    }
+                                    NavMode::NavigateTo(gx, gy) => {
+                                        stats.log(&format!("[NAV] Go To: Planning path to goal: X={:.2}, Y={:.2}", gx, gy));
+                                        if let Some(path) = slam.plan_path(gx, gy) {
+                                            active_path = path;
+                                            navigation_goal = Some((gx, gy));
+                                            let _ = gui_tx.send(GuiUpdate::Path(active_path.clone()));
+                                            let _ = gui_tx.send(GuiUpdate::NavigationTarget(navigation_goal));
+                                            
+                                            // Log path to Rerun (Blue line)
+                                            let path_points: Vec<[f32; 3]> = active_path.iter().map(|p| [p.0, p.1, 0.05]).collect();
+                                            rec.log("robot/exploration/path", &rerun::LineStrips3D::new([path_points])
+                                                .with_colors(vec![rerun::Color::from_rgb(0, 128, 255)])).ok();
+                                            
+                                            last_progress_time = Instant::now();
+                                            last_progress_pose = current_pose;
+                                        } else {
+                                            stats.log("[NAV] Go To: A* failed to find path to goal! Target is unreachable.");
+                                            *cmd = RobotCommand::StopMoving;
+                                            active_path.clear();
+                                            navigation_goal = None;
+                                            let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                            let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+
+                                            // Send immediate STOP command
+                                            let millis = start_time.elapsed().as_millis() as u32;
+                                            let msg = crate::homerobot::ServerToRobotMessage {
+                                                sequence_millis: millis,
+                                                payload: RobotCommand::StopMoving.into_payload(),
+                                            };
+                                            let mut buf = Vec::new();
+                                            prost::Message::encode(&msg, &mut buf).unwrap();
+                                            let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                            final_packet.extend(buf);
+                                            let _ = protocol.send_packet(&final_packet);
+                                        }
+                                    }
+                                    _ => unreachable!()
+                                }
+                                last_replan_time = Instant::now();
+                            }
+
+                            // Stuck Detection: Check if robot has made progress
+                            if !active_path.is_empty() {
+                                if let Some(goal) = navigation_goal {
+                                    let dist_moved = ((current_pose.x - last_progress_pose.x).powi(2) + (current_pose.y - last_progress_pose.y).powi(2)).sqrt();
+                                    let angle_moved = (current_pose.theta - last_progress_pose.theta).abs();
+                                    
+                                    // If we've translated more than 3cm or rotated more than 5 degrees, we have made progress
+                                    if dist_moved > 0.03 || angle_moved > 0.08 {
+                                        last_progress_time = Instant::now();
+                                        last_progress_pose = current_pose;
+                                    }
+
+                                    // If we haven't made progress for 8 seconds, cancel/blacklist
+                                    if last_progress_time.elapsed() >= Duration::from_secs(8) {
+                                        match current_mode {
+                                            NavMode::Exploration => {
+                                                stats.log(&format!("[NAV] Stuck! Exploration progress timeout. Blacklisting frontier at X={:.2}, Y={:.2}", goal.0, goal.1));
+                                                blacklisted_frontiers.push((goal.0, goal.1, Instant::now()));
+                                                active_path.clear();
+                                                navigation_goal = None;
+                                                let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                                let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+                                            }
+                                            NavMode::NavigateTo(..) => {
+                                                stats.log(&format!("[NAV] Stuck! Target is unreachable. Cancelling navigation to X={:.2}, Y={:.2}", goal.0, goal.1));
+                                                *cmd = RobotCommand::StopMoving;
+                                                active_path.clear();
+                                                navigation_goal = None;
+                                                let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                                let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+
+                                                // Send immediate STOP command
+                                                let millis = start_time.elapsed().as_millis() as u32;
+                                                let msg = crate::homerobot::ServerToRobotMessage {
+                                                    sequence_millis: millis,
+                                                    payload: RobotCommand::StopMoving.into_payload(),
+                                                };
+                                                let mut buf = Vec::new();
+                                                prost::Message::encode(&msg, &mut buf).unwrap();
+                                                let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                                final_packet.extend(buf);
+                                                let _ = protocol.send_packet(&final_packet);
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Check goal completion
+                            if !active_path.is_empty() {
+                                if let Some(goal) = navigation_goal {
+                                    let dx = goal.0 - current_pose.x;
+                                    let dy = goal.1 - current_pose.y;
+                                    let dist = (dx*dx + dy*dy).sqrt();
+                                    if dist < 0.20 { // 20cm tolerance
+                                        stats.log(&format!("[NAV] Goal reached within {:.2}m!", dist));
+                                        *cmd = RobotCommand::StopMoving;
+                                        let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
+                                        let _ = gui_tx.send(GuiUpdate::Path(vec![]));
+                                        active_path.clear();
+                                        navigation_goal = None;
+                                        
+                                        // Send immediate STOP command
+                                        let millis = start_time.elapsed().as_millis() as u32;
+                                        let msg = crate::homerobot::ServerToRobotMessage {
+                                            sequence_millis: millis,
+                                            payload: RobotCommand::StopMoving.into_payload(),
+                                        };
+                                        let mut buf = Vec::new();
+                                        prost::Message::encode(&msg, &mut buf).unwrap();
+                                        let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                        final_packet.extend(buf);
+                                        let _ = protocol.send_packet(&final_packet);
+                                    }
+                                }
+                            }
+
+                            // Follow active path if it is still valid
+                            if !active_path.is_empty() {
+                                let lookahead_distance = 0.25_f32;
+                                let mut target_waypoint = None;
+                                for &waypoint in &active_path {
+                                    let dx = waypoint.0 - current_pose.x;
+                                    let dy = waypoint.1 - current_pose.y;
+                                    let dist = (dx*dx + dy*dy).sqrt();
+                                    if dist > lookahead_distance {
+                                        target_waypoint = Some(waypoint);
+                                        break;
+                                    }
+                                }
+                                let target_waypoint = target_waypoint.or_else(|| active_path.last().cloned()).unwrap();
+
+                                let dx = target_waypoint.0 - current_pose.x;
+                                let dy = target_waypoint.1 - current_pose.y;
+                                let target_theta = dy.atan2(dx);
+
+                                let mut angle_diff = target_theta - current_pose.theta;
                                 while angle_diff > std::f32::consts::PI { angle_diff -= 2.0 * std::f32::consts::PI; }
                                 while angle_diff < -std::f32::consts::PI { angle_diff += 2.0 * std::f32::consts::PI; }
 
-                                let (l_pwr, r_pwr) = if min_front_dist < 0.35 {
-                                    // Obstacle too close! Rotate right to avoid
-                                    (100, 0)
-                                } else if angle_diff.abs() > 0.5 {
-                                    // Rotate in place
-                                    let pwr = 80;
-                                    if angle_diff > 0.0 { (0, pwr) } else { (pwr, 0) }
+                                let (l_pwr, l_dir, r_pwr, r_dir) = if min_front_dist < 0.35 {
+                                    // Obstacle! Rotate in place
+                                    if angle_diff > 0.0 {
+                                        (120, -1.0, 120, 1.0)
+                                    } else {
+                                        (120, 1.0, 120, -1.0)
+                                    }
+                                } else if angle_diff.abs() > 0.4 {
+                                    // Rotate in place to align with path waypoint
+                                    if angle_diff > 0.0 {
+                                        (120, -1.0, 120, 1.0)
+                                    } else {
+                                        (120, 1.0, 120, -1.0)
+                                    }
                                 } else {
-                                    // Drive forward with slight turn
-                                    let pwr = 100;
-                                    let turn = (angle_diff * 40.0) as i32;
-                                    ((pwr - turn).clamp(0, 255) as u8, (pwr + turn).clamp(0, 255) as u8)
+                                    // Blend forward and turn
+                                    let base_pwr = 100;
+                                    let turn = (angle_diff * 50.0) as i32;
+                                    let left = (base_pwr - turn).clamp(40, 150) as u8;
+                                    let right = (base_pwr + turn).clamp(40, 150) as u8;
+                                    (left, 1.0, right, 1.0)
                                 };
 
-                                // Send the command directly without overwriting the Exploration State!
                                 let temp_cmd = RobotCommand::MotorAngle {
                                     left_power: l_pwr,
-                                    left_angle: 1.0,
+                                    left_angle: l_dir,
                                     right_power: r_pwr,
-                                    right_angle: 1.0,
+                                    right_angle: r_dir,
                                 };
                                 let millis = start_time.elapsed().as_millis() as u32;
                                 let msg = crate::homerobot::ServerToRobotMessage {

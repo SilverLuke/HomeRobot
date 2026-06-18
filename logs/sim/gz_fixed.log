@@ -1,4 +1,0 @@
-QApplication: invalid style override 'adwaita-dark' passed, ignoring it.
-	Available styles: Windows, Fusion
-XIO:  fatal IO error 0 (Success) on X server ":99"
-      after 23 requests (23 known processed) with 1 events remaining.

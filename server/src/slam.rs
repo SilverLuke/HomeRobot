@@ -1,12 +1,17 @@
 use crate::homerobot::LidarPoint;
 use crate::odometry::Pose;
 use crate::mapping::OccupancyGrid;
+use std::collections::VecDeque;
+use std::time::{Instant, Duration};
 
 /// The core trait for SLAM algorithms. 
 pub trait Slam {
     /// Feed a new LiDAR scan and current odometry estimate.
     /// Returns the corrected Pose.
     fn update(&mut self, scan: &[LidarPoint], odom_pose: &Pose) -> Pose;
+
+    /// Record a high-frequency odometry pose with timestamp.
+    fn add_odom_pose(&mut self, pose: Pose, timestamp: Instant);
 
     /// Get the current probability map data.
     fn get_map_data(&self) -> (usize, usize, &[i16]);
@@ -29,6 +34,8 @@ pub struct BasicSlam {
     map: OccupancyGrid,
     update_count: usize,
     reference_cloud: Vec<(f32, f32)>,
+    pose_history: VecDeque<(Instant, Pose)>,
+    last_scan_time: Option<Instant>,
 }
 
 impl BasicSlam {
@@ -40,6 +47,8 @@ impl BasicSlam {
             map: OccupancyGrid::new(600, 600, 0.05),
             update_count: 0,
             reference_cloud: Vec::new(),
+            pose_history: VecDeque::new(),
+            last_scan_time: None,
         }
     }
 
@@ -57,14 +66,112 @@ impl BasicSlam {
         points
     }
 
+    fn interpolate_pose_at_time(&self, time: Instant) -> Pose {
+        if self.pose_history.is_empty() {
+            return Pose { x: 0.0, y: 0.0, theta: 0.0 };
+        }
+        if time <= self.pose_history[0].0 {
+            return self.pose_history[0].1;
+        }
+        if time >= self.pose_history[self.pose_history.len() - 1].0 {
+            return self.pose_history[self.pose_history.len() - 1].1;
+        }
+
+        // Find the bounding elements
+        for i in 0..self.pose_history.len() - 1 {
+            let (t1, p1) = &self.pose_history[i];
+            let (t2, p2) = &self.pose_history[i + 1];
+            if time >= *t1 && time <= *t2 {
+                let denom = t2.duration_since(*t1).as_secs_f32();
+                let t = if denom > 0.0 {
+                    time.duration_since(*t1).as_secs_f32() / denom
+                } else {
+                    0.0
+                };
+                
+                let x = p1.x + (p2.x - p1.x) * t;
+                let y = p1.y + (p2.y - p1.y) * t;
+                
+                // Angle interpolation with wrap-around
+                let mut diff = p2.theta - p1.theta;
+                while diff > std::f32::consts::PI { diff -= 2.0 * std::f32::consts::PI; }
+                while diff < -std::f32::consts::PI { diff += 2.0 * std::f32::consts::PI; }
+                let theta = p1.theta + diff * t;
+                
+                return Pose { x, y, theta };
+            }
+        }
+
+        self.pose_history[self.pose_history.len() - 1].1
+    }
+
+    fn get_deskewed_cartesian_points(
+        &self, 
+        scan: &[LidarPoint], 
+        scan_end_time: Instant, 
+        scan_duration: Duration, 
+        slam_end_pose: &Pose, 
+        odom_end_pose: &Pose
+    ) -> Vec<(f32, f32)> {
+        let mut points = Vec::new();
+        let n = scan.len();
+        if n == 0 { return points; }
+        
+        let start_time = scan_end_time.checked_sub(scan_duration).unwrap_or(scan_end_time);
+        
+        for (i, p) in scan.iter().enumerate() {
+            if p.distance_mm < 200.0 || p.distance_mm > 5000.0 { continue; }
+            
+            // Infer timestamp of this point
+            let t_offset = (i as f32 / n as f32) * scan_duration.as_secs_f32();
+            let p_time = start_time + Duration::from_secs_f32(t_offset);
+            
+            // Interpolate odometry pose at p_time
+            let odom_i = self.interpolate_pose_at_time(p_time);
+            
+            // Relate it back to the SLAM frame using slam_end_pose and odom_end_pose
+            let dx = odom_i.x - odom_end_pose.x;
+            let dy = odom_i.y - odom_end_pose.y;
+            let dt = odom_i.theta - odom_end_pose.theta;
+            
+            let diff_theta = slam_end_pose.theta - odom_end_pose.theta;
+            let cos_diff = diff_theta.cos();
+            let sin_diff = diff_theta.sin();
+            
+            let robot_x = slam_end_pose.x + dx * cos_diff - dy * sin_diff;
+            let robot_y = slam_end_pose.y + dx * sin_diff + dy * cos_diff;
+            let robot_theta = slam_end_pose.theta + dt;
+            
+            // Project the point
+            let angle_rad = (p.angle_deg as f32).to_radians();
+            let global_angle = robot_theta + angle_rad;
+            let dist_m = p.distance_mm / 1000.0;
+            let x = robot_x + dist_m * global_angle.cos();
+            let y = robot_y + dist_m * global_angle.sin();
+            points.push((x, y));
+        }
+        points
+    }
+
     /// Refine pose using K-Nearest Neighbor Iterative Closest Point (ICP)
-    fn icp_match(&self, initial_pose: &Pose, scan: &[LidarPoint]) -> Pose {
+    fn icp_match(
+        &self, 
+        initial_pose: &Pose, 
+        scan: &[LidarPoint], 
+        scan_end_time: Instant, 
+        scan_duration: Duration, 
+        odom_end_pose: &Pose
+    ) -> Pose {
         if self.reference_cloud.is_empty() {
             return *initial_pose;
         }
         let mut current_pose = *initial_pose;
         for _iter in 0..15 {
-            let q_points = Self::get_cartesian_points(&current_pose, scan);
+            let q_points = if self.pose_history.is_empty() {
+                Self::get_cartesian_points(&current_pose, scan)
+            } else {
+                self.get_deskewed_cartesian_points(scan, scan_end_time, scan_duration, &current_pose, odom_end_pose)
+            };
             if q_points.is_empty() { break; }
             let mut matched_p = Vec::new();
             let mut matched_q = Vec::new();
@@ -120,11 +227,19 @@ impl BasicSlam {
             let dy = dy * pull;
             let dt = dt * pull;
 
+            let cos_dt_pulled = dt.cos();
+            let sin_dt_pulled = dt.sin();
+
             let old_x = current_pose.x;
             let old_y = current_pose.y;
-            current_pose.x = old_x * cos_dt - old_y * sin_dt + dx;
-            current_pose.y = old_x * sin_dt + old_y * cos_dt + dy;
+            current_pose.x = old_x * cos_dt_pulled - old_y * sin_dt_pulled + dx;
+            current_pose.y = old_x * sin_dt_pulled + old_y * cos_dt_pulled + dy;
             current_pose.theta += dt;
+
+            // Normalize theta to [-PI, PI]
+            while current_pose.theta > std::f32::consts::PI { current_pose.theta -= 2.0 * std::f32::consts::PI; }
+            while current_pose.theta < -std::f32::consts::PI { current_pose.theta += 2.0 * std::f32::consts::PI; }
+
             if dx.abs() < 0.0001 && dy.abs() < 0.0001 && dt.abs() < 0.0001 { break; }
         }
         current_pose
@@ -135,17 +250,41 @@ impl Slam for BasicSlam {
     fn update(&mut self, scan: &[LidarPoint], odom_pose: &Pose) -> Pose {
         self.update_count += 1;
 
+        let now = Instant::now();
+        let scan_duration = if let Some(last) = self.last_scan_time {
+            let diff = now.duration_since(last);
+            if diff > Duration::from_millis(50) && diff < Duration::from_millis(500) {
+                diff
+            } else {
+                Duration::from_millis(150)
+            }
+        } else {
+            Duration::from_millis(150)
+        };
+        self.last_scan_time = Some(now);
+
         // 1. Calculate Odom Delta
         if let Some(last_odom) = self.last_odom_pose {
             let dx = odom_pose.x - last_odom.x;
             let dy = odom_pose.y - last_odom.y;
             let dt = odom_pose.theta - last_odom.theta;
 
+            // Rotate odometry delta (dx, dy) to align with SLAM pose orientation
+            let diff_theta = self.current_pose.theta - last_odom.theta;
+            let cos_diff = diff_theta.cos();
+            let sin_diff = diff_theta.sin();
+            let dx_map = dx * cos_diff - dy * sin_diff;
+            let dy_map = dx * sin_diff + dy * cos_diff;
+
             // Simple movement model: add delta to current pose
             // This is "Dead Reckoning" as a starting point for the matcher
-            self.current_pose.x += dx;
-            self.current_pose.y += dy;
+            self.current_pose.x += dx_map;
+            self.current_pose.y += dy_map;
             self.current_pose.theta += dt;
+
+            // Normalize theta to [-PI, PI]
+            while self.current_pose.theta > std::f32::consts::PI { self.current_pose.theta -= 2.0 * std::f32::consts::PI; }
+            while self.current_pose.theta < -std::f32::consts::PI { self.current_pose.theta += 2.0 * std::f32::consts::PI; }
         } else {
             self.current_pose = *odom_pose;
         }
@@ -154,14 +293,19 @@ impl Slam for BasicSlam {
         // 2. Localization Refinement (Scan-to-Map Matching)
         // Only refine if we have some map data
         if self.update_count > 1 {
-            self.current_pose = self.icp_match(&self.current_pose, scan);
+            self.current_pose = self.icp_match(&self.current_pose, scan, now, scan_duration, odom_pose);
         }
 
         // 3. Mapping Update
-        self.map.update_from_scan(&self.current_pose, scan);
+        let q_points = if self.pose_history.is_empty() {
+            Self::get_cartesian_points(&self.current_pose, scan)
+        } else {
+            self.get_deskewed_cartesian_points(scan, now, scan_duration, &self.current_pose, odom_pose)
+        };
+
+        self.map.update_from_deskewed_scan((self.current_pose.x, self.current_pose.y), &q_points);
 
         // 4. Update Reference Point Cloud
-        let q_points = BasicSlam::get_cartesian_points(&self.current_pose, scan);
         for p in q_points {
             self.reference_cloud.push(p);
         }
@@ -171,6 +315,13 @@ impl Slam for BasicSlam {
         }
 
         self.current_pose
+    }
+
+    fn add_odom_pose(&mut self, pose: Pose, timestamp: Instant) {
+        self.pose_history.push_back((timestamp, pose));
+        while self.pose_history.len() > 0 && timestamp.duration_since(self.pose_history[0].0) > Duration::from_secs(2) {
+            self.pose_history.pop_front();
+        }
     }
 
     fn get_map_data(&self) -> (usize, usize, &[i16]) {
@@ -187,5 +338,55 @@ impl Slam for BasicSlam {
 
     fn plan_path(&self, goal_x: f32, goal_y: f32) -> Option<Vec<(f32, f32)>> {
         crate::pathfinding::plan_path(&self.map, self.current_pose.x, self.current_pose.y, goal_x, goal_y)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Instant, Duration};
+
+    #[test]
+    fn test_pose_history_interpolation() {
+        let mut slam = BasicSlam::new();
+        let t0 = Instant::now();
+        
+        // Populate trajectory
+        slam.add_odom_pose(Pose { x: 0.0, y: 0.0, theta: 0.0 }, t0);
+        slam.add_odom_pose(Pose { x: 1.0, y: 2.0, theta: 1.0 }, t0 + Duration::from_millis(100));
+        slam.add_odom_pose(Pose { x: 2.0, y: 4.0, theta: 2.0 }, t0 + Duration::from_millis(200));
+
+        // Test boundary limits
+        let p_early = slam.interpolate_pose_at_time(t0 - Duration::from_millis(50));
+        assert_eq!(p_early.x, 0.0);
+        assert_eq!(p_early.y, 0.0);
+
+        let p_late = slam.interpolate_pose_at_time(t0 + Duration::from_millis(250));
+        assert_eq!(p_late.x, 2.0);
+        assert_eq!(p_late.y, 4.0);
+
+        // Test mid-point interpolation
+        let p_mid = slam.interpolate_pose_at_time(t0 + Duration::from_millis(50));
+        assert_eq!(p_mid.x, 0.5);
+        assert_eq!(p_mid.y, 1.0);
+        assert!((p_mid.theta - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_pose_interpolation_wrap_around() {
+        let mut slam = BasicSlam::new();
+        let t0 = Instant::now();
+        
+        // Wrap around CCW: from PI - 0.1 to -PI + 0.1
+        slam.add_odom_pose(Pose { x: 0.0, y: 0.0, theta: std::f32::consts::PI - 0.1 }, t0);
+        slam.add_odom_pose(Pose { x: 0.0, y: 0.0, theta: -std::f32::consts::PI + 0.1 }, t0 + Duration::from_millis(100));
+
+        // Mid point should be exactly PI / -PI
+        let p_mid = slam.interpolate_pose_at_time(t0 + Duration::from_millis(50));
+        let expected_theta = std::f32::consts::PI;
+        let mut diff = p_mid.theta - expected_theta;
+        while diff > std::f32::consts::PI { diff -= 2.0 * std::f32::consts::PI; }
+        while diff < -std::f32::consts::PI { diff += 2.0 * std::f32::consts::PI; }
+        assert!(diff.abs() < 1e-4);
     }
 }

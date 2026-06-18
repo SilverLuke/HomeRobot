@@ -47,6 +47,7 @@ impl OccupancyGrid {
     }
 
     /// Gets a cell probability (0..100) or -1 for unknown
+    #[allow(dead_code)]
     pub fn get_cell(&self, x: f32, y: f32) -> i8 {
         if let Some((gx, gy)) = self.world_to_grid(x, y) {
             let val = self.data[gy * self.width + gx];
@@ -80,7 +81,7 @@ impl OccupancyGrid {
                 if self.data[idx] < -10 && !visited[idx] {
                     if self.is_frontier_cell(x, y) {
                         let cluster = self.expand_frontier_cluster(x, y, &mut visited);
-                        if cluster.len() > 5 { // Ignore tiny frontiers (noise)
+                        if cluster.len() > 15 { // Ignore tiny frontiers / noise (minimum 75cm width)
                             frontiers.push(self.cluster_to_frontier(cluster));
                         }
                     }
@@ -163,6 +164,21 @@ impl OccupancyGrid {
             let ox_world = pose.x + (p.distance_mm / 1000.0) * total_angle.cos();
             let oy_world = pose.y + (p.distance_mm / 1000.0) * total_angle.sin();
             
+            if let Some((ox, oy)) = self.world_to_grid(ox_world, oy_world) {
+                self.update_cell(ox_world, oy_world, LOG_ODDS_OCCUPIED);
+                self.raytrace_free(rx, ry, ox, oy);
+            }
+        }
+    }
+
+    /// Apply a deskewed LiDAR scan to the map
+    pub fn update_from_deskewed_scan(&mut self, robot_pos: (f32, f32), deskewed_points: &[(f32, f32)]) {
+        let (rx, ry) = match self.world_to_grid(robot_pos.0, robot_pos.1) {
+            Some(coords) => coords,
+            None => return,
+        };
+
+        for &(ox_world, oy_world) in deskewed_points {
             if let Some((ox, oy)) = self.world_to_grid(ox_world, oy_world) {
                 self.update_cell(ox_world, oy_world, LOG_ODDS_OCCUPIED);
                 self.raytrace_free(rx, ry, ox, oy);
