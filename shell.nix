@@ -13,7 +13,10 @@
         protobuf = prev.protobuf_31;
       })
       (import (fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz"))
-      (final: prev: import ../gazebo-sim-overlay/pkgs { 
+      (final: prev: import (
+        let src = fetchTarball "https://github.com/SilverLuke/gazebo-sim-overlay/archive/pr-gazebo-10-support.tar.gz";
+        in "${src}/pkgs"
+      ) { 
         pkgs = final;
       })
     ];
@@ -55,9 +58,12 @@ pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
     protobuf rerun gz-jetty uv libuuid util-linux.dev tinyxml-2 zeromq cppzmq libsodium
     SDL2 gtk4.dev glib.dev cairo.dev pango.dev gdk-pixbuf.dev graphene.dev libadwaita
-    (rust-bin.stable.latest.default.override { extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ]; }) ccache cmake dfu-util dtc esptool file gcc gcovr git
+    # esptool 5.x: required by Zephyr CMake (>= 5.0.2). If CH343 auto-reset
+    # breaks, use FLASH_BEFORE=no-reset and manually press BOOT+EN.
+    pkgs.esptool
+    (rust-bin.stable.latest.default.override { extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ]; }) ccache cmake dfu-util dtc file gcc gcovr git
     gperf libusb1 ncurses ninja pkg-config unzip wget which xz pythonEnv west2nix.west2nix
-    mesa-demos xvfb-run imagemagick xorg-server
+    mesa-demos xvfb-run imagemagick xorg-server rsyslog gnumake
     
     # Critical for Qt6/Wayland/Ogre2 EGL
     libGL
@@ -134,6 +140,71 @@ pkgs.mkShell {
     export GZ_SIM_RESOURCE_PATH="$PWD/simulation:$GZ_SIM_RESOURCE_PATH"
 
     ${hookContent}
+
+    # --- Local Rsyslog Daemon Management ---
+    mkdir -p "''$PWD/logs/rsyslog"
+    mkdir -p "''$PWD/logs/remote"
+
+    cat <<'EOF' > "''$PWD/logs/rsyslog.conf"
+module(load="imudp")
+input(type="imudp" port="1514")
+
+module(load="imtcp")
+input(type="imtcp" port="1514")
+
+global(workDirectory="''$PWD/logs/rsyslog")
+
+template(name="RemoteLogs" type="string"
+  string="''$PWD/logs/remote/%HOSTNAME%/%$YEAR%-%$MONTH%-%$DAY%.log"
+)
+
+*.* ?RemoteLogs
+*.* @127.0.0.1:5140
+EOF
+
+    # Only manage rsyslog lifecycle in interactive shells.
+    # nix-direnv evaluates shellHook in a non-interactive subshell whose
+    # EXIT trap fires immediately, killing the daemon on every env reload.
+    if [[ ''$- == *i* ]]; then
+        _HR_COUNTER="''$PWD/logs/rsyslog/shell_count"
+
+        # Increment the shell reference counter
+        _hr_n=''$(cat "''$_HR_COUNTER" 2>/dev/null || echo 0)
+        echo ''$((_hr_n + 1)) > "''$_HR_COUNTER"
+
+        # Start rsyslogd if not already running
+        _HR_RUNNING=0
+        if [ -f "''$PWD/logs/rsyslog/rsyslogd.pid" ]; then
+            _HR_PID=''$(cat "''$PWD/logs/rsyslog/rsyslogd.pid" 2>/dev/null)
+            if [ -n "''$_HR_PID" ] && kill -0 "''$_HR_PID" 2>/dev/null; then
+                echo "  [INFO] Local rsyslogd is already running (PID ''$_HR_PID)."
+                _HR_RUNNING=1
+            fi
+        fi
+
+        if [ ''$_HR_RUNNING -eq 0 ]; then
+            echo "  [INFO] Starting local Rsyslog daemon on port 1514..."
+            rsyslogd -i "''$PWD/logs/rsyslog/rsyslogd.pid" -f "''$PWD/logs/rsyslog.conf"
+        fi
+
+        # On exit: decrement counter, only stop rsyslogd when last shell closes
+        trap '
+            _HR_COUNTER="''$PWD/logs/rsyslog/shell_count"
+            _hr_n=''$(cat "''$_HR_COUNTER" 2>/dev/null || echo 1)
+            _hr_n=''$((_hr_n - 1))
+            [ ''$_hr_n -lt 0 ] && _hr_n=0
+            echo ''$_hr_n > "''$_HR_COUNTER"
+            if [ ''$_hr_n -eq 0 ]; then
+                if [ -f "''$PWD/logs/rsyslog/rsyslogd.pid" ]; then
+                    _HR_PID=''$(cat "''$PWD/logs/rsyslog/rsyslogd.pid" 2>/dev/null)
+                    if [ -n "''$_HR_PID" ]; then
+                        echo "Stopping local rsyslogd (PID ''$_HR_PID)..."
+                        kill "''$_HR_PID" 2>/dev/null || true
+                    fi
+                fi
+            fi
+        ' EXIT
+    fi
 
     echo "  [✓] Environment ready. 'west' and Gazebo Jetty are available."
     echo "  [TIP] Run simulation with: ./tools/sim_world.sh"
