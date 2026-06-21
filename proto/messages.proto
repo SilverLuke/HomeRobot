@@ -80,9 +80,12 @@ message MotionRequest {
     ARC = 2;
   }
   Type type = 1;
-  int32 left_ticks = 2;
-  int32 right_ticks = 3;
-  uint32 max_power = 4;
+  float distance = 2;
+  float angle = 3;
+  float radius = 4;
+  uint32 max_power = 5;
+  int32 left_ticks = 6;
+  int32 right_ticks = 7;
 }
 
 // RPC Envelope for sending requests to the Robot
