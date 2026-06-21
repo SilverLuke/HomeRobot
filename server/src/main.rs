@@ -63,19 +63,86 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                     }
                                     homerobot::server_to_robot_message::Payload::RpcRequest(r) => {
                                         println!("[PROXY] Received RPC Request: {}", r.method);
-                                        if r.method == "RunDiagnostic" {
-                                            *cmd = RobotCommand::RunDiagnostic;
-                                            println!("[PROXY] Forwarding RunDiagnostic");
-                                        } else if r.method == "SaveMap" {
-                                            *cmd = RobotCommand::SaveMap;
-                                            println!("[PROXY] Triggering SaveMap");
-                                        } else if r.method == "StartExplore" {
-                                            *cmd = RobotCommand::AutonomousExploration { enabled: true };
-                                            println!("[PROXY] Starting Autonomous Exploration");
-                                        } else if r.method == "StopExplore" {
-                                            *cmd = RobotCommand::AutonomousExploration { enabled: false };
-                                            println!("[PROXY] Stopping Autonomous Exploration");
-                                        }
+                                         if r.method == "RunDiagnostic" {
+                                             *cmd = RobotCommand::RunDiagnostic;
+                                             println!("[PROXY] Forwarding RunDiagnostic");
+                                         } else if r.method == "SaveMap" {
+                                             *cmd = RobotCommand::SaveMap;
+                                             println!("[PROXY] Triggering SaveMap");
+                                         } else if r.method == "StartExplore" {
+                                             *cmd = RobotCommand::AutonomousExploration { enabled: true };
+                                             println!("[PROXY] Starting Autonomous Exploration");
+                                         } else if r.method == "StopExplore" {
+                                             *cmd = RobotCommand::AutonomousExploration { enabled: false };
+                                             println!("[PROXY] Stopping Autonomous Exploration");
+                                         } else if r.method == "NavigateTo" {
+                                             if r.payload.len() >= 8 {
+                                                 let x = f32::from_le_bytes(r.payload[0..4].try_into().unwrap());
+                                                 let y = f32::from_le_bytes(r.payload[4..8].try_into().unwrap());
+                                                 *cmd = RobotCommand::NavigateTo { x, y };
+                                                 println!("[PROXY] Starting Navigation to X={:.2}, Y={:.2}", x, y);
+                                             } else {
+                                                 println!("[PROXY] Invalid payload for NavigateTo");
+                                             }
+                                         } else if r.method == "ExecuteMotion" {
+                                             if let Ok(motion_req) = <homerobot::MotionRequest as prost::Message>::decode(&*r.payload) {
+                                                 let ticks_per_meter = 1736.2_f32;
+                                                 let wheel_base = 0.26_f32;
+                                                 
+                                                 let (left_ticks, right_ticks) = match motion_req.r#type {
+                                                     0 => { // STRAIGHT
+                                                         let ticks = (motion_req.distance * ticks_per_meter) as i32;
+                                                         (ticks, ticks)
+                                                     }
+                                                     1 => { // ROTATE
+                                                         let angle_rad = motion_req.angle.to_radians();
+                                                         let dist = angle_rad * (wheel_base / 2.0);
+                                                         let ticks = (dist * ticks_per_meter) as i32;
+                                                         (-ticks, ticks)
+                                                     }
+                                                     2 => { // ARC
+                                                         let angle_rad = motion_req.angle.to_radians();
+                                                         let left_dist = angle_rad * (motion_req.radius - wheel_base / 2.0);
+                                                         let right_dist = angle_rad * (motion_req.radius + wheel_base / 2.0);
+                                                         ((left_dist * ticks_per_meter) as i32, (right_dist * ticks_per_meter) as i32)
+                                                     }
+                                                     _ => (motion_req.left_ticks, motion_req.right_ticks),
+                                                 };
+                                                 
+                                                 *cmd = RobotCommand::ExecuteMotion {
+                                                     motion_type: motion_req.r#type,
+                                                     left_ticks,
+                                                     right_ticks,
+                                                     max_power: motion_req.max_power,
+                                                 };
+                                                 println!("[PROXY] ExecuteMotion calculated: L={} R={}", left_ticks, right_ticks);
+                                                 
+                                                 drop(cmd);
+                                                 
+                                                 let &(ref lock, ref cvar) = &**crate::connection::MOTION_COMPLETED;
+                                                 {
+                                                     let mut completed = lock.lock().unwrap();
+                                                     *completed = None;
+                                                 }
+                                                 
+                                                 let mut completed = lock.lock().unwrap();
+                                                 while completed.is_none() {
+                                                     completed = cvar.wait(completed).unwrap();
+                                                 }
+                                                 
+                                                 match completed.as_ref().unwrap() {
+                                                     Ok(()) => {
+                                                         println!("[PROXY] Motion completed successfully.");
+                                                         let _ = stream.write_all(&[1u8]);
+                                                     }
+                                                     Err(e) => {
+                                                         println!("[PROXY] Motion failed: {}", e);
+                                                         let _ = stream.write_all(&[0u8]);
+                                                     }
+                                                 }
+                                                 break;
+                                             }
+                                         }
                                     }
                                     _ => {
                                         println!("[PROXY] Received unknown payload type");
@@ -100,6 +167,12 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
 }
 
 fn main() -> io::Result<()> {
+    // Initialize logger
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    pretty_env_logger::init();
+
     // Initialize Rerun (save to file in HEADLESS mode, disabled otherwise)
     let is_headless = env::var("HEADLESS").is_ok();
     
@@ -113,7 +186,10 @@ fn main() -> io::Result<()> {
     };
 
     let stats = Stats::new();
-    let robot_command = Arc::new(Mutex::new(RobotCommand::default()));
+    let robot_command = Arc::new(Mutex::new(RobotCommand::LidarControl {
+        active: true,
+        target_frequency_hz: 5.0,
+    }));
     let sig_count = Arc::new(AtomicUsize::new(0));
 
     // 1. Initialize GTK GUI (only if not headless)
@@ -201,7 +277,40 @@ fn main() -> io::Result<()> {
         }
     });
 
-    // 5. Run GTK GUI or Headless Loop
+    // 5. Start UDP Syslog listener
+    let stats_syslog = stats.clone();
+    let gui_tx_syslog = gui_tx.clone();
+    thread::spawn(move || {
+        use std::net::UdpSocket;
+        let socket = match UdpSocket::bind("0.0.0.0:5140") {
+            Ok(s) => s,
+            Err(e) => {
+                println!("[SYSLOG ERROR] Could not bind to port 5140: {}\r", e);
+                return;
+            }
+        };
+        socket.set_read_timeout(Some(Duration::from_millis(500))).ok();
+        println!("[SYSLOG] Listening on UDP 0.0.0.0:5140...\r");
+
+        let mut buf = [0u8; 1024];
+        while stats_syslog.running.load(Ordering::Relaxed) {
+            match socket.recv_from(&mut buf) {
+                Ok((amt, _src)) => {
+                    if let Ok(msg) = std::str::from_utf8(&buf[..amt]) {
+                        let clean_msg = msg.trim();
+                        println!("[ROBOT] {}\r", clean_msg);
+                        let _ = gui_tx_syslog.send(crate::gui::GuiUpdate::Log(clean_msg.to_string()));
+                    }
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(_) => {}
+            }
+        }
+    });
+
+    // 6. Run GTK GUI or Headless Loop
     if is_headless {
         println!("[SERVER] Running in background. Waiting for connections...");
         while stats.running.load(Ordering::Relaxed) {

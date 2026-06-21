@@ -13,6 +13,11 @@ use crate::slam::{Slam, BasicSlam};
 use crate::sender::send_manual_command;
 use crate::homerobot::robot_to_server_message::Payload;
 
+lazy_static::lazy_static! {
+    pub static ref MOTION_COMPLETED: Arc<(Mutex<Option<Result<(), String>>>, std::sync::Condvar)> = 
+        Arc::new((Mutex::new(None), std::sync::Condvar::new()));
+}
+
 /// Handles a single robot connection
 pub fn handle_connection(
     stream: TcpStream, 
@@ -36,6 +41,12 @@ pub fn handle_connection(
     let start_time = Instant::now();
     let mut last_sent_command = RobotCommand::default();
     let mut min_front_dist = 10.0_f32;
+
+    // Scan buffering: accumulate points until scan_completed marks a full revolution.
+    let mut pending_scan: Vec<crate::homerobot::LidarPoint> = Vec::new();
+    let mut last_scan_flush_time = Instant::now() - Duration::from_secs(5);
+    // Scan-rate tracking: timestamps of the last N completed revolutions.
+    let mut revolution_times: std::collections::VecDeque<Instant> = std::collections::VecDeque::new();
 
     let mut current_pose = crate::odometry::Pose { x: 0.0, y: 0.0, theta: 0.0 };
     let mut current_pose_initialized = false;
@@ -75,14 +86,16 @@ pub fn handle_connection(
                             }
                             Payload::Encoders(enc) => {
                                 telemetry_received = true;
-                                println!("[SERVER] Telemetry Heartbeat: Encoders L={} R={}", enc.left_encoder, enc.right_encoder);
+                                if enc.left_encoder != 0 || enc.right_encoder != 0 {
+                                    println!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", enc.left_encoder, enc.right_encoder);
+                                }
                                 odom.update(enc.left_encoder, enc.right_encoder);
                                 slam.add_odom_pose(odom.pose, Instant::now());
                                 if !current_pose_initialized {
                                     current_pose = odom.pose;
                                     current_pose_initialized = true;
                                 }
-                                let _ = gui_tx.send(GuiUpdate::Encoders { left: enc.left_encoder, right: enc.right_encoder });
+                                let _ = gui_tx.send(GuiUpdate::Encoders { left: odom.cumulative_left, right: odom.cumulative_right });
                                 let _ = gui_tx.send(GuiUpdate::Pose { 
                                     x: odom.pose.x, 
                                     y: odom.pose.y, 
@@ -93,7 +106,7 @@ pub fn handle_connection(
                                 rec.log("robot/pose/odom", &rerun::Transform3D::from_translation_rotation(
                                     [odom.pose.x, odom.pose.y, 0.0],
                                     rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(odom.pose.theta))
-                                )).ok();
+                                    )).ok();
                             }
                             Payload::Imu(imu) => {
                                 telemetry_received = true;
@@ -116,46 +129,84 @@ pub fn handle_connection(
                             }
                             Payload::Lidar(scan) => {
                                 telemetry_received = true;
-                                min_front_dist = 10.0;
-                                for p in &scan.points {
-                                    if p.angle_deg < 40.0 || p.angle_deg > 320.0 {
-                                        let d = p.distance_mm / 1000.0;
-                                        if d > 0.05 && d < min_front_dist {
-                                            min_front_dist = d;
+
+                                // Accumulate points into the pending buffer.
+                                // When a scan_completed point arrives it marks the START of a new
+                                // revolution (RP-Lidar SYNCBIT), so everything accumulated so far
+                                // forms one complete 360° sweep — flush it now.
+                                for p in scan.points {
+                                    if p.scan_completed {
+                                        if !pending_scan.is_empty() && pending_scan.len() >= 30 && last_scan_flush_time.elapsed() >= Duration::from_millis(80) {
+                                            // --- Full revolution ready: process the buffered sweep ---
+                                            last_scan_flush_time = Instant::now();
+
+                                            // Track revolution time for scan-rate telemetry.
+                                            let now = Instant::now();
+                                            revolution_times.push_back(now);
+                                            // Keep only the last 5 revolutions for a stable average.
+                                            while revolution_times.len() > 5 {
+                                                revolution_times.pop_front();
+                                            }
+                                            // Compute Hz from oldest→newest span.
+                                            if revolution_times.len() >= 2 {
+                                                let span = revolution_times.back().unwrap()
+                                                    .duration_since(*revolution_times.front().unwrap())
+                                                    .as_secs_f32();
+                                                let hz = (revolution_times.len() as f32 - 1.0) / span;
+                                                let _ = gui_tx.send(GuiUpdate::LidarScanRate(hz));
+                                            }
+
+                                            // Update obstacle proximity from the complete sweep.
+                                            min_front_dist = 10.0;
+                                            for pt in &pending_scan {
+                                                if pt.angle_deg < 40.0 || pt.angle_deg > 320.0 {
+                                                    let d = pt.distance_mm / 1000.0;
+                                                    if d > 0.05 && d < min_front_dist {
+                                                        min_front_dist = d;
+                                                    }
+                                                }
+                                            }
+
+                                            // Run SLAM on the complete, consistent sweep.
+                                            let corrected_pose = slam.update(&pending_scan, &odom.pose);
+                                            current_pose = corrected_pose;
+                                            current_pose_initialized = true;
+                                            let _ = gui_tx.send(GuiUpdate::Lidar(pending_scan.clone()));
+                                            let _ = gui_tx.send(GuiUpdate::SlamPose {
+                                                x: corrected_pose.x,
+                                                y: corrected_pose.y,
+                                                theta: corrected_pose.theta,
+                                            });
+
+                                            // Log SLAM Pose to Rerun
+                                            rec.log("robot/pose/slam", &rerun::Transform3D::from_translation_rotation(
+                                                [corrected_pose.x, corrected_pose.y, 0.0],
+                                                rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(corrected_pose.theta))
+                                            )).ok();
+
+                                            // Log Lidar Points to Rerun (quality-colored, robot frame)
+                                            let (rerun_pts, rerun_colors): (Vec<[f32; 3]>, Vec<rerun::Color>) = pending_scan.iter().map(|pt| {
+                                                let angle = -(pt.angle_deg as f32).to_radians();
+                                                let d = pt.distance_mm / 1000.0;
+                                                let t = (pt.quality as f32 / 63.0).clamp(0.0, 1.0);
+                                                let r = ((1.0 - t) * 255.0) as u8;
+                                                let g = (t * 255.0) as u8;
+                                                ([d * angle.cos(), d * angle.sin(), 0.0], rerun::Color::from_rgb(r, g, 0))
+                                            }).unzip();
+                                            rec.log("robot/sensor/lidar", &rerun::Points3D::new(rerun_pts).with_colors(rerun_colors)).ok();
+
+                                            // Send map update once per revolution.
+                                            let (w, h, data) = slam.get_map_data();
+                                            let _ = gui_tx.send(GuiUpdate::Map {
+                                                width: w,
+                                                height: h,
+                                                data: data.to_vec(),
+                                            });
                                         }
+                                        pending_scan.clear();
                                     }
+                                    pending_scan.push(p);
                                 }
-                                let corrected_pose = slam.update(&scan.points, &odom.pose);
-                                current_pose = corrected_pose;
-                                current_pose_initialized = true;
-                                let _ = gui_tx.send(GuiUpdate::Lidar(scan.points.clone()));
-                                let _ = gui_tx.send(GuiUpdate::SlamPose { 
-                                    x: corrected_pose.x, 
-                                    y: corrected_pose.y, 
-                                    theta: corrected_pose.theta 
-                                });
-
-                                // Log SLAM Pose to Rerun
-                                rec.log("robot/pose/slam", &rerun::Transform3D::from_translation_rotation(
-                                    [corrected_pose.x, corrected_pose.y, 0.0],
-                                    rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(corrected_pose.theta))
-                                )).ok();
-
-                                // Log Lidar Points to Rerun (in Robot Frame)
-                                let points: Vec<[f32; 3]> = scan.points.iter().map(|p| {
-                                    let angle = (p.angle_deg as f32).to_radians();
-                                    let d = p.distance_mm / 1000.0;
-                                    [d * angle.cos(), d * angle.sin(), 0.0]
-                                }).collect();
-                                rec.log("robot/sensor/lidar", &rerun::Points3D::new(points).with_colors(vec![rerun::Color::from_rgb(0, 255, 0)])).ok();
-
-                                // Send map update every scan (optimized later)
-                                let (w, h, data) = slam.get_map_data();
-                                let _ = gui_tx.send(GuiUpdate::Map { 
-                                    width: w, 
-                                    height: h, 
-                                    data: data.to_vec() 
-                                });
                             }
                             Payload::Config(conf) => {
                                 stats.log("[CONFIG] Robot configuration received");
@@ -163,6 +214,16 @@ pub fn handle_connection(
                             }
                             Payload::RpcResponse(resp) => {
                                 stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
+                                {
+                                    let &(ref lock, ref cvar) = &**MOTION_COMPLETED;
+                                    let mut completed = lock.lock().unwrap();
+                                    if resp.error.is_empty() {
+                                        *completed = Some(Ok(()));
+                                    } else {
+                                        *completed = Some(Err(resp.error.clone()));
+                                    }
+                                    cvar.notify_all();
+                                }
                                 if let Ok(diag_result) = prost::Message::decode(&*resp.payload) {
                                     let diag_result: crate::homerobot::DiagnosticResult = diag_result;
                                     stats.log(&format!("[DIAGNOSTICS] All OK: {}", diag_result.all_ok));
@@ -190,11 +251,17 @@ pub fn handle_connection(
         // Handle Server-Side Only commands
         if let Ok(mut cmd) = robot_command.try_lock() {
             if *cmd == RobotCommand::SaveMap {
-                stats.log("[SLAM] Saving house map to house_map.pgm...");
-                if let Err(e) = slam.save_map("house_map.pgm") {
+                let map_name = "house_map.pgm";
+                let abs_path = std::env::current_dir()
+                    .map(|p| p.join(map_name))
+                    .unwrap_or_else(|_| std::path::PathBuf::from(map_name));
+                let abs_path_str = abs_path.to_string_lossy().to_string();
+
+                stats.log(&format!("[SLAM] Saving house map to {}...", abs_path_str));
+                if let Err(e) = slam.save_map(map_name) {
                     eprintln!("Error saving map: {:?}\r", e);
                 } else {
-                    stats.log("[SLAM] Map saved successfully!");
+                    stats.log(&format!("[SLAM] Map saved successfully to {}!", abs_path_str));
                 }
                 *cmd = RobotCommand::StopMoving;
             } else if *cmd == RobotCommand::Reset {

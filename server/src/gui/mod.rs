@@ -18,6 +18,7 @@ pub enum GuiUpdate {
     Frontiers(Vec<crate::mapping::Frontier>),
     Path(Vec<(f32, f32)>),
     Lidar(Vec<LidarPoint>),
+    LidarScanRate(f32),
     Imu { 
         ax: f32, ay: f32, az: f32, 
         gx: f32, gy: f32, gz: f32,
@@ -25,6 +26,8 @@ pub enum GuiUpdate {
     },
     Config(RobotConfig),
     Status(String),
+    NavigationTarget(Option<(f32, f32)>),
+    Log(String),
 }
 
 pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Application, mpsc::Sender<GuiUpdate>) {
@@ -50,6 +53,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let sidebar_scroll: gtk4::ScrolledWindow = builder.object("sidebar_scroll").expect("Could not find sidebar_scroll");
         let btn_toggle_sidebar: gtk4::ToggleButton = builder.object("btn_toggle_sidebar").expect("Could not find btn_toggle_sidebar");
         let power_scale: gtk4::Scale = builder.object("global_power_scale").expect("Could not find global_power_scale");
+        let lidar_freq_scale: gtk4::Scale = builder.object("lidar_freq_scale").expect("Could not find lidar_freq_scale");
         let lidar_canvas: DrawingArea = builder.object("lidar_canvas").expect("Could not find lidar_canvas");
         let battery_label: Label = builder.object("battery_label").expect("Could not find battery_label");
         let enc_left_label: Label = builder.object("enc_left_val").expect("Could not find enc_left_val");
@@ -65,6 +69,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let gyro_canvas: DrawingArea = builder.object("gyro_plot").expect("Could not find gyro_plot");
         let mag_canvas: DrawingArea = builder.object("mag_plot").expect("Could not find mag_plot");
         let btn_clear_path: Button = builder.object("btn_clear_path").expect("Could not find btn_clear_path");
+        let scan_rate_label: Label = builder.object("scan_rate_label").expect("Could not find scan_rate_label");
 
         let apply_btn: Button = builder.object("apply_config").expect("Could not find apply_config");
 
@@ -92,6 +97,9 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_lock_pid: gtk4::ToggleButton = builder.object("btn_lock_pid").expect("Could not find btn_lock_pid");
         let btn_rotate_left: Button = builder.object("btn_rotate_left").expect("Could not find btn_rotate_left");
         let btn_rotate_right: Button = builder.object("btn_rotate_right").expect("Could not find btn_rotate_right");
+        let btn_zoom_in: Button = builder.object("btn_zoom_in").expect("Could not find btn_zoom_in");
+        let btn_zoom_out: Button = builder.object("btn_zoom_out").expect("Could not find btn_zoom_out");
+        let log_text_view: gtk4::TextView = builder.object("log_text_view").expect("Could not find log_text_view");
 
         let loading_overlay: gtk4::Box = builder.object("loading_overlay").expect("Could not find loading_overlay");
         let loading_spinner: gtk4::Spinner = builder.object("loading_spinner").expect("Could not find loading_spinner");
@@ -105,11 +113,15 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         ki_right.set_focusable(false);
         kd_right.set_focusable(false);
         apply_btn.set_focusable(false);
+        lidar_freq_scale.set_focusable(false);
         btn_start_rerun.set_focusable(false);
         btn_lock_pid.set_focusable(false);
         btn_rotate_left.set_focusable(false);
         btn_rotate_right.set_focusable(false);
         btn_reset.set_focusable(false);
+        btn_zoom_in.set_focusable(false);
+        btn_zoom_out.set_focusable(false);
+        log_text_view.set_focusable(false);
 
         #[allow(deprecated)]
         {
@@ -125,6 +137,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             btn_rotate_left.set_can_focus(false);
             btn_rotate_right.set_can_focus(false);
             btn_reset.set_can_focus(false);
+            log_text_view.set_can_focus(false);
         }
 
         // Set up LIDAR drawing
@@ -132,6 +145,43 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         crate::gui::lidar::setup_accel_plot(&accel_canvas);
         crate::gui::lidar::setup_gyro_plot(&gyro_canvas);
         crate::gui::lidar::setup_mag_plot(&mag_canvas);
+
+        // Map Click Navigation gesture
+        let click_controller = gtk4::GestureClick::new();
+        let rc_click = robot_command.clone();
+        let lidar_canvas_click = lidar_canvas.clone();
+        let btn_explore_click = btn_explore.clone();
+        click_controller.connect_pressed(move |_gesture, _n_press, x, y| {
+            let width = lidar_canvas_click.width() as f64;
+            let height = lidar_canvas_click.height() as f64;
+            
+            let world_center_x = width / 2.0;
+            let world_center_y = height / 2.0;
+            
+            // Map click (x, y) to world (goal_x, goal_y)
+            let goal_y = (world_center_x - x) as f32 / 50.0;
+            let goal_x = (world_center_y - y) as f32 / 50.0;
+            
+            println!("GUI: Map clicked at pixel ({:.1}, {:.1}) -> World Goal: X={:.2}, Y={:.2}", x, y, goal_x, goal_y);
+            
+            // Set navigation target in GUI State immediately for visual response
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.navigation_target = Some((goal_x, goal_y));
+                state.current_path.clear(); // Clear old path until replanned by server
+            }
+            lidar_canvas_click.queue_draw();
+            
+            // Deactivate auto-exploration if active
+            if btn_explore_click.is_active() {
+                btn_explore_click.set_active(false);
+            }
+            
+            // Send NavigateTo command
+            let mut cmd = rc_click.lock().unwrap();
+            *cmd = RobotCommand::NavigateTo { x: goal_x, y: goal_y };
+        });
+        lidar_canvas.add_controller(click_controller);
 
         let lidar_canvas_clear = lidar_canvas.clone();
         btn_clear_path.connect_clicked(move |_| {
@@ -172,6 +222,8 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_lidar_clone = btn_lidar.clone();
         let btn_toggle_sidebar_clone = btn_toggle_sidebar.clone();
         let power_scale_clone = power_scale.clone();
+        let lidar_freq_scale_key = lidar_freq_scale.clone();
+        let lidar_canvas_key = lidar_canvas.clone();
 
         key_controller.connect_key_pressed(move |_, key, _, _| {
             let mut cmd = rc_key.lock().unwrap();
@@ -230,17 +282,35 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                     println!("GUI: Keyboard Lidar Toggle: {}", if new_state { "ON" } else { "OFF" });
                     *cmd = RobotCommand::LidarControl { 
                         active: new_state, 
-                        target_frequency_hz: if new_state { 5.0 } else { 0.0 } 
+                        target_frequency_hz: if new_state { lidar_freq_scale_key.value() as f32 } else { 0.0 } 
                     };
                     btn_lidar_clone.set_active(new_state);
                 },
                 Key::space => {
                     println!("GUI: Keyboard STOP");
+                    {
+                        let mut state = GUI_STATE.lock().unwrap();
+                        state.navigation_target = None;
+                        state.current_path.clear();
+                    }
+                    lidar_canvas_key.queue_draw();
                     *cmd = RobotCommand::StopMoving;
                 },
                 Key::t | Key::T => {
                     println!("GUI: Keyboard Trigger Diagnostics");
                     *cmd = RobotCommand::RunDiagnostic;
+                },
+                Key::plus | Key::equal | Key::KP_Add => {
+                    let mut state = GUI_STATE.lock().unwrap();
+                    state.zoom_factor *= 1.2;
+                    println!("GUI: Zoom In via keyboard: {:.2}x", state.zoom_factor);
+                    lidar_canvas_key.queue_draw();
+                },
+                Key::minus | Key::KP_Subtract => {
+                    let mut state = GUI_STATE.lock().unwrap();
+                    state.zoom_factor = (state.zoom_factor / 1.2).max(0.1);
+                    println!("GUI: Zoom Out via keyboard: {:.2}x", state.zoom_factor);
+                    lidar_canvas_key.queue_draw();
                 },
                 _ => {}
             }
@@ -308,8 +378,15 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         });
 
         let rc_stop = rc_clone.clone();
+        let lidar_canvas_stop = lidar_canvas.clone();
         btn_stop.connect_clicked(move |_| {
             println!("GUI: Button STOP");
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.navigation_target = None;
+                state.current_path.clear();
+            }
+            lidar_canvas_stop.queue_draw();
             *rc_stop.lock().unwrap() = RobotCommand::StopMoving;
         });
 
@@ -320,21 +397,60 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         });
 
         let rc_reset = rc_clone.clone();
+        let lidar_canvas_reset = lidar_canvas.clone();
         btn_reset.connect_clicked(move |_| {
             println!("GUI: Button Reset Triggered");
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.navigation_target = None;
+                state.current_path.clear();
+            }
+            lidar_canvas_reset.queue_draw();
             *rc_reset.lock().unwrap() = RobotCommand::Reset;
         });
 
         let rc_lidar = rc_clone.clone();
+        let lidar_freq_scale_btn = lidar_freq_scale.clone();
         btn_lidar.connect_toggled(move |btn| {
             let mut cmd = rc_lidar.lock().unwrap();
             let active = btn.is_active();
             *cmd = RobotCommand::LidarControl { 
                 active, 
-                target_frequency_hz: if active { 5.0 } else { 0.0 } 
+                target_frequency_hz: if active { lidar_freq_scale_btn.value() as f32 } else { 0.0 } 
             };
             println!("GUI: Lidar toggled: {}", active);
         });
+        btn_lidar.set_active(true);
+
+        let lidar_canvas_zoom_in = lidar_canvas.clone();
+        btn_zoom_in.connect_clicked(move |_| {
+            let mut state = GUI_STATE.lock().unwrap();
+            state.zoom_factor *= 1.2;
+            println!("GUI: Zoom In clicked: {:.2}x", state.zoom_factor);
+            lidar_canvas_zoom_in.queue_draw();
+        });
+
+        let lidar_canvas_zoom_out = lidar_canvas.clone();
+        btn_zoom_out.connect_clicked(move |_| {
+            let mut state = GUI_STATE.lock().unwrap();
+            state.zoom_factor = (state.zoom_factor / 1.2).max(0.1);
+            println!("GUI: Zoom Out clicked: {:.2}x", state.zoom_factor);
+            lidar_canvas_zoom_out.queue_draw();
+        });
+
+        let scroll_controller = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
+        let lidar_canvas_scroll = lidar_canvas.clone();
+        scroll_controller.connect_scroll(move |_, _, dy| {
+            let mut state = GUI_STATE.lock().unwrap();
+            if dy < 0.0 {
+                state.zoom_factor *= 1.15;
+            } else if dy > 0.0 {
+                state.zoom_factor = (state.zoom_factor / 1.15).max(0.1);
+            }
+            lidar_canvas_scroll.queue_draw();
+            glib::Propagation::Stop
+        });
+        lidar_canvas.add_controller(scroll_controller);
 
         // Start Rerun on-demand button
         let rec_btn = rec.clone();
@@ -360,6 +476,25 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
 
         // PID Lock Logic and Apply Config Button
         let is_updating = std::rc::Rc::new(std::cell::Cell::new(false));
+
+        let rc_lidar_freq = rc_clone.clone();
+        let btn_lidar_freq_ref = btn_lidar.clone();
+        let is_updating_freq = is_updating.clone();
+        let lidar_freq_scale_c = lidar_freq_scale.clone();
+        lidar_freq_scale.connect_value_changed(move |_| {
+            if !is_updating_freq.get() {
+                let freq = lidar_freq_scale_c.value() as f32;
+                let active = btn_lidar_freq_ref.is_active();
+                if active {
+                    let mut cmd = rc_lidar_freq.lock().unwrap();
+                    *cmd = RobotCommand::LidarControl {
+                        active: true,
+                        target_frequency_hz: freq,
+                    };
+                    println!("GUI: Lidar frequency changed: {} Hz", freq);
+                }
+            }
+        });
 
         let kp_left_c = kp_left.clone();
         let kp_right_c = kp_right.clone();
@@ -462,6 +597,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let kpr = kp_right.clone();
         let kir = ki_right.clone();
         let kdr = kd_right.clone();
+        let lfs = lidar_freq_scale.clone();
         apply_btn.connect_clicked(move |_| {
             let mut cmd = rc_conf.lock().unwrap();
             *cmd = RobotCommand::UpdateConfig {
@@ -471,6 +607,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 right_kp: kpr.value() as f32,
                 right_ki: kir.value() as f32,
                 right_kd: kdr.value() as f32,
+                lidar_frequency: lfs.value() as f32,
             };
             println!("GUI: Sent RobotConfig update");
         });
@@ -485,6 +622,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let accel_label_c = accel_label.clone();
         let gyro_label_c = gyro_label.clone();
         let mag_label_c = mag_label.clone();
+        let scan_rate_label_c = scan_rate_label.clone();
         let lidar_canvas_c = lidar_canvas.clone();
         let accel_canvas_c = accel_canvas.clone();
         let gyro_canvas_c = gyro_canvas.clone();
@@ -493,6 +631,8 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let rx_inner = rx.clone();
         let loading_overlay_c = loading_overlay.clone();
         let loading_spinner_c = loading_spinner.clone();
+        let lidar_freq_scale_c_loop = lidar_freq_scale.clone();
+        let log_text_view_c = log_text_view.clone();
 
         glib::timeout_add_local(Duration::from_millis(33), move || {
             if let Ok(rx_locked) = rx_inner.try_lock() {
@@ -580,6 +720,9 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                                 lidar_canvas_c.queue_draw();
                             }
                         }
+                        GuiUpdate::LidarScanRate(hz) => {
+                            scan_rate_label_c.set_text(&format!("LiDAR: {:.1} Hz", hz));
+                        }
                         GuiUpdate::Config(conf) => {
                             let is_updating_recv = is_updating.clone();
                             is_updating_recv.set(true);
@@ -593,7 +736,13 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                                 ki_right.set_value(right.ki as f64);
                                 kd_right.set_value(right.kd as f64);
                             }
+                            lidar_freq_scale_c_loop.set_value(conf.lidar_frequency as f64);
                             is_updating_recv.set(false);
+                        }
+                        GuiUpdate::NavigationTarget(target) => {
+                            let mut state = GUI_STATE.lock().unwrap();
+                            state.navigation_target = target;
+                            lidar_canvas_c.queue_draw();
                         }
                         GuiUpdate::Status(msg) => {
                             window_c.set_title(Some(&format!("HomeRobot Control Center - {}", msg)));
@@ -604,6 +753,21 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                                 loading_overlay_c.set_visible(true);
                                 loading_spinner_c.start();
                             }
+                        }
+                        GuiUpdate::Log(msg) => {
+                            let buffer = log_text_view_c.buffer();
+                            let mut end_iter = buffer.end_iter();
+                            buffer.insert(&mut end_iter, &format!("{}\n", msg));
+                            let line_count = buffer.line_count();
+                            if line_count > 500 {
+                                if let Some(mut limit_iter) = buffer.iter_at_line(line_count - 500) {
+                                    let mut start_iter = buffer.start_iter();
+                                    buffer.delete(&mut start_iter, &mut limit_iter);
+                                }
+                            }
+                            let mark = buffer.create_mark(None, &buffer.end_iter(), false);
+                            log_text_view_c.scroll_to_mark(&mark, 0.0, true, 0.0, 1.0);
+                            buffer.delete_mark(&mark);
                         }
                     }
                 }
@@ -643,6 +807,7 @@ mod tests {
             "btn_toggle_sidebar",
             "btn_clear_path",
             "global_power_scale",
+            "lidar_freq_scale",
             "lidar_canvas",
             "accel_plot",
             "gyro_plot",
@@ -655,7 +820,11 @@ mod tests {
             "btn_lock_pid",
             "btn_start_rerun",
             "btn_lidar",
+            "btn_zoom_in",
+            "btn_zoom_out",
             "btn_reset",
+            "scan_rate_label",
+            "log_text_view",
         ];
 
         for id in objects {

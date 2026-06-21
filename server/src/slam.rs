@@ -55,9 +55,9 @@ impl BasicSlam {
     fn get_cartesian_points(pose: &Pose, scan: &[LidarPoint]) -> Vec<(f32, f32)> {
         let mut points = Vec::new();
         for p in scan {
-            if p.distance_mm < 200.0 || p.distance_mm > 5000.0 { continue; }
+            if p.distance_mm < 200.0 || p.distance_mm > 8000.0 { continue; }
             let angle_rad = (p.angle_deg as f32).to_radians();
-            let global_angle = pose.theta + angle_rad;
+            let global_angle = pose.theta - angle_rad;
             let dist_m = p.distance_mm / 1000.0;
             let x = pose.x + dist_m * global_angle.cos();
             let y = pose.y + dist_m * global_angle.sin();
@@ -120,7 +120,7 @@ impl BasicSlam {
         let start_time = scan_end_time.checked_sub(scan_duration).unwrap_or(scan_end_time);
         
         for (i, p) in scan.iter().enumerate() {
-            if p.distance_mm < 200.0 || p.distance_mm > 5000.0 { continue; }
+            if p.distance_mm < 200.0 || p.distance_mm > 8000.0 { continue; }
             
             // Infer timestamp of this point
             let t_offset = (i as f32 / n as f32) * scan_duration.as_secs_f32();
@@ -144,7 +144,7 @@ impl BasicSlam {
             
             // Project the point
             let angle_rad = (p.angle_deg as f32).to_radians();
-            let global_angle = robot_theta + angle_rad;
+            let global_angle = robot_theta - angle_rad;
             let dist_m = p.distance_mm / 1000.0;
             let x = robot_x + dist_m * global_angle.cos();
             let y = robot_y + dist_m * global_angle.sin();

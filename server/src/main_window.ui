@@ -51,6 +51,20 @@
           </object>
         </child>
         <child type="start">
+          <object class="GtkButton" id="btn_zoom_in">
+            <property name="icon-name">zoom-in-symbolic</property>
+            <property name="tooltip-text">Zoom In (+)</property>
+            <property name="focusable">false</property>
+          </object>
+        </child>
+        <child type="start">
+          <object class="GtkButton" id="btn_zoom_out">
+            <property name="icon-name">zoom-out-symbolic</property>
+            <property name="tooltip-text">Zoom Out (-)</property>
+            <property name="focusable">false</property>
+          </object>
+        </child>
+        <child type="start">
           <object class="GtkButton" id="btn_reset">
             <property name="icon-name">view-refresh-symbolic</property>
             <property name="tooltip-text">Reset Simulation Pose &amp; Map</property>
@@ -66,6 +80,12 @@
             <property name="margin-end">12</property>
           </object>
         </child>
+        <child type="end">
+          <object class="GtkLabel" id="scan_rate_label">
+            <property name="label">LiDAR: -- Hz</property>
+            <property name="margin-end">8</property>
+          </object>
+        </child>
       </object>
     </child>
 
@@ -77,13 +97,14 @@
         <property name="shrink-end-child">false</property>
         <property name="resize-start-child">false</property>
         <property name="resize-end-child">true</property>
-        <property name="position">320</property>
+        <property name="position">450</property>
 
         <child type="start">
           <object class="GtkScrolledWindow" id="sidebar_scroll">
             <property name="hscrollbar-policy">never</property>
             <property name="vscrollbar-policy">automatic</property>
-            <property name="min-content-width">300</property>
+            <property name="min-content-width">450</property>
+            <property name="propagate-natural-width">true</property>
             <child>
               <object class="GtkBox" id="sidebar_container">
                 <property name="orientation">vertical</property>
@@ -443,6 +464,42 @@
                                 </child>
                               </object>
                             </child>
+
+                            <child>
+                              <object class="GtkSeparator">
+                                <property name="orientation">horizontal</property>
+                              </object>
+                            </child>
+
+                            <!-- Lidar Spinning Velocity Control -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">Lidar Spinning Velocity (Hz)</property>
+                                    <property name="xalign">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkScale" id="lidar_freq_scale">
+                                    <property name="focusable">false</property>
+                                    <property name="adjustment">
+                                      <object class="GtkAdjustment">
+                                        <property name="lower">5</property>
+                                        <property name="upper">10</property>
+                                        <property name="value">5</property>
+                                        <property name="step-increment">1</property>
+                                      </object>
+                                    </property>
+                                    <property name="value-pos">right</property>
+                                    <property name="draw-value">true</property>
+                                    <property name="round-digits">0</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -629,6 +686,34 @@ Q/E: Rotate In-Place (L/R)
 L: Toggle LiDAR
 Space: STOP ALL
 H: Toggle Sidebar</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <!-- Robot Logs -->
+                <child>
+                  <object class="GtkExpander">
+                    <property name="label">Robot Logs</property>
+                    <property name="expanded">true</property>
+                    <child>
+                      <object class="GtkFrame">
+                        <child>
+                          <object class="GtkScrolledWindow">
+                            <property name="hscrollbar-policy">never</property>
+                            <property name="vscrollbar-policy">automatic</property>
+                            <property name="min-content-height">150</property>
+                            <child>
+                              <object class="GtkTextView" id="log_text_view">
+                                <property name="focusable">false</property>
+                                <property name="editable">false</property>
+                                <property name="cursor-visible">false</property>
+                                <property name="wrap-mode">word</property>
+                                <property name="monospace">true</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>

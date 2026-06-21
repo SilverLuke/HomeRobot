@@ -21,10 +21,18 @@ pub enum RobotCommand {
         right_kp: f32,
         right_ki: f32,
         right_kd: f32,
+        lidar_frequency: f32,
     },
     RunDiagnostic,
     SaveMap,
     AutonomousExploration { enabled: bool },
+    NavigateTo { x: f32, y: f32 },
+    ExecuteMotion {
+        motion_type: i32,
+        left_ticks: i32,
+        right_ticks: i32,
+        max_power: u32,
+    },
     Reset,
 }
 
@@ -42,6 +50,29 @@ impl Default for RobotCommand {
 impl RobotCommand {
     pub fn into_payload(&self) -> Option<server_to_robot_message::Payload> {
         match self {
+            RobotCommand::ExecuteMotion { motion_type, left_ticks, right_ticks, max_power } => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                use prost::Message;
+                let call_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
+                
+                let req = crate::homerobot::MotionRequest {
+                    r#type: *motion_type,
+                    distance: 0.0,
+                    angle: 0.0,
+                    radius: 0.0,
+                    max_power: *max_power,
+                    left_ticks: *left_ticks,
+                    right_ticks: *right_ticks,
+                };
+                let mut payload_buf = Vec::new();
+                req.encode(&mut payload_buf).unwrap();
+                
+                Some(server_to_robot_message::Payload::RpcRequest(crate::homerobot::RpcRequest {
+                    call_id,
+                    method: "ExecuteMotion".to_string(),
+                    payload: payload_buf,
+                }))
+            }
             RobotCommand::RunDiagnostic => {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 let call_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
@@ -76,7 +107,7 @@ impl RobotCommand {
                     target_frequency_hz: *target_frequency_hz,
                 }))
             }
-            RobotCommand::UpdateConfig { left_kp, left_ki, left_kd, right_kp, right_ki, right_kd } => {
+            RobotCommand::UpdateConfig { left_kp, left_ki, left_kd, right_kp, right_ki, right_kd, lidar_frequency } => {
                 Some(server_to_robot_message::Payload::MotorConfig(crate::homerobot::RobotConfig {
                     left_motor: Some(crate::homerobot::MotorPidConfig {
                         kp: *left_kp,
@@ -90,11 +121,12 @@ impl RobotCommand {
                         kd: *right_kd,
                         max_speed: 255,
                     }),
-                    lidar_frequency: 5.0,
+                    lidar_frequency: *lidar_frequency,
                 }))
             }
             RobotCommand::SaveMap => None,
             RobotCommand::AutonomousExploration { .. } => None,
+            RobotCommand::NavigateTo { .. } => None,
             RobotCommand::Reset => None,
         }
     }

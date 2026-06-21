@@ -17,9 +17,11 @@ pub struct GuiState {
     pub frontiers: Vec<crate::mapping::Frontier>,
     pub current_path: Vec<(f32, f32)>,
     pub trajectory: Vec<(f32, f32)>,
+    pub navigation_target: Option<(f32, f32)>,
     pub accel_history: std::collections::VecDeque<(f32, f32, f32)>,
     pub gyro_history: std::collections::VecDeque<(f32, f32, f32)>,
     pub mag_history: std::collections::VecDeque<(f32, f32, f32)>,
+    pub zoom_factor: f64,
 }
 
 lazy_static::lazy_static! {
@@ -37,9 +39,11 @@ lazy_static::lazy_static! {
         frontiers: Vec::new(),
         current_path: Vec::new(),
         trajectory: Vec::new(),
+        navigation_target: None,
         accel_history: std::collections::VecDeque::with_capacity(100),
         gyro_history: std::collections::VecDeque::with_capacity(100),
         mag_history: std::collections::VecDeque::with_capacity(100),
+        zoom_factor: 1.0,
     });
 }
 
@@ -48,6 +52,13 @@ lazy_static::lazy_static! {
 /// to the last point in new_points, following the rotation direction.
 pub fn update_scan(display_scan: &mut Vec<LidarPoint>, new_points: Vec<LidarPoint>) {
     if new_points.is_empty() {
+        return;
+    }
+
+    // If it's a full scan (e.g. from the real sensor or simulation), we replace the display_scan
+    // entirely to avoid accumulating stale points when the robot is moving.
+    if new_points.len() > 10 {
+        *display_scan = new_points;
         return;
     }
 
@@ -74,7 +85,7 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         let state = GUI_STATE.lock().unwrap();
         let world_center_x = width as f64 / 2.0;
         let world_center_y = height as f64 / 2.0;
-        let scale = 0.05; // 1mm = 0.05px (1m = 50px)
+        let scale = 0.05 * state.zoom_factor; // 1mm = 0.05px * zoom_factor (1m = 50px * zoom_factor)
 
         cr.set_source_rgb(0.05, 0.05, 0.1);
         cr.paint().unwrap();
@@ -133,6 +144,26 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
             cr.fill().unwrap();
         }
 
+        // Draw Navigation Target (Orange Crosshair)
+        if let Some((tx, ty)) = state.navigation_target {
+            let dx = world_center_x - (ty as f64 * 1000.0 * scale);
+            let dy = world_center_y - (tx as f64 * 1000.0 * scale);
+            
+            cr.set_source_rgb(1.0, 0.5, 0.0); // Orange
+            cr.set_line_width(2.0);
+            
+            // Draw circle
+            cr.arc(dx, dy, 6.0, 0.0, 2.0 * std::f64::consts::PI);
+            cr.stroke().unwrap();
+            
+            // Draw cross
+            cr.move_to(dx - 10.0, dy);
+            cr.line_to(dx + 10.0, dy);
+            cr.move_to(dx, dy - 10.0);
+            cr.line_to(dx, dy + 10.0);
+            cr.stroke().unwrap();
+        }
+
         // Draw Planned Path (Blue line)
         if !state.current_path.is_empty() {
             cr.set_source_rgb(0.0, 0.5, 1.0);
@@ -184,9 +215,11 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         let robot_theta = state.robot_theta as f64;
         let screen_theta = -std::f64::consts::FRAC_PI_2 - robot_theta;
 
+        let robot_radius_px = 150.0 * scale; // 150 mm radius = 300 mm (30 cm) diameter
+
         // Draw Robot
         cr.set_source_rgb(1.0, 0.3, 0.3);
-        cr.arc(robot_draw_x, robot_draw_y, 10.0, 0.0, 2.0 * std::f64::consts::PI);
+        cr.arc(robot_draw_x, robot_draw_y, robot_radius_px, 0.0, 2.0 * std::f64::consts::PI);
         cr.fill().unwrap();
 
         // Draw Robot Heading (White vector)
@@ -194,35 +227,111 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         cr.set_line_width(2.0);
         cr.move_to(robot_draw_x, robot_draw_y);
         cr.line_to(
-            robot_draw_x + (15.0 * screen_theta.cos()),
-            robot_draw_y + (15.0 * screen_theta.sin())
+            robot_draw_x + (robot_radius_px * screen_theta.cos()),
+            robot_draw_y + (robot_radius_px * screen_theta.sin())
         );
         cr.stroke().unwrap();
 
         // Draw current Lidar Scan (Corrected for Pose)
-        cr.set_source_rgba(0.0, 1.0, 0.5, 0.8);
+        // Points are colored by quality: green = high quality, red = low quality.
+        // RP-Lidar A1M8 quality range is 0–63.
+        const MAX_QUALITY: f64 = 63.0;
         for p in &state.display_scan {
             if p.distance_mm < 10.0 {
                 continue;
             }
-            
+
+            // Map quality [0, MAX_QUALITY] → t [0.0, 1.0]
+            let t = (p.quality as f64 / MAX_QUALITY).clamp(0.0, 1.0);
+            // Gradient: red (t=0) → green (t=1)
+            let r = 1.0 - t;
+            let g = t;
+            cr.set_source_rgba(r, g, 0.0, 0.85);
+
             // Lidar point in robot frame (Lidar 0 is Front)
             let angle_robot_rad = (p.angle_deg as f64).to_radians();
-            
+
             // Total angle in world frame
-            let total_angle_world = robot_theta + angle_robot_rad;
-            
+            let total_angle_world = robot_theta - angle_robot_rad;
+
             // Transform to World Coordinates (Gazebo Frame)
             let wx = (state.robot_x as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.cos());
             let wy = (state.robot_y as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.sin());
-            
+
             // Project to Screen Coordinates
             let dx = world_center_x - (wy * scale);
             let dy = world_center_y - (wx * scale);
-            
+
             cr.arc(dx, dy, 2.0, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
         }
+
+        // Draw Scale Legend
+        // We'll place it in the bottom-right corner.
+        let margin_x = 15.0;
+        let margin_y = 15.0;
+        let rect_w = 160.0;
+        let rect_h = 55.0;
+        let rect_x = width as f64 - rect_w - margin_x;
+        let rect_y = height as f64 - rect_h - margin_y;
+
+        // Draw semi-transparent background
+        cr.set_source_rgba(0.02, 0.02, 0.05, 0.75);
+        cr.rectangle(rect_x, rect_y, rect_w, rect_h);
+        cr.fill().unwrap();
+
+        // Draw border
+        cr.set_source_rgba(0.3, 0.3, 0.4, 0.8);
+        cr.set_line_width(1.0);
+        cr.rectangle(rect_x, rect_y, rect_w, rect_h);
+        cr.stroke().unwrap();
+
+        // Select scale unit and length
+        let one_meter_px = 1000.0 * scale;
+        let (bar_len_px, label) = if one_meter_px > 120.0 {
+            // If 1m is very big, draw a 0.5m scale bar
+            (one_meter_px * 0.5, "0.5 m")
+        } else if one_meter_px < 25.0 {
+            // If 1m is very small, draw a 5m scale bar
+            (one_meter_px * 5.0, "5.0 m")
+        } else {
+            // Default 1m scale bar
+            (one_meter_px, "1.0 m")
+        };
+
+        // Draw scale text
+        cr.set_source_rgb(0.9, 0.9, 0.9);
+        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+        cr.set_font_size(11.0);
+        
+        // Center text in box
+        cr.move_to(rect_x + 10.0, rect_y + 18.0);
+        cr.show_text("Grid Square: 1.0 m").unwrap();
+
+        // Draw scale bar line
+        let bar_x = rect_x + 10.0;
+        let bar_y = rect_y + 38.0;
+        let tick_h = 4.0;
+        
+        cr.set_source_rgb(0.9, 0.9, 0.9);
+        cr.set_line_width(1.5);
+        
+        // Left tick
+        cr.move_to(bar_x, bar_y - tick_h);
+        cr.line_to(bar_x, bar_y + tick_h);
+        // Main line
+        cr.move_to(bar_x, bar_y);
+        cr.line_to(bar_x + bar_len_px, bar_y);
+        // Right tick
+        cr.move_to(bar_x + bar_len_px, bar_y - tick_h);
+        cr.line_to(bar_x + bar_len_px, bar_y + tick_h);
+        cr.stroke().unwrap();
+
+        // Draw bar label text
+        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        cr.set_font_size(9.0);
+        cr.move_to(bar_x + bar_len_px + 6.0, bar_y + 3.0);
+        cr.show_text(label).unwrap();
     });
 }
 

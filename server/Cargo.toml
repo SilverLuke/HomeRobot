@@ -16,6 +16,8 @@ glib = "0.20"
 cairo-rs = "0.20"
 lazy_static = "1.5"
 rerun = "0.32.1"
+log = "0.4"
+pretty_env_logger = "0.5"
 
 [build-dependencies]
 prost-build = "0.13"

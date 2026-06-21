@@ -159,7 +159,7 @@ impl OccupancyGrid {
             if p.distance_mm > 8000.0 { continue; }
             
             let angle_rad = (p.angle_deg as f32).to_radians();
-            let total_angle = pose.theta + angle_rad;
+            let total_angle = pose.theta - angle_rad;
             
             let ox_world = pose.x + (p.distance_mm / 1000.0) * total_angle.cos();
             let oy_world = pose.y + (p.distance_mm / 1000.0) * total_angle.sin();
