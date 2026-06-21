@@ -20,7 +20,7 @@
         encoder-sx = &pcnt;
         encoder-dx = &pcnt;
         status-led = &rmt_led;
-        lidar-en = &lidar_en_gpio;
+        lidar-pwm = &pwm_lidar_label;
     };
 
     soc {
@@ -44,11 +44,10 @@
         };
     };
 
-    lidar_ctrl {
-        compatible = "gpio-leds";
-        lidar_en_gpio: lidar_en {
-            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
-            label = "Lidar Enable";
+    pwm_lidar_group {
+        compatible = "pwm-leds";
+        pwm_lidar_label: lidar_pwm {
+            pwms = <&ledc0 4 50000 PWM_POLARITY_NORMAL>;
         };
     };
 
@@ -116,7 +115,8 @@
             pinmux = <LEDC_CH0_GPIO19>,
                      <LEDC_CH1_GPIO18>,
                      <LEDC_CH2_GPIO11>,
-                     <LEDC_CH3_GPIO10>;
+                     <LEDC_CH3_GPIO10>,
+                     <LEDC_CH4_GPIO15>;
             output-enable;
         };
     };
@@ -194,6 +194,11 @@
         reg = <3>;
         timer = <0>;
     };
+ 
+    pwm_lidar: channel@4 {
+        reg = <4>;
+        timer = <0>;
+    };
 };
 
 &pcnt {
@@ -246,4 +251,33 @@
 
 &usb_serial {
     status = "okay";
+};
+
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        boot_partition: partition@0 {
+            label = "mcuboot";
+            reg = <0x00000000 0x00010000>;
+        };
+        slot0_partition: partition@10000 {
+            label = "image-0";
+            reg = <0x00010000 0x00200000>;
+        };
+        slot1_partition: partition@210000 {
+            label = "image-1";
+            reg = <0x00210000 0x00200000>;
+        };
+        scratch_partition: partition@410000 {
+            label = "image-scratch";
+            reg = <0x00410000 0x00040000>;
+        };
+        storage_partition: partition@450000 {
+            label = "storage";
+            reg = <0x00450000 0x00010000>;
+        };
+    };
 };

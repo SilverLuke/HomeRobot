@@ -34,6 +34,27 @@ The firmware implements a synchronous RPC dispatcher within the main loop:
 - `make build-c6`: Compile for the ESP32-C6.
 - `make flash`: Flash the image to the device.
 - `make snapshot-logs`: Capture 5s of serial diagnostic output.
+- `make ota-flash ROBOT_IP=<ip>`: Flash the signed app image wirelessly over Wi-Fi, automatically mark it for test, and reboot the robot.
+- `make ota-confirm ROBOT_IP=<ip>`: Confirm the currently booted new image to make it permanent.
+
+## OTA Update Commands (MCUboot Details)
+The `make ota-flash` target automates the standard MCUboot upgrade cycle. If you ever need to perform the steps manually or inspect the slots, you can use the `mcumgr` CLI tool:
+1. **List the image slots**:
+   ```bash
+   ~/go/bin/mcumgr --conntype udp --connstring="[<ROBOT_IP>]:1337" image list
+   ```
+2. **Mark the Slot 1 image as pending test** (replace `<HASH>` with the hash from Slot 1 in the list):
+   ```bash
+   ~/go/bin/mcumgr --conntype udp --connstring="[<ROBOT_IP>]:1337" image test <HASH>
+   ```
+3. **Reboot the robot** to perform the upgrade swap:
+   ```bash
+   ~/go/bin/mcumgr --conntype udp --connstring="[<ROBOT_IP>]:1337" reset
+   ```
+4. **Confirm the new image** (make the upgrade permanent once verified):
+   ```bash
+   ~/go/bin/mcumgr --conntype udp --connstring="[<ROBOT_IP>]:1337" image confirm
+   ```
 
 ## Logging
 - Uses Zephyr's standard logging subsystem.

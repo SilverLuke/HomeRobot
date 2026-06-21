@@ -8,6 +8,10 @@ set(DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)
 include(nanopb)
 
+if(DISABLE_BATTERY_CHECK)
+    target_compile_definitions(app PRIVATE DISABLE_BATTERY_CHECK)
+endif()
+
 target_sources(app PRIVATE 
     src/main.cpp
     src/robot.cpp
@@ -72,4 +76,4 @@ target_include_directories(app PRIVATE src)
 zephyr_include_directories(include)
 add_subdirectory(drivers)
 
-target_compile_options(app PRIVATE -fno-threadsafe-statics -fpermissive)
+target_compile_options(app PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics> $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>)
