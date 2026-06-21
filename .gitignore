@@ -26,3 +26,11 @@ zephyrproject
 logs/**/*
 !logs/**/
 !logs/**/.gitkeep
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+
+# Maps
+**/*.pgm
+**/*.png
