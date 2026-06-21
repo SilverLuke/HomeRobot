@@ -37,8 +37,12 @@ def main():
         print("Error: Timeout waiting for robot connection.")
         return
 
+    cumulative_l = 0
+    cumulative_r = 0
+
     # Helper function to read telemetry
     def read_encoders():
+        nonlocal cumulative_l, cumulative_r
         try:
             # Read 2-byte length prefix
             header = client_sock.recv(2)
@@ -50,7 +54,9 @@ def main():
             msg.ParseFromString(data)
 
             if msg.HasField('encoders'):
-                return msg.encoders.left_encoder, msg.encoders.right_encoder
+                cumulative_l += msg.encoders.left_encoder
+                cumulative_r += msg.encoders.right_encoder
+                return cumulative_l, cumulative_r
         except socket.timeout:
             pass
         except Exception as e:

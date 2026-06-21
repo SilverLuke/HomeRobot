@@ -33,7 +33,7 @@ export LIBGL_DRI3_DISABLE=1
 # Ensure Ogre2 can find its plugins and Media (HLMS shaders)
 if [ -z "$OGRE2_RESOURCE_PATH" ] || [ -z "$OGRE_MEDIA_PATH" ]; then
     echo "  [WARNING] OGRE2 paths not fully set, attempting fallback..."
-    OGRE_NEXT_PATH=$(nix-build -E 'let pkgs = import <nixpkgs> { overlays = [ (final: prev: import ./gazebo-sim-overlay/pkgs { pkgs = final; }) ]; }; in pkgs.ogre-next' --no-out-link)
+    OGRE_NEXT_PATH=$(nix-build -E 'let pkgs = import <nixpkgs> { overlays = [ (final: prev: import (let src = fetchTarball "https://github.com/SilverLuke/gazebo-sim-overlay/archive/pr-gazebo-10-support.tar.gz"; in "${src}/pkgs") { pkgs = final; }) ]; }; in pkgs.ogre-next' --no-out-link)
     
     if [ -z "$OGRE2_RESOURCE_PATH" ]; then
         export OGRE2_RESOURCE_PATH="$OGRE_NEXT_PATH/lib/OGRE-Next"

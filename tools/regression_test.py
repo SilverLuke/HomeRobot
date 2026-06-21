@@ -26,22 +26,37 @@ class RegressionTest:
 
     def get_ground_truth(self):
         try:
-            res = subprocess.check_output('gz topic -t /model/homerobot/odometry -e -n 1', 
-                                         shell=True, timeout=2.0, env=self.env).decode()
-            x_match = re.search(r'x:\s*([-0-9.eE+]+)', res)
-            y_match = re.search(r'y:\s*([-0-9.eE+]+)', res)
+            res = subprocess.check_output(['gz', 'topic', '-t', '/world/homerobot_world/pose/info', '-e', '-n', '1'], 
+                                          timeout=2.0, env=self.env).decode()
+            start = res.find('name: "homerobot"')
+            if start == -1:
+                return False
+            block = res[start:start+1000]
+            
+            # Parse position
+            pos_match = re.search(r'position\s*\{([^}]+)\}', block)
+            if not pos_match:
+                return False
+            pos_content = pos_match.group(1)
+            x_match = re.search(r'x:\s*([-0-9.eE+]+)', pos_content)
+            y_match = re.search(r'y:\s*([-0-9.eE+]+)', pos_content)
+            
             if x_match and y_match:
                 self.ground_truth_x = float(x_match.group(1))
                 self.ground_truth_y = float(y_match.group(1))
                 
-                # Orientation
-                oz_match = re.search(r'orientation\s*\{[^}]*z:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                ow_match = re.search(r'orientation\s*\{[^}]*w:\s*([-0-9.eE+]+)', res, re.DOTALL)
-                if oz_match and ow_match:
-                    oz, ow = float(oz_match.group(1)), float(ow_match.group(1))
-                    self.ground_truth_theta = math.atan2(2 * ow * oz, 1 - 2 * (oz * oz))
+                # Parse orientation
+                orient_match = re.search(r'orientation\s*\{([^}]+)\}', block)
+                if orient_match:
+                    orient_content = orient_match.group(1)
+                    oz_match = re.search(r'z:\s*([-0-9.eE+]+)', orient_content)
+                    ow_match = re.search(r'w:\s*([-0-9.eE+]+)', orient_content)
+                    if oz_match and ow_match:
+                        oz, ow = float(oz_match.group(1)), float(ow_match.group(1))
+                        self.ground_truth_theta = math.atan2(2 * ow * oz, 1 - 2 * (oz * oz))
                 return True
-        except:
+        except Exception as e:
+            print(f"DEBUG: get_ground_truth error: {e}")
             return False
         return False
 
@@ -58,10 +73,10 @@ class RegressionTest:
         print("2. Commanding 2-meter forward move...")
         # We use cmd_sender logic here or call it
         try:
-            subprocess.run(["cargo", "run", "--", "move", "--left", "100", "--right", "100"], 
+            subprocess.run(["cargo", "run", "--", "--proxy", "move", "--left", "100", "--right", "100"], 
                            cwd="tools/cmd_sender", timeout=5)
             time.sleep(3) # Move for 3 seconds
-            subprocess.run(["cargo", "run", "--", "stop"], 
+            subprocess.run(["cargo", "run", "--", "--proxy", "stop"], 
                            cwd="tools/cmd_sender", timeout=5)
             time.sleep(1) # Wait for physics to settle
         except Exception as e:

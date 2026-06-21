@@ -29,7 +29,8 @@ fi
 # 1. Force Cleanup
 echo "[0/4] Cleaning up old processes..."
 pkill -9 -f "zephyr.exe" || true
-pkill -f "[g]z sim" || true
+pkill -9 -f "gz-sim-main" || true
+pkill -9 -f "gz sim" || true
 pkill -9 -f "gazebo_bridge.main" || true
 pkill -9 -f "$SERVER_BIN" || true
 sleep 1
