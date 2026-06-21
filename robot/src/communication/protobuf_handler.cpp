@@ -46,7 +46,7 @@ bool ProtobufHandler::send_encoders_data(uint32_t millis, int32_t left, int32_t 
     return encode_and_send(message);
 }
 
-bool ProtobufHandler::send_robot_config(uint32_t millis, float kp_l, float ki_l, float kd_l, float kp_r, float ki_r, float kd_r) {
+bool ProtobufHandler::send_robot_config(uint32_t millis, float kp_l, float ki_l, float kd_l, float kp_r, float ki_r, float kd_r, float lidar_frequency) {
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;
     message.which_payload = homerobot_RobotToServerMessage_config_tag;
@@ -63,7 +63,7 @@ bool ProtobufHandler::send_robot_config(uint32_t millis, float kp_l, float ki_l,
     message.payload.config.right_motor.kd = kd_r;
     message.payload.config.right_motor.max_speed = 255;
 
-    message.payload.config.lidar_frequency = 5.0;
+    message.payload.config.lidar_frequency = lidar_frequency;
 
     return encode_and_send(message);
 }
@@ -186,9 +186,7 @@ bool ProtobufHandler::encode_and_send(const homerobot_RobotToServerMessage& mess
         return false;
     }
 
-    if (message.which_payload == homerobot_RobotToServerMessage_lidar_tag) {
-        LOG_INF("Forwarded Lidar to Server: %u points", message.payload.lidar.points_count);
-    } else if (message.which_payload == homerobot_RobotToServerMessage_encoders_tag) {
+    if (message.which_payload == homerobot_RobotToServerMessage_encoders_tag) {
         LOG_INF("Forwarded Encoders to Server: L=%d R=%d", 
                 message.payload.encoders.left_encoder, message.payload.encoders.right_encoder);
     }

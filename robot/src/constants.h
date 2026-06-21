@@ -17,5 +17,5 @@ namespace constants {
     constexpr uint32_t SERVER_RECONNECT_INTERVAL_MS = 5000;
 
     // Main Loop
-    constexpr uint32_t MAIN_LOOP_DELAY_MS = 10; // 100Hz loop
+    constexpr uint32_t MAIN_LOOP_DELAY_MS = 5; // 200Hz loop
 }

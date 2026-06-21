@@ -47,18 +47,34 @@ std::size_t ZephyrNetClient::write(const uint8_t* buffer, std::size_t size) {
     return 0;
   }
 
-  // Use non-blocking send to prevent hanging the main loop
-  ssize_t bytes_written = zsock_send(sock_fd_, buffer, size, ZSOCK_MSG_DONTWAIT);
-  if (bytes_written < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      return 0; // Buffer full, skip this write to keep loop running
+  std::size_t total_written = 0;
+  uint64_t start_time = k_uptime_get();
+
+  while (total_written < size) {
+    ssize_t bytes_written = zsock_send(sock_fd_, buffer + total_written, size - total_written, ZSOCK_MSG_DONTWAIT);
+    if (bytes_written < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // If we've been trying to write for more than 500ms, time out to keep loop running
+        if (k_uptime_get() - start_time > 500) {
+          LOG_ERR("Send timeout (500ms exceeded): connection congested or stalled");
+          stop();
+          return total_written;
+        }
+        k_msleep(2); // Wait a tiny bit for TCP buffer space to clear up
+        continue;
+      }
+      LOG_ERR("Send error: %d", errno);
+      stop();
+      return total_written;
+    } else if (bytes_written == 0) {
+      LOG_ERR("Send returned 0");
+      stop();
+      return total_written;
     }
-    LOG_ERR( "Send error: %d", errno);
-    stop();
-    return 0;
+    total_written += static_cast<std::size_t>(bytes_written);
   }
 
-  return static_cast<std::size_t>(bytes_written);
+  return total_written;
 #else
   return 0;
 #endif

@@ -13,8 +13,6 @@ extern "C" {
 }
 #endif
 
-static Robot robot;
-
 extern "C" int main(void)
 {
 #if defined(CONFIG_BOARD_NATIVE_SIM)
@@ -25,6 +23,7 @@ extern "C" int main(void)
 
     k_sleep(K_MSEC(500));
 
+    static Robot robot;
     robot.setup();
 
     while (1) {

@@ -66,6 +66,7 @@ private:
     float motor_kp_ = 1.0f;
     float motor_ki_ = 0.01f;
     float motor_kd_ = 0.1f;
+    float lidar_frequency_ = 5.0f;
 
     uint32_t last_telemetry_ms_ = 0;
     uint32_t last_fast_telemetry_ms_ = 0;
@@ -74,10 +75,17 @@ private:
     bool motion_active_ = false;
     uint32_t active_motion_call_id_ = 0;
     uint32_t motion_start_time_ms_ = 0;
+    bool hardware_initialized_ = false;
+
+    int32_t last_sent_enc_sx_ = 0;
+    int32_t last_sent_enc_dx_ = 0;
+    
+    uint32_t disconnect_time_ms_ = 0;
+    bool lidar_stopped_due_to_disconnect_ = true;
 
     // DT Specs (passed to constructors in initializer list)
     static const struct device *const lidar_uart_dev;
-    static const struct gpio_dt_spec lidar_en_gpio;
+    static const struct pwm_dt_spec lidar_pwm;
     static const struct device *const adc_dev;
     static const struct device *const imu_dev;
     static const struct pwm_dt_spec motor_sx_fwd;

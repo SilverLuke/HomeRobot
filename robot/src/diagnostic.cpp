@@ -118,7 +118,7 @@ bool Diagnostic::test_imu(homerobot_DiagnosticResult* result) {
     LOG_INF("IMU: Raw Gyro  -> X: %.3f, Y: %.3f, Z: %.3f", (double)gx, (double)gy, (double)gz);
 
     char msg[128];
-    snprintf(msg, sizeof(msg), "Acc:%.1f G:%.1f Gyro:%.1f", (double)total_g, (double)(total_g/9.81), (double)sqrt(gx*gx + gy*gy + gz*gz));
+    snprintf(msg, sizeof(msg), "Acc:%.1f G:%.1f Gyro:%.1f", (double)total_g, (double)(total_g/9.81f), (double)sqrt(gx*gx + gy*gy + gz*gz));
 
     if (total_g < 7.0f || total_g > 13.0f) {
         LOG_WRN( "IMU: Gravity vector (%.2f) outside Earth normal range [7, 13]", (double)total_g);

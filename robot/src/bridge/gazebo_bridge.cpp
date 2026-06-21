@@ -128,6 +128,7 @@ void GazeboBridge::on_lidar(const gz::msgs::LaserScan &msg) {
         double angle_deg = angle_rad * (180.0 / M_PI);
         while (angle_deg < 0) angle_deg += 360.0;
         while (angle_deg >= 360.0) angle_deg -= 360.0;
+        
 
         last_scan_.points[i].distance_mm = (float)(dist * 1000.0);
         last_scan_.points[i].angle_deg = (float)angle_deg;

@@ -42,6 +42,9 @@ int32_t Battery::read_raw() {
 #if defined(CONFIG_BOARD_NATIVE_SIM)
     return 2450; // Dummy raw value for ~15V
 #else
+    if (adc_dev_ == nullptr || !device_is_ready(adc_dev_)) {
+        return -1;
+    }
     int16_t sample_buffer[1];
     struct adc_sequence sequence = {
         .channels = BIT(channel_),
@@ -64,6 +67,9 @@ uint32_t Battery::get_voltage_mv() {
 #if defined(CONFIG_BOARD_NATIVE_SIM)
     return 15000; // Fixed 15V for simulation
 #else
+    if (adc_dev_ == nullptr || !device_is_ready(adc_dev_)) {
+        return 0;
+    }
     int32_t raw = read_raw();
     if (raw < 0) return 0;
 

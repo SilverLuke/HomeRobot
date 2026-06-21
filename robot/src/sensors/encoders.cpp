@@ -15,8 +15,8 @@ Encoders::Encoders(const struct device* dev, uint8_t unit_idx)
 
 bool Encoders::init() {
 #if !defined(CONFIG_BOARD_NATIVE_SIM)
-    if (!device_is_ready(dev_)) {
-        LOG_ERR("PCNT device not ready");
+    if (dev_ == nullptr || !device_is_ready(dev_)) {
+        LOG_ERR("PCNT device is NULL or not ready");
         return false;
     }
     

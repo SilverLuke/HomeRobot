@@ -29,11 +29,11 @@ bool StatusLed::init() {
     return true;
 #else
     rmt_dev_ = DEVICE_DT_GET(RMT_LED_NODE);
-    if (!device_is_ready(rmt_dev_)) {
-        LOG_ERR( "RMT Device for LED not ready");
+    if (rmt_dev_ == nullptr || !device_is_ready(rmt_dev_)) {
+        LOG_ERR("RMT Device for LED not ready or NULL");
         return false;
     }
-    LOG_INF( "Status LED: Initialized on RMT device %p", rmt_dev_);
+    LOG_INF("Status LED: Initialized on RMT device %p", rmt_dev_);
     
     // Initial flash to confirm physical connectivity
     set_color(50, 50, 50); // White
@@ -51,7 +51,7 @@ void StatusLed::set_status(RobotStatus status) {
 
 void StatusLed::set_color(uint8_t r, uint8_t g, uint8_t b) {
     r_ = r; g_ = g; b_ = b;
-    // WS2812 expects GRB order
+    // Physical LED on the board expects standard WS2812 GRB layout
     uint32_t color = (g << 16) | (r << 8) | b;
     for (int i = 0; i < 24; i++) {
         int bit = (color >> (23 - i)) & 1;

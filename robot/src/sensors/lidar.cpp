@@ -8,8 +8,8 @@
 
 LOG_MODULE_REGISTER(lidar, LOG_LEVEL_DBG);
 
-Lidar::Lidar(const struct device* uart_dev, const struct gpio_dt_spec* motor_gpio)
-    : uart_dev_(uart_dev), motor_gpio_(motor_gpio), rx_idx_(0) {
+Lidar::Lidar(const struct device* uart_dev, const struct pwm_dt_spec* motor_pwm)
+    : uart_dev_(uart_dev), motor_pwm_(motor_pwm), rx_idx_(0) {
 #if defined(CONFIG_BOARD_NATIVE_SIM)
     state_ = State::READING_DATA;
 #else
@@ -26,16 +26,12 @@ bool Lidar::init() {
         LOG_ERR("UART device for Lidar not ready");
         return false;
     }
-
-    if (motor_gpio_ && !gpio_is_ready_dt(motor_gpio_)) {
-        LOG_ERR("Motor GPIO for Lidar not ready");
+ 
+    if (motor_pwm_ && !pwm_is_ready_dt(motor_pwm_)) {
+        LOG_ERR("Motor PWM for Lidar not ready");
         return false;
     }
-
-    if (motor_gpio_) {
-        gpio_pin_configure_dt(motor_gpio_, GPIO_OUTPUT_INACTIVE);
-    }
-
+ 
     LOG_INF("Lidar driver initialized");
     return true;
 #endif
@@ -55,19 +51,37 @@ void Lidar::start() {
     points_count_ = 0;
     total_bytes_read_ = 0;
     total_points_read_ = 0;
+    sync_errors_ = 0;
+    sync_locked_ = false;
+    consecutive_valid_ = 0;
+    consecutive_invalid_ = 0;
+    last_sync_ms_ = 0;
+    speed_integral_ = 0.0f;
+
+    // Send stop command first to halt any active scan
+    uint8_t stop_cmd[] = {CMD_SYNC_BYTE, CMD_STOP};
+    for(int i=0; i<2; i++) uart_poll_out(uart_dev_, stop_cmd[i]);
+    k_sleep(K_MSEC(100)); // wait for the lidar to process the stop command
+
+    // Flush any leftover scan bytes (maximum 1024 to avoid infinite loops)
+    uint8_t dummy;
+    int flushed = 0;
+    while (flushed < 1024 && uart_poll_in(uart_dev_, &dummy) == 0) {
+        flushed++;
+    }
+    if (flushed > 0) printk("Flushed %d bytes of old scan data\n", flushed);
 
     // Reset lidar to clear any stuck state
     LOG_INF("Sending RESET command...");
     uint8_t reset_cmd[] = {CMD_SYNC_BYTE, CMD_RESET};
     for(int i=0; i<2; i++) uart_poll_out(uart_dev_, reset_cmd[i]);
     
-    // Give it time to spin up and reset
+    // Give it time to reboot
     k_sleep(K_MSEC(2000));
 
-    // Flush welcome banner
-    uint8_t dummy;
-    int flushed = 0;
-    while (uart_poll_in(uart_dev_, &dummy) == 0) {
+    // Flush welcome banner (maximum 2048 to avoid infinite loops)
+    flushed = 0;
+    while (flushed < 2048 && uart_poll_in(uart_dev_, &dummy) == 0) {
         flushed++;
     }
     if (flushed > 0) printk("Flushed %d bytes of welcome banner\n", flushed);
@@ -102,11 +116,11 @@ void Lidar::stop() {
 
 void Lidar::enable_motor(bool enable) {
 #if !defined(CONFIG_BOARD_NATIVE_SIM)
-    if (motor_gpio_) {
-        int ret = gpio_pin_set_dt(motor_gpio_, enable ? 1 : 0);
-        if (ret < 0) LOG_ERR("Failed to set motor GPIO: %d", ret);
-        LOG_INF("Lidar motor %s", enable ? "ENABLED" : "DISABLED");
-        printk("Lidar motor %s\n", enable ? "ENABLED" : "DISABLED");
+    if (motor_pwm_) {
+        uint32_t pulse = enable ? (uint32_t)(0.6f * (float)motor_pwm_->period) : 0;
+        int ret = pwm_set_pulse_dt(motor_pwm_, pulse);
+        if (ret < 0) LOG_ERR("Failed to set motor PWM: %d", ret);
+        LOG_INF("Lidar motor %s", enable ? "ENABLED (60% PWM)" : "DISABLED");
     }
 #endif
 }
@@ -133,6 +147,9 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
         proto_handler->send_lidar_scan(k_uptime_get_32(), pts, scan.points_count);
     }
 #else
+    if (uart_dev_ == nullptr || !device_is_ready(uart_dev_)) {
+        return;
+    }
     uint8_t rx_byte;
 
     int bytes_in_this_loop = 0;
@@ -140,9 +157,8 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
         total_bytes_read_++;
         bytes_in_this_loop++;
         process_byte(rx_byte, proto_handler);
-        if (bytes_in_this_loop > 256) break;
+        if (bytes_in_this_loop > 2048) break;
     }
-    k_msleep(1); // Small sleep to let other tasks run
 
     uint32_t now = k_uptime_get_32();
     if (now - last_log_ms_ >= 1000) {
@@ -153,7 +169,8 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
             case State::READING_DATA: state_str = "READ_DATA"; break;
         }
         if (state_ != State::IDLE) {
-            printk("[lidar] Status: State=%s, BytesRcv=%u, PtsRcv=%u\n", state_str, total_bytes_read_, total_points_read_);
+            printk("[lidar] Status: State=%s, BytesRcv=%u, PtsRcv=%u, PtsRcvGood=%u, PtsRcvErrors=%u\n",
+                   state_str, total_bytes_read_, total_points_read_ + sync_errors_, total_points_read_, sync_errors_);
         }
         last_log_ms_ = now;
     }
@@ -168,7 +185,9 @@ void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {
             rx_buffer_[rx_idx_++] = byte;
             if (rx_idx_ >= sizeof(ans_header_t)) {
                 ans_header_t* header = (ans_header_t*)rx_buffer_;
-                if (header->syncByte1 == ANS_SYNC_BYTE1 && header->syncByte2 == ANS_SYNC_BYTE2) {
+                if (header->syncByte1 == ANS_SYNC_BYTE1 && 
+                    header->syncByte2 == ANS_SYNC_BYTE2 &&
+                    header->type == ANS_TYPE_MEAS) {
                     LOG_INF("Lidar: Received valid response header (type 0x%02x, size %u)", header->type, header->size());
                     state_ = State::READING_DATA;
                     rx_idx_ = 0;
@@ -181,33 +200,40 @@ void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {
             break;
         case State::READING_DATA:
             rx_buffer_[rx_idx_++] = byte;
-            
-            // Check first byte validity if we just started a packet
-            if (rx_idx_ == 1) {
-                uint8_t s = byte & 0x01;
-                uint8_t s_inv = (byte & 0x02) >> 1;
-                if (s == s_inv) {
-                    // Invalid start byte (S and ~S must be different)
-                    rx_idx_ = 0;
-                    return;
-                }
-            }
-            
-            // Check second byte validity (Check bit must be 1)
-            if (rx_idx_ == 2) {
-                if (!(byte & 0x01)) {
-                    // Invalid check bit, this byte is not the second byte of a packet.
-                    // We might have missed the first byte.
-                    // Reset and try to find a valid start byte.
-                    rx_idx_ = 0;
-                    return;
-                }
-            }
 
             if (rx_idx_ >= sizeof(node_info_t)) {
-                node_info_t* node = (node_info_t*)rx_buffer_;
-                handle_point(*node, proto_handler);
-                rx_idx_ = 0;
+                uint8_t s = rx_buffer_[0] & 0x01;
+                uint8_t s_inv = (rx_buffer_[0] & 0x02) >> 1;
+                bool first_byte_ok = (s != s_inv);
+                bool second_byte_ok = (rx_buffer_[1] & 0x01);
+
+                if (first_byte_ok && second_byte_ok) {
+                    consecutive_valid_++;
+                    consecutive_invalid_ = 0;
+                    if (!sync_locked_ && consecutive_valid_ >= 100) {
+                        sync_locked_ = true;
+                        LOG_INF("Sync lock ACQUIRED");
+                    }
+
+                    if (sync_locked_) {
+                        node_info_t* node = (node_info_t*)rx_buffer_;
+                        handle_point(*node, proto_handler);
+                    }
+                    rx_idx_ = 0;
+                } else {
+                    sync_errors_++;
+                    consecutive_valid_ = 0;
+
+                    if (sync_locked_) {
+                        sync_locked_ = false;
+                        consecutive_invalid_ = 0;
+                        LOG_WRN("Sync lock LOST");
+                    }
+
+                    // Shift by 1 byte to search for start-of-packet alignment
+                    memmove(rx_buffer_, rx_buffer_ + 1, rx_idx_ - 1);
+                    rx_idx_--;
+                }
             }
             break;
     }
@@ -215,12 +241,50 @@ void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {
 
 void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler) {
     if (!proto_handler) return;
-
+ 
     float angle_deg = (float)(node.angle_q6_checkbit >> RESP_MEAS_ANGLE_SHIFT) / 64.0f;
     float distance_mm = (float)node.distance_q2 / 4.0f;
     float quality = (float)(node.sync_quality >> RESP_MEAS_QUALITY_SHIFT);
     bool sync = (node.sync_quality & RESP_MEAS_SYNCBIT);
-
+ 
+    if (sync) {
+        uint32_t now = k_uptime_get_32();
+        if (last_sync_ms_ != 0) {
+            uint32_t diff = now - last_sync_ms_;
+            if (diff > 0) {
+                actual_frequency_ = 1000.0f / (float)diff;
+ 
+                // PI closed-loop speed control
+                float error = target_frequency_ - actual_frequency_;
+                const float kp = 12.0f;
+                const float ki = 1.5f;
+                const float dt = (float)diff / 1000.0f;
+ 
+                speed_integral_ += error * dt;
+                // Clamp integral
+                if (speed_integral_ > 80.0f) speed_integral_ = 80.0f;
+                if (speed_integral_ < -80.0f) speed_integral_ = -80.0f;
+ 
+                float ctrl_out = (kp * error) + (ki * speed_integral_);
+                
+                // Base feedforward PWM duty cycle (approximate)
+                float base_pwm = 150.0f + (target_frequency_ - 5.0f) * 15.0f;
+                float final_pwm = base_pwm + ctrl_out;
+ 
+                if (final_pwm > 255.0f) final_pwm = 255.0f;
+                if (final_pwm < 80.0f) final_pwm = 80.0f;
+ 
+                #if !defined(CONFIG_BOARD_NATIVE_SIM)
+                if (motor_pwm_) {
+                    uint32_t pulse = (uint32_t)((final_pwm / 255.0f) * (float)motor_pwm_->period);
+                    pwm_set_pulse_dt(motor_pwm_, pulse);
+                }
+                #endif
+            }
+        }
+        last_sync_ms_ = now;
+    }
+ 
     points_buffer_[points_count_].angle_deg = angle_deg;
     points_buffer_[points_count_].distance_mm = distance_mm;
     points_buffer_[points_count_].quality = (uint32_t)quality;
@@ -229,7 +293,6 @@ void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler
     total_points_read_++;
 
     if (points_count_ >= BATCH_SIZE) {
-        LOG_DBG("Sending lidar scan batch (%d points)", points_count_);
         proto_handler->send_lidar_scan(k_uptime_get_32(), points_buffer_, points_count_);
         points_count_ = 0;
     }

@@ -14,9 +14,11 @@ Motor::Motor(const char* name,
              const struct pwm_dt_spec* fwd_pwm, 
              const struct pwm_dt_spec* bwd_pwm,
              Encoders* encoder,
+             bool invert_encoder,
              uint8_t lower_limit, 
              uint8_t upper_limit)
     : name_(name), fwd_pwm_(fwd_pwm), bwd_pwm_(bwd_pwm), encoder_(encoder),
+      invert_encoder_(invert_encoder),
       upper_limit_(upper_limit), lower_limit_(lower_limit) {
 }
 
@@ -26,12 +28,13 @@ void Motor::init(double kp, double ki, double kd) {
     kd_ = kd;
 
 #if !defined(CONFIG_BOARD_NATIVE_SIM)
-    if (!pwm_is_ready_dt(fwd_pwm_) || !pwm_is_ready_dt(bwd_pwm_)) {
-        LOG_ERR("PWM device for motor %s not ready", name_);
+    if (fwd_pwm_ == nullptr || bwd_pwm_ == nullptr || !pwm_is_ready_dt(fwd_pwm_) || !pwm_is_ready_dt(bwd_pwm_)) {
+        LOG_ERR("PWM device for motor %s not ready or NULL", name_);
         return;
     }
 #endif
 
+    initialized_ = true;
     LOG_INF("Motor %s: Initialized (KP: %.2f, KI: %.2f, KD: %.2f)", name_, kp_, ki_, kd_);
     direction_ = BRAKE;
     set_motor(BRAKE, 0);
@@ -41,6 +44,9 @@ void Motor::set_motor(Direction dir, uint8_t pwm_val) {
 #if defined(CONFIG_BOARD_NATIVE_SIM)
     GazeboBridge::send_motor_cmd(name_, (int)dir, pwm_val);
 #else
+    if (!initialized_) {
+        return;
+    }
     uint32_t pulse = (uint32_t)((float)pwm_val / 255.0f * (float)fwd_pwm_->period);
     
     switch (dir) {
@@ -116,7 +122,8 @@ uint8_t Motor::limit_power(double power_signal) const {
 
 int32_t Motor::read_encoder() {
     if (encoder_) {
-        position_ = encoder_->get_total_ticks();
+        int32_t ticks = encoder_->get_total_ticks();
+        position_ = invert_encoder_ ? -ticks : ticks;
     }
     return position_;
 }

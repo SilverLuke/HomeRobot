@@ -1,14 +1,14 @@
 #pragma once
 
 #include <zephyr/drivers/uart.h>
-#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
 #include "communication/protobuf_handler.h"
 #include "constants.h"
 
 class Lidar {
 public:
-    Lidar(const struct device* uart_dev, const struct gpio_dt_spec* motor_gpio);
+    Lidar(const struct device* uart_dev, const struct pwm_dt_spec* motor_pwm);
 
     bool init();
     void loop(ProtobufHandler* proto_handler = nullptr);
@@ -17,10 +17,16 @@ public:
     void stop();
 
     void enable_motor(bool enable);
+    void set_target_frequency(float freq) { target_frequency_ = freq; }
 
 private:
     const struct device* uart_dev_;
-    const struct gpio_dt_spec* motor_gpio_;
+    const struct pwm_dt_spec* motor_pwm_;
+    
+    float target_frequency_ = 5.0f;
+    float actual_frequency_ = 0.0f;
+    float speed_integral_ = 0.0f;
+    uint32_t last_sync_ms_ = 0;
     
     enum State {
         IDLE,
@@ -101,4 +107,8 @@ private:
     uint32_t last_log_ms_ = 0;
     uint32_t total_points_read_ = 0;
     uint32_t total_bytes_read_ = 0;
+    uint32_t sync_errors_ = 0;
+    bool sync_locked_ = false;
+    uint32_t consecutive_valid_ = 0;
+    uint32_t consecutive_invalid_ = 0;
 };

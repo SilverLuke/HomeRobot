@@ -16,7 +16,7 @@ using namespace constants;
 #if !defined(CONFIG_BOARD_NATIVE_SIM)
 // Define static DT specs
 const struct device *const Robot::lidar_uart_dev = DEVICE_DT_GET(DT_ALIAS(lidar_uart));
-const struct gpio_dt_spec Robot::lidar_en_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(lidar_en), gpios);
+const struct pwm_dt_spec Robot::lidar_pwm = PWM_DT_SPEC_GET(DT_ALIAS(lidar_pwm));
 const struct device *const Robot::adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc0));
 const struct device *const Robot::imu_dev = DEVICE_DT_GET(DT_ALIAS(imu));
 const struct pwm_dt_spec Robot::motor_sx_fwd = PWM_DT_SPEC_GET(DT_ALIAS(motor_sx_fwd_pwm));
@@ -27,7 +27,7 @@ const struct device *const Robot::encoder_dev = DEVICE_DT_GET(DT_ALIAS(encoder_s
 #else
 // Dummy values for simulation
 const struct device *const Robot::lidar_uart_dev = nullptr;
-const struct gpio_dt_spec Robot::lidar_en_gpio = {0};
+const struct pwm_dt_spec Robot::lidar_pwm = {0};
 const struct device *const Robot::adc_dev = nullptr;
 const struct device *const Robot::imu_dev = nullptr;
 const struct pwm_dt_spec Robot::motor_sx_fwd = {0};
@@ -40,12 +40,12 @@ const struct device *const Robot::encoder_dev = nullptr;
 Robot::Robot()
     : status_led_(),
       battery_(adc_dev, 2),
-      lidar_(lidar_uart_dev, &lidar_en_gpio),
+      lidar_(lidar_uart_dev, &lidar_pwm),
       imu_(imu_dev),
       enc_sx_(encoder_dev, 0),
       enc_dx_(encoder_dev, 1),
-      motor_sx_("SX", &motor_sx_fwd, &motor_sx_bwd, &enc_sx_),
-      motor_dx_("DX", &motor_dx_fwd, &motor_dx_bwd, &enc_dx_),
+      motor_sx_("SX", &motor_sx_fwd, &motor_sx_bwd, &enc_sx_, true),
+      motor_dx_("DX", &motor_dx_fwd, &motor_dx_bwd, &enc_dx_, false),
       wifi_(WifiManager::instance()),
       net_client_(),
       proto_handler_(net_client_),
@@ -99,6 +99,16 @@ void Robot::loop() {
             handle_operational();
             break;
     }
+ 
+    // Handle Lidar stop timeout on server disconnection
+    if (state_ != RobotState::OPERATIONAL && !lidar_stopped_due_to_disconnect_) {
+        if (disconnect_time_ms_ != 0 && k_uptime_get_32() - disconnect_time_ms_ >= 10000) {
+            LOG_INF("Disconnected from server for >= 10s. Stopping Lidar...");
+            lidar_.stop();
+            lidar_stopped_due_to_disconnect_ = true;
+        }
+    }
+ 
     motor_sx_.loop();
     motor_dx_.loop();
 
@@ -126,6 +136,9 @@ void Robot::loop() {
 
 void Robot::handle_power_check() {
     uint32_t voltage = battery_.get_voltage_mv();
+#if defined(DISABLE_BATTERY_CHECK)
+    LOG_INF("Power check bypassed (bench power supply mode). Voltage: %u mV", voltage);
+#else
     if (voltage < 10000) {
         status_led_.set_status(RobotStatus::LOW_BATTERY);
         static uint32_t last_log = 0;
@@ -133,10 +146,19 @@ void Robot::handle_power_check() {
             LOG_WRN("LOW POWER: %u mV - Please turn on battery switch", voltage);
             last_log = k_uptime_get_32();
         }
-    } else {
-        LOG_INF("Power OK: %u mV", voltage);
-        set_state(RobotState::INITIALIZE_HARDWARE);
+        return;
     }
+    LOG_INF("Power OK: %u mV", voltage);
+#endif
+
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+    set_state(RobotState::INITIALIZE_HARDWARE);
+#else
+    LOG_INF("Starting Wi-Fi connection early...");
+    wifi_.connect(wifi_ssid, wifi_password);
+    status_led_.set_status(RobotStatus::NO_WIFI);
+    set_state(RobotState::WIFI_CONNECTING);
+#endif
 }
 
 void Robot::handle_initialize_hardware() {
@@ -148,26 +170,30 @@ void Robot::handle_initialize_hardware() {
     lidar_.init();
     motor_sx_.init(motor_kp_, motor_ki_, motor_kd_);
     motor_dx_.init(motor_kp_, motor_ki_, motor_kd_);
+    hardware_initialized_ = true;
 
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    LOG_INF("Simulation: Skipping Wi-Fi connection, moving to server connecting.");
+    LOG_INF("Hardware ready. Connecting to server...");
     set_state(RobotState::SERVER_CONNECTING);
-#else
-    LOG_INF("Hardware ready. Starting Wi-Fi connection...");
-    wifi_.connect(wifi_ssid, wifi_password);
-    status_led_.set_status(RobotStatus::NO_WIFI);
-
-    set_state(RobotState::WIFI_CONNECTING);
-#endif
 }
 
 void Robot::handle_wifi_connecting() {
     if (wifi_.is_connected()) {
         LOG_INF("Wi-Fi connected.");
-        set_state(RobotState::SERVER_CONNECTING);
+        if (!hardware_initialized_) {
+            set_state(RobotState::INITIALIZE_HARDWARE);
+        } else {
+            set_state(RobotState::SERVER_CONNECTING);
+        }
     } else {
         status_led_.set_status(RobotStatus::NO_WIFI);
-        // Wi-Fi manager handles retries automatically based on its implementation
+        
+        static uint32_t last_connect_attempt = 0;
+        uint32_t now = k_uptime_get_32();
+        if (now - last_connect_attempt > 5000) {
+            LOG_INF("Retrying Wi-Fi connection...");
+            wifi_.connect(wifi_ssid, wifi_password);
+            last_connect_attempt = now;
+        }
     }
 }
 
@@ -199,9 +225,15 @@ void Robot::handle_server_connecting() {
         // Send current config on connection
         if (net_client_.connected()) {
             proto_handler_.send_robot_config(k_uptime_get_32(),
-                motor_kp_, motor_ki_, motor_kd_, motor_kp_, motor_ki_, motor_kd_);
+                motor_kp_, motor_ki_, motor_kd_, motor_kp_, motor_ki_, motor_kd_, lidar_frequency_);
         }
         
+        // Reset encoder baselines so the first telemetry packet sends 0 delta
+        last_sent_enc_sx_ = enc_sx_.get_total_ticks();
+        last_sent_enc_dx_ = enc_dx_.get_total_ticks();
+        
+        disconnect_time_ms_ = 0;
+        lidar_stopped_due_to_disconnect_ = false;
         set_state(RobotState::OPERATIONAL);
     } else {
         LOG_ERR("Server connection failed, retrying...");
@@ -217,6 +249,8 @@ void Robot::handle_operational() {
         LOG_WRN("Wi-Fi lost, reconnecting...");
         motor_sx_.set_motor(BRAKE, 0);
         motor_dx_.set_motor(BRAKE, 0);
+        disconnect_time_ms_ = k_uptime_get_32();
+        lidar_stopped_due_to_disconnect_ = false;
         set_state(RobotState::WIFI_CONNECTING);
         return;
     }
@@ -226,6 +260,8 @@ void Robot::handle_operational() {
         LOG_WRN("Server connection lost, reconnecting...");
         motor_sx_.set_motor(BRAKE, 0);
         motor_dx_.set_motor(BRAKE, 0);
+        disconnect_time_ms_ = k_uptime_get_32();
+        lidar_stopped_due_to_disconnect_ = false;
         set_state(RobotState::SERVER_CONNECTING);
         return;
     }
@@ -268,6 +304,12 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
             motor_dx_.init(motor_kp_, motor_ki_, motor_kd_);
             LOG_INF("PID UPDATED: P=%.3f I=%.3f D=%.3f", (double)motor_kp_, (double)motor_ki_, (double)motor_kd_);
         }
+        float freq = msg.payload.motor_config.lidar_frequency;
+        if (freq >= 5.0f && freq <= 10.0f) {
+            lidar_frequency_ = freq;
+            lidar_.set_target_frequency(freq);
+            LOG_INF("LIDAR FREQUENCY UPDATED: %.1f Hz", (double)lidar_frequency_);
+        }
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_rpc_request_tag) {
         if (strcmp(msg.payload.rpc_request.method, "ExecuteMotion") == 0) {
@@ -303,7 +345,12 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_lidar_control_tag) {
         bool active = msg.payload.lidar_control.active;
-        LOG_INF("RPC: Lidar control received: active=%s", active ? "true" : "false");
+        float freq = msg.payload.lidar_control.target_frequency_hz;
+        if (freq >= 5.0f && freq <= 10.0f) {
+            lidar_frequency_ = freq;
+            lidar_.set_target_frequency(freq);
+        }
+        LOG_INF("RPC: Lidar control received: active=%s, freq=%.1f Hz", active ? "true" : "false", (double)lidar_frequency_);
         if (active) lidar_.start();
         else lidar_.stop();
     }
@@ -328,7 +375,15 @@ void Robot::send_telemetry() {
             imu_.get_gyro(gx, gy, gz);
             proto_handler_.send_imu_data(now, ax, ay, az, gx, gy, gz);
         }
-        proto_handler_.send_encoders_data(now, enc_sx_.get_total_ticks(), enc_dx_.get_total_ticks());
+        int32_t current_sx = enc_sx_.get_total_ticks();
+        int32_t current_dx = enc_dx_.get_total_ticks();
+        int32_t delta_sx = current_sx - last_sent_enc_sx_;
+        int32_t delta_dx = current_dx - last_sent_enc_dx_;
+        if (delta_sx != 0 || delta_dx != 0) {
+            proto_handler_.send_encoders_data(now, delta_sx, delta_dx);
+            last_sent_enc_sx_ = current_sx;
+            last_sent_enc_dx_ = current_dx;
+        }
         last_fast_telemetry_ms_ = now;
 
         // LiDAR Loop

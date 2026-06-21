@@ -1,8 +1,11 @@
 #pragma once
 
 #include <zephyr/net/net_if.h>
-#include <zephyr/net/wifi_mgmt.h>
 #include <zephyr/kernel.h>
+
+#if defined(CONFIG_WIFI)
+#include <zephyr/net/wifi_mgmt.h>
+#endif
 
 class WifiManager {
 public:
@@ -16,6 +19,7 @@ public:
 
 private:
     WifiManager();
+#if defined(CONFIG_WIFI)
     static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
                                        uint64_t mgmt_event, struct net_if *iface);
 
@@ -23,4 +27,7 @@ private:
     struct net_mgmt_event_callback wifi_mgmt_cb_;
     bool connected_ = false;
     struct k_sem wifi_connected_sem_;
+#else
+    bool connected_ = true;
+#endif
 };

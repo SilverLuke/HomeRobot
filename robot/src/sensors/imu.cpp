@@ -37,6 +37,9 @@ bool Imu::update() {
     GazeboBridge::get_virtual_imu(v_accel_, v_gyro_);
     return true;
 #else
+    if (dev_ == nullptr || !device_is_ready(dev_)) {
+        return false;
+    }
     int ret = sensor_sample_fetch(dev_);
     if (ret < 0) {
         LOG_ERR("IMU fetch failed: error %d. Check if sensor is connected to I2C.", ret);

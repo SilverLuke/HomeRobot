@@ -17,6 +17,7 @@ class Motor {
         const struct pwm_dt_spec* fwd_pwm, 
         const struct pwm_dt_spec* bwd_pwm,
         Encoders* encoder,
+        bool invert_encoder = false,
         uint8_t lower_limit = 50, 
         uint8_t upper_limit = 255);
 
@@ -43,6 +44,7 @@ private:
   const struct pwm_dt_spec* fwd_pwm_;
   const struct pwm_dt_spec* bwd_pwm_;
   Encoders* encoder_;
+  bool invert_encoder_{false};
 
   uint8_t upper_limit_;
   uint8_t lower_limit_;
@@ -60,6 +62,7 @@ private:
   uint8_t power_{0};
   bool manual_mode_{false};
 
+  bool initialized_{false};
   static constexpr uint32_t PWM_PERIOD = 50000; // 20kHz in nanoseconds (1/20000 * 1e9)
   static constexpr int32_t POSITION_TOLERANCE = 2;
 
