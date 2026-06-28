@@ -1,0 +1,167 @@
+.lidar-on { background-color: #2ecc71; color: white; border: none; }
+.lidar-on:checked { background-color: #27ae60; color: white; border: none; }
+.explore-on { background-color: #e74c3c; color: white; border: none; }
+.explore-on:checked { background-color: #c0392b; color: white; border: none; }
+.loading-overlay-bg { background-color: rgba(25, 25, 25, 0.96); color: white; }
+
+.map-control-overlay {
+    background-color: rgba(30, 30, 45, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.map-control-button {
+    background: rgba(60, 60, 80, 0.6);
+    color: #f0f0f5;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+}
+.map-control-button:hover {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+}
+.map-control-button:active {
+    background: #2980b9;
+}
+
+.map-control-toggle {
+    background: rgba(60, 60, 80, 0.6);
+    color: #f0f0f5;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px;
+    min-width: 28px;
+    min-height: 28px;
+}
+.map-control-toggle:hover {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+}
+.map-control-toggle:checked {
+    background: #27ae60;
+    color: white;
+    border-color: #218c4e;
+}
+
+/* Professional Sidebar Style Rules */
+#sidebar_scroll {
+    background-color: #121218;
+    border-right: 1px solid #252535;
+}
+#sidebar_scroll viewport {
+    background-color: #121218;
+}
+#sidebar_container {
+    background-color: transparent;
+    padding: 12px;
+}
+
+/* Custom Expander Styling */
+#sidebar_scroll expander {
+    margin-bottom: 14px;
+}
+#sidebar_scroll expander > title {
+    font-weight: 700;
+    font-size: 13.5px;
+    color: #5e5ce6;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background-color: rgba(94, 92, 230, 0.08);
+    border: none;
+    transition: background-color 0.15s ease;
+}
+#sidebar_scroll expander > title:hover {
+    background-color: rgba(94, 92, 230, 0.15);
+}
+#sidebar_scroll expander > title:checked {
+    color: #ffffff;
+    background-color: rgba(94, 92, 230, 0.22);
+}
+
+/* Custom Frame Styling (Card Design) */
+#sidebar_scroll frame,
+frame {
+    background-color: #1a1a26;
+    border-radius: 8px;
+    padding: 8px;
+    margin-top: 6px;
+    border: none !important;
+    border-width: 0px !important;
+    border-style: none !important;
+}
+#sidebar_scroll frame border,
+frame border {
+    border: none !important;
+    border-width: 0px !important;
+    border-style: none !important;
+    box-shadow: none !important;
+}
+
+/* Custom Sidebar Buttons */
+#sidebar_scroll button {
+    background-color: #262638;
+    color: #e5e5ea;
+    border: 1px solid #3c3c58;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-weight: 500;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+#sidebar_scroll button:hover {
+    background-color: #383854;
+    border-color: #5e5ce6;
+    color: #ffffff;
+}
+#sidebar_scroll button:active {
+    background-color: #5e5ce6;
+    border-color: #5e5ce6;
+}
+
+/* Slider & Value Adjustments */
+#sidebar_scroll scale trough {
+    background-color: #242436;
+    border-radius: 4px;
+    min-height: 8px;
+}
+#sidebar_scroll scale highlight {
+    background-color: #5e5ce6;
+    border-radius: 4px;
+}
+#sidebar_scroll scale slider {
+    background-color: #ffffff;
+    border: 1px solid #3c3c58;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+}
+
+/* GtkListBox styling inside cards */
+#sidebar_scroll list {
+    background-color: transparent;
+}
+#sidebar_scroll listrow {
+    background-color: transparent;
+    padding: 8px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+#sidebar_scroll listrow:last-child {
+    border-bottom: none;
+}
+
+/* Row details description and value styling */
+#sidebar_scroll listrow box > label:first-child {
+    color: #9898a0;
+    font-size: 13px;
+    font-weight: 500;
+}
+#sidebar_scroll listrow box > label:last-child {
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+}

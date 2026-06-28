@@ -1,5 +1,6 @@
 #include "robot.h"
 #include <pb_decode.h>
+#include <pb_encode.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include "secrets.h"
@@ -226,6 +227,16 @@ void Robot::handle_server_connecting() {
         if (net_client_.connected()) {
             proto_handler_.send_robot_config(k_uptime_get_32(),
                 motor_kp_, motor_ki_, motor_kd_, motor_kp_, motor_ki_, motor_kd_, lidar_frequency_);
+            
+            // Send capabilities on connection
+            proto_handler_.send_robot_capabilities(k_uptime_get_32(),
+                HAS_ACCELEROMETER,
+                HAS_GYROSCOPE,
+                HAS_MAGNETOMETER,
+                WHEEL_DIAMETER_MM,
+                WHEEL_TRACK_MM,
+                ENCODER_TICKS_PER_REV
+            );
         }
         
         // Reset encoder baselines so the first telemetry packet sends 0 delta
@@ -339,8 +350,15 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
                 proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0, "Decode error");
             }
         } else {
-            diagnostic_.run_rpc();
-            proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0);
+            homerobot_DiagnosticResult result = diagnostic_.run_rpc();
+            uint8_t buffer[homerobot_DiagnosticResult_size];
+            pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
+            if (pb_encode(&stream, homerobot_DiagnosticResult_fields, &result)) {
+                proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, buffer, stream.bytes_written);
+            } else {
+                LOG_ERR("Failed to encode DiagnosticResult");
+                proto_handler_.send_rpc_response(k_uptime_get_32(), msg.payload.rpc_request.call_id, nullptr, 0, "Encode error");
+            }
         }
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_lidar_control_tag) {

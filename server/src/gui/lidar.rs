@@ -22,6 +22,10 @@ pub struct GuiState {
     pub gyro_history: std::collections::VecDeque<(f32, f32, f32)>,
     pub mag_history: std::collections::VecDeque<(f32, f32, f32)>,
     pub zoom_factor: f64,
+    pub pan_x: f64,
+    pub pan_y: f64,
+    pub show_map: bool,
+    pub show_lidar: bool,
 }
 
 lazy_static::lazy_static! {
@@ -44,6 +48,10 @@ lazy_static::lazy_static! {
         gyro_history: std::collections::VecDeque::with_capacity(100),
         mag_history: std::collections::VecDeque::with_capacity(100),
         zoom_factor: 1.0,
+        pan_x: 0.0,
+        pan_y: 0.0,
+        show_map: true,
+        show_lidar: true,
     });
 }
 
@@ -91,7 +99,7 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         cr.paint().unwrap();
 
         // Draw Map (Occupancy Grid)
-        if !state.map_data.is_empty() {
+        if state.show_map && !state.map_data.is_empty() {
             let res = 0.05; // 5cm
             let m_scale = res as f64 * 1000.0 * scale; // pixels per grid cell
             
@@ -114,8 +122,8 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
                     let world_x = (x as f64 - state.map_width as f64 / 2.0) * res as f64;
                     let world_y = (y as f64 - state.map_height as f64 / 2.0) * res as f64;
 
-                    let dx = world_center_x - (world_y * 1000.0 * scale);
-                    let dy = world_center_y - (world_x * 1000.0 * scale);
+                    let dx = world_center_x - ((world_y - state.pan_y) * 1000.0 * scale);
+                    let dy = world_center_y - ((world_x - state.pan_x) * 1000.0 * scale);
 
                     cr.rectangle(dx - m_scale/2.0, dy - m_scale/2.0, m_scale, m_scale);
                     cr.fill().unwrap();
@@ -123,31 +131,53 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
             }
         }
 
-        // Draw World Grid (Fixed)
-        cr.set_source_rgb(0.15, 0.15, 0.2);
+        // Draw World Grid (Infinite and Dynamic)
+        cr.set_source_rgb(0.12, 0.12, 0.18);
         cr.set_line_width(0.5);
-        for i in -10..=10 {
-            let pos = i as f64 * 1000.0 * scale; // 1m grid
-            cr.move_to(world_center_x + pos, 0.0);
-            cr.line_to(world_center_x + pos, height as f64);
-            cr.move_to(0.0, world_center_y + pos);
-            cr.line_to(width as f64, world_center_y + pos);
+        
+        let meters_per_grid = 1.0;
+        
+        // Horizontal lines (corresponding to constant world_x)
+        let min_world_x = state.pan_x - (height as f64 / 2.0) / (1000.0 * scale);
+        let max_world_x = state.pan_x + (height as f64 / 2.0) / (1000.0 * scale);
+        let start_x_grid = (min_world_x / meters_per_grid).floor() as i32;
+        let end_x_grid = (max_world_x / meters_per_grid).ceil() as i32;
+        
+        for i in start_x_grid..=end_x_grid {
+            let wx = i as f64 * meters_per_grid;
+            let dy = world_center_y - ((wx - state.pan_x) * 1000.0 * scale);
+            cr.move_to(0.0, dy);
+            cr.line_to(width as f64, dy);
+            cr.stroke().unwrap();
+        }
+        
+        // Vertical lines (corresponding to constant world_y)
+        let min_world_y = state.pan_y - (width as f64 / 2.0) / (1000.0 * scale);
+        let max_world_y = state.pan_y + (width as f64 / 2.0) / (1000.0 * scale);
+        let start_y_grid = (min_world_y / meters_per_grid).floor() as i32;
+        let end_y_grid = (max_world_y / meters_per_grid).ceil() as i32;
+        
+        for i in start_y_grid..=end_y_grid {
+            let wy = i as f64 * meters_per_grid;
+            let dx = world_center_x - ((wy - state.pan_y) * 1000.0 * scale);
+            cr.move_to(dx, 0.0);
+            cr.line_to(dx, height as f64);
             cr.stroke().unwrap();
         }
 
         // Draw Frontiers (Yellow points)
         cr.set_source_rgb(1.0, 1.0, 0.0);
         for f in &state.frontiers {
-            let dx = world_center_x - (f.centroid_y as f64 * 1000.0 * scale);
-            let dy = world_center_y - (f.centroid_x as f64 * 1000.0 * scale);
+            let dx = world_center_x - ((f.centroid_y as f64 - state.pan_y) * 1000.0 * scale);
+            let dy = world_center_y - ((f.centroid_x as f64 - state.pan_x) * 1000.0 * scale);
             cr.arc(dx, dy, 3.0, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
         }
 
         // Draw Navigation Target (Orange Crosshair)
         if let Some((tx, ty)) = state.navigation_target {
-            let dx = world_center_x - (ty as f64 * 1000.0 * scale);
-            let dy = world_center_y - (tx as f64 * 1000.0 * scale);
+            let dx = world_center_x - ((ty as f64 - state.pan_y) * 1000.0 * scale);
+            let dy = world_center_y - ((tx as f64 - state.pan_x) * 1000.0 * scale);
             
             cr.set_source_rgb(1.0, 0.5, 0.0); // Orange
             cr.set_line_width(2.0);
@@ -170,8 +200,8 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
             cr.set_line_width(2.0);
             let mut first = true;
             for p in &state.current_path {
-                let dx = world_center_x - (p.1 as f64 * 1000.0 * scale);
-                let dy = world_center_y - (p.0 as f64 * 1000.0 * scale);
+                let dx = world_center_x - ((p.1 as f64 - state.pan_y) * 1000.0 * scale);
+                let dy = world_center_y - ((p.0 as f64 - state.pan_x) * 1000.0 * scale);
                 if first {
                     cr.move_to(dx, dy);
                     first = false;
@@ -187,15 +217,14 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         cr.set_line_width(1.0);
         cr.set_dash(&[5.0, 5.0], 0.0);
         if let Some((first_x, first_y)) = state.trajectory.first() {
-            // wx = first_x, wy = first_y
             cr.move_to(
-                world_center_x - (*first_y as f64 * 1000.0 * scale),
-                world_center_y - (*first_x as f64 * 1000.0 * scale)
+                world_center_x - ((*first_y as f64 - state.pan_y) * 1000.0 * scale),
+                world_center_y - ((*first_x as f64 - state.pan_x) * 1000.0 * scale)
             );
             for (tx, ty) in state.trajectory.iter().skip(1) {
                 cr.line_to(
-                    world_center_x - (*ty as f64 * 1000.0 * scale),
-                    world_center_y - (*tx as f64 * 1000.0 * scale)
+                    world_center_x - ((*ty as f64 - state.pan_y) * 1000.0 * scale),
+                    world_center_y - ((*tx as f64 - state.pan_x) * 1000.0 * scale)
                 );
             }
             cr.stroke().unwrap();
@@ -203,15 +232,9 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         cr.set_dash(&[], 0.0);
 
         // Calculate Robot Position on Canvas (Corrected for Screen Coordinates)
-        // Gazebo X (Forward) -> Screen -Y (Up)
-        // Gazebo Y (Left) -> Screen -X (Left)
-        let robot_draw_x = world_center_x - (state.robot_y as f64 * 1000.0 * scale);
-        let robot_draw_y = world_center_y - (state.robot_x as f64 * 1000.0 * scale);
+        let robot_draw_x = world_center_x - ((state.robot_y as f64 - state.pan_y) * 1000.0 * scale);
+        let robot_draw_y = world_center_y - ((state.robot_x as f64 - state.pan_x) * 1000.0 * scale);
         
-        // Robot Theta 0 is +X (Forward/Up). 
-        // Screen orientation: Up is -PI/2.
-        // Because screen Y is inverted, increasing Theta (CCW) should move the 
-        // screen vector towards the Left (-PI).
         let robot_theta = state.robot_theta as f64;
         let screen_theta = -std::f64::consts::FRAC_PI_2 - robot_theta;
 
@@ -232,38 +255,54 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         );
         cr.stroke().unwrap();
 
-        // Draw current Lidar Scan (Corrected for Pose)
-        // Points are colored by quality: green = high quality, red = low quality.
-        // RP-Lidar A1M8 quality range is 0–63.
-        const MAX_QUALITY: f64 = 63.0;
-        for p in &state.display_scan {
-            if p.distance_mm < 10.0 {
-                continue;
+        // Draw line to the latest point with scan_completed == true (marking the boundary/start of the scan)
+        if state.show_lidar {
+            if let Some(p) = state.display_scan.iter().rev().find(|p| p.scan_completed && p.distance_mm >= 10.0) {
+                let angle_robot_rad = (p.angle_deg as f64).to_radians();
+                let total_angle_world = robot_theta - angle_robot_rad;
+
+                let wx = (state.robot_x as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.cos());
+                let wy = (state.robot_y as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.sin());
+
+                let dx = world_center_x - ((wy - state.pan_y * 1000.0) * scale);
+                let dy = world_center_y - ((wx - state.pan_x * 1000.0) * scale);
+
+                cr.set_source_rgba(0.0, 0.8, 1.0, 0.6); // Semi-transparent Cyan
+                cr.set_line_width(1.5);
+                let dash = [4.0, 4.0];
+                cr.set_dash(&dash, 0.0);
+                cr.move_to(robot_draw_x, robot_draw_y);
+                cr.line_to(dx, dy);
+                cr.stroke().unwrap();
+                cr.set_dash(&[], 0.0); // Reset dash
             }
+        }
 
-            // Map quality [0, MAX_QUALITY] → t [0.0, 1.0]
-            let t = (p.quality as f64 / MAX_QUALITY).clamp(0.0, 1.0);
-            // Gradient: red (t=0) → green (t=1)
-            let r = 1.0 - t;
-            let g = t;
-            cr.set_source_rgba(r, g, 0.0, 0.85);
+        // Draw current Lidar Scan (Corrected for Pose)
+        if state.show_lidar {
+            const MAX_QUALITY: f64 = 15.0;
+            for p in &state.display_scan {
+                if p.distance_mm < 10.0 {
+                    continue;
+                }
 
-            // Lidar point in robot frame (Lidar 0 is Front)
-            let angle_robot_rad = (p.angle_deg as f64).to_radians();
+                let t = (p.quality as f64 / MAX_QUALITY).clamp(0.0, 1.0);
+                let r = 1.0 - t;
+                let g = t;
+                cr.set_source_rgba(r, g, 0.0, 0.85);
 
-            // Total angle in world frame
-            let total_angle_world = robot_theta - angle_robot_rad;
+                let angle_robot_rad = (p.angle_deg as f64).to_radians();
+                let total_angle_world = robot_theta - angle_robot_rad;
 
-            // Transform to World Coordinates (Gazebo Frame)
-            let wx = (state.robot_x as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.cos());
-            let wy = (state.robot_y as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.sin());
+                let wx = (state.robot_x as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.cos());
+                let wy = (state.robot_y as f64 * 1000.0) + (p.distance_mm as f64 * total_angle_world.sin());
 
-            // Project to Screen Coordinates
-            let dx = world_center_x - (wy * scale);
-            let dy = world_center_y - (wx * scale);
+                let dx = world_center_x - ((wy - state.pan_y * 1000.0) * scale);
+                let dy = world_center_y - ((wx - state.pan_x * 1000.0) * scale);
 
-            cr.arc(dx, dy, 2.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill().unwrap();
+                cr.arc(dx, dy, 2.0, 0.0, 2.0 * std::f64::consts::PI);
+                cr.fill().unwrap();
+            }
         }
 
         // Draw Scale Legend

@@ -17,6 +17,9 @@ public:
 
     bool send_robot_config(uint32_t millis, float kp_l, float ki_l, float kd_l, float kp_r, float ki_r, float kd_r, float lidar_frequency = 5.0f);
 
+    bool send_robot_capabilities(uint32_t millis, bool has_accel, bool has_gyro, bool has_mag,
+                                 float wheel_diameter_mm, float wheel_track_mm, uint32_t encoder_ticks_per_rev);
+
     bool send_heartbeat(uint32_t millis);
 
     bool send_lidar_point(uint32_t millis, float distance_mm, float angle_deg, uint32_t quality, bool scan_completed);

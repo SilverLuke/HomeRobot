@@ -128,6 +128,17 @@ message Telemetry {
   LidarScan lidar = 4;
 }
 
+// Physical attributes and sensor availability of the robot
+message RobotCapabilities {
+  bool has_accelerometer = 1;
+  bool has_gyroscope = 2;
+  bool has_magnetometer = 3;
+  
+  float wheel_diameter_mm = 4;
+  float wheel_track_mm = 5;
+  uint32 encoder_ticks_per_rev = 6;
+}
+
 // Wrapper message for data sent from the Robot (ESP32) to the Server
 message RobotToServerMessage {
   uint32 sequence_millis = 1;
@@ -139,6 +150,7 @@ message RobotToServerMessage {
     RobotConfig config = 6;
     bool heartbeat = 7;
     RpcResponse rpc_response = 8;
+    RobotCapabilities capabilities = 9;
   }
 }
 

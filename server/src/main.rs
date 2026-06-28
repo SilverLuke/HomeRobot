@@ -86,8 +86,10 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                              }
                                          } else if r.method == "ExecuteMotion" {
                                              if let Ok(motion_req) = <homerobot::MotionRequest as prost::Message>::decode(&*r.payload) {
-                                                 let ticks_per_meter = 1736.2_f32;
-                                                 let wheel_base = 0.26_f32;
+                                                 let (ticks_per_meter, wheel_base) = {
+                                                     let sizes = crate::constants::ROBOT_SIZES.lock().unwrap();
+                                                     (sizes.ticks_per_meter, sizes.wheel_base)
+                                                 };
                                                  
                                                  let (left_ticks, right_ticks) = match motion_req.r#type {
                                                      0 => { // STRAIGHT

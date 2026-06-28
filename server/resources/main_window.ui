@@ -16,51 +16,9 @@
           </object>
         </child>
         <child type="start">
-          <object class="GtkButton" id="btn_clear_path">
-            <property name="icon-name">edit-clear-all-symbolic</property>
-            <property name="tooltip-text">Clear Robot Path</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
           <object class="GtkToggleButton" id="btn_explore">
             <property name="icon-name">media-record-symbolic</property>
             <property name="tooltip-text">Autonomous Exploration</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkButton" id="btn_save_map">
-            <property name="icon-name">document-save-symbolic</property>
-            <property name="tooltip-text">Save Map to house_map.pgm</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkToggleButton" id="btn_lidar">
-            <property name="icon-name">sensors-symbolic</property>
-            <property name="tooltip-text">Toggle LiDAR Streaming (L)</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkButton" id="btn_start_rerun">
-            <property name="icon-name">media-playback-start-symbolic</property>
-            <property name="tooltip-text">Start Rerun Viewer</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkButton" id="btn_zoom_in">
-            <property name="icon-name">zoom-in-symbolic</property>
-            <property name="tooltip-text">Zoom In (+)</property>
-            <property name="focusable">false</property>
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkButton" id="btn_zoom_out">
-            <property name="icon-name">zoom-out-symbolic</property>
-            <property name="tooltip-text">Zoom Out (-)</property>
             <property name="focusable">false</property>
           </object>
         </child>
@@ -205,6 +163,70 @@
                                   <property name="column">1</property>
                                   <property name="row">2</property>
                                 </layout>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <!-- Mapping & Sensors Operations -->
+                <child>
+                  <object class="GtkExpander">
+                    <property name="label">Mapping &amp; Sensors</property>
+                    <property name="expanded">true</property>
+                    <child>
+                      <object class="GtkFrame">
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
+                            <property name="margin-start">10</property>
+                            <property name="margin-end">10</property>
+                            <property name="margin-top">10</property>
+                            <property name="margin-bottom">10</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">LiDAR Sensor:</property>
+                                    <property name="hexpand">true</property>
+                                    <property name="xalign">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkToggleButton" id="btn_lidar">
+                                    <property name="label">Toggle Streaming</property>
+                                    <property name="icon-name">sensors-symbolic</property>
+                                    <property name="focusable">false</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkButton" id="btn_clear_path">
+                                    <property name="label">Clear Path</property>
+                                    <property name="icon-name">edit-clear-all-symbolic</property>
+                                    <property name="hexpand">true</property>
+                                    <property name="focusable">false</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_save_map">
+                                    <property name="label">Save Map</property>
+                                    <property name="icon-name">document-save-symbolic</property>
+                                    <property name="hexpand">true</property>
+                                    <property name="focusable">false</property>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>
@@ -667,6 +689,44 @@
                   </object>
                 </child>
 
+                <!-- Advanced Visualization -->
+                <child>
+                  <object class="GtkExpander">
+                    <property name="label">Advanced Visualization</property>
+                    <property name="expanded">false</property>
+                    <child>
+                      <object class="GtkFrame">
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">10</property>
+                            <property name="margin-start">10</property>
+                            <property name="margin-end">10</property>
+                            <property name="margin-top">10</property>
+                            <property name="margin-bottom">10</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Launch Rerun SDK for advanced 3D visual SLAM tracking, point clouds, and trajectory timeline playback.</property>
+                                <property name="wrap">true</property>
+                                <property name="justify">left</property>
+                                <property name="xalign">0</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_start_rerun">
+                                <property name="label">Start Rerun Viewer</property>
+                                <property name="icon-name">media-playback-start-symbolic</property>
+                                <property name="hexpand">true</property>
+                                <property name="focusable">false</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
                 <!-- Keyboard Shortcuts Help -->
                 <child>
                   <object class="GtkExpander">
@@ -730,10 +790,89 @@ H: Toggle Sidebar</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
             <child>
-              <object class="GtkDrawingArea" id="lidar_canvas">
-                <property name="focusable">true</property>
-                <property name="content-width">600</property>
-                <property name="content-height">600</property>
+              <object class="GtkOverlay" id="map_overlay">
+                <child>
+                  <object class="GtkDrawingArea" id="lidar_canvas">
+                    <property name="focusable">true</property>
+                    <property name="content-width">600</property>
+                    <property name="content-height">600</property>
+                  </object>
+                </child>
+                <child type="overlay">
+                  <object class="GtkBox" id="map_controls_box">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="halign">end</property>
+                    <property name="valign">start</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-end">12</property>
+                    <style>
+                      <class name="map-control-overlay"/>
+                    </style>
+                    <child>
+                      <object class="GtkButton" id="btn_zoom_in">
+                        <property name="icon-name">zoom-in-symbolic</property>
+                        <property name="tooltip-text">Zoom In (+)</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-button"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_zoom_out">
+                        <property name="icon-name">zoom-out-symbolic</property>
+                        <property name="tooltip-text">Zoom Out (-)</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-button"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_center_robot">
+                        <property name="icon-name">find-location-symbolic</property>
+                        <property name="tooltip-text">Center Map on Robot</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-button"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="btn_zoom_fit">
+                        <property name="icon-name">zoom-fit-best-symbolic</property>
+                        <property name="tooltip-text">Fit Viewport to Map</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-button"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkToggleButton" id="btn_show_map">
+                        <property name="icon-name">map-symbolic</property>
+                        <property name="tooltip-text">Toggle Map Visibility</property>
+                        <property name="active">true</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-toggle"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkToggleButton" id="btn_show_sensor">
+                        <property name="icon-name">sensors-symbolic</property>
+                        <property name="tooltip-text">Toggle Sensor Readings Visibility</property>
+                        <property name="active">true</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="map-control-toggle"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
@@ -742,6 +881,7 @@ H: Toggle Sidebar</property>
     </child>
         <child type="overlay">
           <object class="GtkBox" id="loading_overlay">
+            <property name="visible">false</property>
             <property name="orientation">vertical</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>

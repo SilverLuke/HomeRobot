@@ -7,11 +7,40 @@ Battery::Battery(const struct device* adc_dev, uint8_t channel)
     : adc_dev_(adc_dev), channel_(channel) {
 }
 
-bool Battery::init() {
+uint32_t Battery::get_percentage() {
+    uint32_t mv = get_voltage_mv();
+    if (mv >= BATTERY_MAX_VOLTAGE) return 100;
+    if (mv <= BATTERY_MIN_VOLTAGE) return 0;
+
+    return (mv - BATTERY_MIN_VOLTAGE) * 100 / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE);
+}
+
 #if defined(CONFIG_BOARD_NATIVE_SIM)
+
+// ==========================================
+// SIMULATED IMPLEMENTATION
+// ==========================================
+
+bool Battery::init() {
     LOG_INF("Battery (Simulated) initialized.");
     return true;
+}
+
+int32_t Battery::read_raw() {
+    return 2450; // Dummy raw value for ~15V
+}
+
+uint32_t Battery::get_voltage_mv() {
+    return 15000; // Fixed 15V for simulation
+}
+
 #else
+
+// ==========================================
+// HARDWARE IMPLEMENTATION
+// ==========================================
+
+bool Battery::init() {
     if (adc_dev_ == nullptr) {
         LOG_ERR("ADC device pointer is NULL! Check devicetree node adc0.");
         return false;
@@ -35,13 +64,9 @@ bool Battery::init() {
     }
 
     return true;
-#endif
 }
 
 int32_t Battery::read_raw() {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    return 2450; // Dummy raw value for ~15V
-#else
     if (adc_dev_ == nullptr || !device_is_ready(adc_dev_)) {
         return -1;
     }
@@ -60,13 +85,9 @@ int32_t Battery::read_raw() {
     }
 
     return sample_buffer[0];
-#endif
 }
 
 uint32_t Battery::get_voltage_mv() {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    return 15000; // Fixed 15V for simulation
-#else
     if (adc_dev_ == nullptr || !device_is_ready(adc_dev_)) {
         return 0;
     }
@@ -80,13 +101,6 @@ uint32_t Battery::get_voltage_mv() {
     
     // Applying the voltage divider ratio
     return (uint32_t)((float)mv * VOLTAGE_DIVIDER_RATIO);
+}
+
 #endif
-}
-
-uint32_t Battery::get_percentage() {
-    uint32_t mv = get_voltage_mv();
-    if (mv >= BATTERY_MAX_VOLTAGE) return 100;
-    if (mv <= BATTERY_MIN_VOLTAGE) return 0;
-
-    return (mv - BATTERY_MIN_VOLTAGE) * 100 / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE);
-}

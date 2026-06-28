@@ -18,4 +18,12 @@ namespace constants {
 
     // Main Loop
     constexpr uint32_t MAIN_LOOP_DELAY_MS = 5; // 200Hz loop
+
+    // Robot Capabilities & Specifications
+    constexpr bool HAS_ACCELEROMETER = true;
+    constexpr bool HAS_GYROSCOPE = true;
+    constexpr bool HAS_MAGNETOMETER = false; // BMI160 only has accel/gyro
+    constexpr float WHEEL_DIAMETER_MM = 66.0f;
+    constexpr float WHEEL_TRACK_MM = 260.0f;
+    constexpr int32_t ENCODER_TICKS_PER_REV = 360;
 }

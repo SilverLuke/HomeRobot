@@ -68,6 +68,22 @@ bool ProtobufHandler::send_robot_config(uint32_t millis, float kp_l, float ki_l,
     return encode_and_send(message);
 }
 
+bool ProtobufHandler::send_robot_capabilities(uint32_t millis, bool has_accel, bool has_gyro, bool has_mag,
+                                             float wheel_diameter_mm, float wheel_track_mm, uint32_t encoder_ticks_per_rev) {
+    homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
+    message.sequence_millis = millis;
+    message.which_payload = homerobot_RobotToServerMessage_capabilities_tag;
+
+    message.payload.capabilities.has_accelerometer = has_accel;
+    message.payload.capabilities.has_gyroscope = has_gyro;
+    message.payload.capabilities.has_magnetometer = has_mag;
+    message.payload.capabilities.wheel_diameter_mm = wheel_diameter_mm;
+    message.payload.capabilities.wheel_track_mm = wheel_track_mm;
+    message.payload.capabilities.encoder_ticks_per_rev = encoder_ticks_per_rev;
+
+    return encode_and_send(message);
+}
+
 bool ProtobufHandler::send_heartbeat(uint32_t millis) {
     homerobot_RobotToServerMessage message = homerobot_RobotToServerMessage_init_default;
     message.sequence_millis = millis;

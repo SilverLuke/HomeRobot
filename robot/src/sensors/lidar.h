@@ -3,6 +3,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/ring_buffer.h>
 #include "communication/protobuf_handler.h"
 #include "constants.h"
 
@@ -111,4 +112,10 @@ private:
     bool sync_locked_ = false;
     uint32_t consecutive_valid_ = 0;
     uint32_t consecutive_invalid_ = 0;
+
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
+    struct ring_buf rx_ring_buf_;
+    uint8_t rx_ring_buf_data_[1024];
+    static void lidar_uart_irq_handler(const struct device *dev, void *user_data);
+#endif
 };

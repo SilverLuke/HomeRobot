@@ -28,6 +28,14 @@ pub enum GuiUpdate {
     Status(String),
     NavigationTarget(Option<(f32, f32)>),
     Log(String),
+    Capabilities {
+        _has_accelerometer: bool,
+        _has_gyroscope: bool,
+        has_magnetometer: bool,
+        _wheel_diameter_mm: f32,
+        _wheel_track_mm: f32,
+        _encoder_ticks_per_rev: u32,
+    },
 }
 
 pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Application, mpsc::Sender<GuiUpdate>) {
@@ -45,7 +53,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let rec = rec_clone.clone();
         println!("GUI: Initializing GTK components...");
         let builder = Builder::new();
-        builder.add_from_string(include_str!("../main_window.ui")).expect("Failed to parse UI XML");
+        builder.add_from_string(include_str!("../../resources/main_window.ui")).expect("Failed to parse UI XML");
         
         let window: ApplicationWindow = builder.object("main_window").expect("Could not find object 'main_window' in UI definition");
         window.set_application(Some(app));
@@ -99,11 +107,16 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_rotate_right: Button = builder.object("btn_rotate_right").expect("Could not find btn_rotate_right");
         let btn_zoom_in: Button = builder.object("btn_zoom_in").expect("Could not find btn_zoom_in");
         let btn_zoom_out: Button = builder.object("btn_zoom_out").expect("Could not find btn_zoom_out");
+        let btn_center_robot: Button = builder.object("btn_center_robot").expect("Could not find btn_center_robot");
+        let btn_zoom_fit: Button = builder.object("btn_zoom_fit").expect("Could not find btn_zoom_fit");
+        let btn_show_map: gtk4::ToggleButton = builder.object("btn_show_map").expect("Could not find btn_show_map");
+        let btn_show_sensor: gtk4::ToggleButton = builder.object("btn_show_sensor").expect("Could not find btn_show_sensor");
         let log_text_view: gtk4::TextView = builder.object("log_text_view").expect("Could not find log_text_view");
 
         let loading_overlay: gtk4::Box = builder.object("loading_overlay").expect("Could not find loading_overlay");
         let loading_spinner: gtk4::Spinner = builder.object("loading_spinner").expect("Could not find loading_spinner");
         loading_spinner.start();
+        loading_overlay.set_visible(true);
 
         // Explicitly disable focus for input widgets to prevent them from stealing WASD keys
         kp_left.set_focusable(false);
@@ -121,6 +134,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         btn_reset.set_focusable(false);
         btn_zoom_in.set_focusable(false);
         btn_zoom_out.set_focusable(false);
+        btn_center_robot.set_focusable(false);
+        btn_zoom_fit.set_focusable(false);
+        btn_show_map.set_focusable(false);
+        btn_show_sensor.set_focusable(false);
         log_text_view.set_focusable(false);
 
         #[allow(deprecated)]
@@ -137,6 +154,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             btn_rotate_left.set_can_focus(false);
             btn_rotate_right.set_can_focus(false);
             btn_reset.set_can_focus(false);
+            btn_center_robot.set_can_focus(false);
+            btn_zoom_fit.set_can_focus(false);
+            btn_show_map.set_can_focus(false);
+            btn_show_sensor.set_can_focus(false);
             log_text_view.set_can_focus(false);
         }
 
@@ -146,42 +167,77 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         crate::gui::lidar::setup_gyro_plot(&gyro_canvas);
         crate::gui::lidar::setup_mag_plot(&mag_canvas);
 
-        // Map Click Navigation gesture
-        let click_controller = gtk4::GestureClick::new();
+        // Map Drag & Click Navigation gesture
+        let drag_controller = gtk4::GestureDrag::new();
         let rc_click = robot_command.clone();
-        let lidar_canvas_click = lidar_canvas.clone();
         let btn_explore_click = btn_explore.clone();
-        click_controller.connect_pressed(move |_gesture, _n_press, x, y| {
-            let width = lidar_canvas_click.width() as f64;
-            let height = lidar_canvas_click.height() as f64;
+        
+        let start_pan = std::rc::Rc::new(std::cell::Cell::new((0.0f64, 0.0f64)));
+        let start_pan_begin = start_pan.clone();
+        
+        drag_controller.connect_drag_begin(move |_, _, _| {
+            let state = GUI_STATE.lock().unwrap();
+            start_pan_begin.set((state.pan_x, state.pan_y));
+        });
+        
+        let start_pan_update = start_pan.clone();
+        let lidar_canvas_drag_update = lidar_canvas.clone();
+        drag_controller.connect_drag_update(move |_, offset_x, offset_y| {
+            let scale = {
+                let state = GUI_STATE.lock().unwrap();
+                0.05 * state.zoom_factor
+            };
+            let (spx, spy) = start_pan_update.get();
             
-            let world_center_x = width / 2.0;
-            let world_center_y = height / 2.0;
+            // Dragging: adjust camera center (opposite of cursor movement in screen space)
+            let new_pan_x = spx + offset_y / (1000.0 * scale);
+            let new_pan_y = spy + offset_x / (1000.0 * scale);
             
-            // Map click (x, y) to world (goal_x, goal_y)
-            let goal_y = (world_center_x - x) as f32 / 50.0;
-            let goal_x = (world_center_y - y) as f32 / 50.0;
-            
-            println!("GUI: Map clicked at pixel ({:.1}, {:.1}) -> World Goal: X={:.2}, Y={:.2}", x, y, goal_x, goal_y);
-            
-            // Set navigation target in GUI State immediately for visual response
             {
                 let mut state = GUI_STATE.lock().unwrap();
-                state.navigation_target = Some((goal_x, goal_y));
-                state.current_path.clear(); // Clear old path until replanned by server
+                state.pan_x = new_pan_x;
+                state.pan_y = new_pan_y;
             }
-            lidar_canvas_click.queue_draw();
-            
-            // Deactivate auto-exploration if active
-            if btn_explore_click.is_active() {
-                btn_explore_click.set_active(false);
-            }
-            
-            // Send NavigateTo command
-            let mut cmd = rc_click.lock().unwrap();
-            *cmd = RobotCommand::NavigateTo { x: goal_x, y: goal_y };
+            lidar_canvas_drag_update.queue_draw();
         });
-        lidar_canvas.add_controller(click_controller);
+        
+        let lidar_canvas_drag_end = lidar_canvas.clone();
+        drag_controller.connect_drag_end(move |gesture, offset_x, offset_y| {
+            let dist = (offset_x * offset_x + offset_y * offset_y).sqrt();
+            if dist < 6.0 {
+                if let Some((start_x, start_y)) = gesture.start_point() {
+                    let width = lidar_canvas_drag_end.width() as f64;
+                    let height = lidar_canvas_drag_end.height() as f64;
+                    let world_center_x = width / 2.0;
+                    let world_center_y = height / 2.0;
+                    
+                    let (pan_x, pan_y, scale) = {
+                        let state = GUI_STATE.lock().unwrap();
+                        (state.pan_x, state.pan_y, 0.05 * state.zoom_factor)
+                    };
+                    
+                    let goal_y = (pan_y + (world_center_x - start_x) / (1000.0 * scale)) as f32;
+                    let goal_x = (pan_x + (world_center_y - start_y) / (1000.0 * scale)) as f32;
+                    
+                    println!("GUI: Map clicked at pixel ({:.1}, {:.1}) -> World Goal: X={:.2}, Y={:.2}", start_x, start_y, goal_x, goal_y);
+                    
+                    {
+                        let mut state = GUI_STATE.lock().unwrap();
+                        state.navigation_target = Some((goal_x, goal_y));
+                        state.current_path.clear();
+                    }
+                    lidar_canvas_drag_end.queue_draw();
+                    
+                    if btn_explore_click.is_active() {
+                        btn_explore_click.set_active(false);
+                    }
+                    
+                    let mut cmd = rc_click.lock().unwrap();
+                    *cmd = RobotCommand::NavigateTo { x: goal_x, y: goal_y };
+                }
+            }
+        });
+        lidar_canvas.add_controller(drag_controller);
 
         let lidar_canvas_clear = lidar_canvas.clone();
         btn_clear_path.connect_clicked(move |_| {
@@ -193,13 +249,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
 
         // Custom CSS for Buttons and Loading Overlay
         let provider = gtk4::CssProvider::new();
-        provider.load_from_string("
-            .lidar-on { background-color: #2ecc71; color: white; }
-            .lidar-on:checked { background-color: #27ae60; color: white; }
-            .explore-on { background-color: #e74c3c; color: white; }
-            .explore-on:checked { background-color: #c0392b; color: white; }
-            .loading-overlay-bg { background-color: rgba(25, 25, 25, 0.96); color: white; }
-        ");
+        provider.load_from_string(include_str!("../../resources/style.css"));
         gtk4::style_context_add_provider_for_display(
             &gdk4::Display::default().expect("Could not connect to a display."),
             &provider,
@@ -404,6 +454,9 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 let mut state = GUI_STATE.lock().unwrap();
                 state.navigation_target = None;
                 state.current_path.clear();
+                state.pan_x = 0.0;
+                state.pan_y = 0.0;
+                state.zoom_factor = 1.0;
             }
             lidar_canvas_reset.queue_draw();
             *rc_reset.lock().unwrap() = RobotCommand::Reset;
@@ -422,6 +475,28 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         });
         btn_lidar.set_active(true);
 
+        let lidar_canvas_show_map = lidar_canvas.clone();
+        btn_show_map.connect_toggled(move |btn| {
+            let active = btn.is_active();
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.show_map = active;
+            }
+            lidar_canvas_show_map.queue_draw();
+            println!("GUI: Show Map toggled: {}", active);
+        });
+
+        let lidar_canvas_show_sensor = lidar_canvas.clone();
+        btn_show_sensor.connect_toggled(move |btn| {
+            let active = btn.is_active();
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.show_lidar = active;
+            }
+            lidar_canvas_show_sensor.queue_draw();
+            println!("GUI: Plot Sensor Reads toggled: {}", active);
+        });
+
         let lidar_canvas_zoom_in = lidar_canvas.clone();
         btn_zoom_in.connect_clicked(move |_| {
             let mut state = GUI_STATE.lock().unwrap();
@@ -436,6 +511,73 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             state.zoom_factor = (state.zoom_factor / 1.2).max(0.1);
             println!("GUI: Zoom Out clicked: {:.2}x", state.zoom_factor);
             lidar_canvas_zoom_out.queue_draw();
+        });
+
+        let lidar_canvas_center = lidar_canvas.clone();
+        btn_center_robot.connect_clicked(move |_| {
+            let mut state = GUI_STATE.lock().unwrap();
+            state.pan_x = state.robot_x as f64;
+            state.pan_y = state.robot_y as f64;
+            println!("GUI: Centered map on robot at ({:.2}, {:.2})", state.pan_x, state.pan_y);
+            lidar_canvas_center.queue_draw();
+        });
+
+        let lidar_canvas_fit = lidar_canvas.clone();
+        btn_zoom_fit.connect_clicked(move |_| {
+            let mut state = GUI_STATE.lock().unwrap();
+            
+            let mut points = Vec::new();
+            points.push((state.robot_x, state.robot_y));
+            for &(tx, ty) in &state.trajectory {
+                points.push((tx, ty));
+            }
+            
+            if !state.map_data.is_empty() && state.map_width > 0 && state.map_height > 0 {
+                let res = 0.05f64;
+                for y in 0..state.map_height {
+                    for x in 0..state.map_width {
+                        let val = state.map_data[y * state.map_width + x];
+                        if val != 0 {
+                            let wx = (x as f64 - state.map_width as f64 / 2.0) * res;
+                            let wy = (y as f64 - state.map_height as f64 / 2.0) * res;
+                            points.push((wx as f32, wy as f32));
+                        }
+                    }
+                }
+            }
+            
+            if !points.is_empty() {
+                let mut min_x = points[0].0;
+                let mut max_x = points[0].0;
+                let mut min_y = points[0].1;
+                let mut max_y = points[0].1;
+                
+                for &(px, py) in points.iter().skip(1) {
+                    min_x = min_x.min(px);
+                    max_x = max_x.max(px);
+                    min_y = min_y.min(py);
+                    max_y = max_y.max(py);
+                }
+                
+                state.pan_x = ((min_x + max_x) / 2.0) as f64;
+                state.pan_y = ((min_y + max_y) / 2.0) as f64;
+                
+                let size_x = (max_x - min_x).max(2.0) as f64;
+                let size_y = (max_y - min_y).max(2.0) as f64;
+                
+                let width = lidar_canvas_fit.width() as f64;
+                let height = lidar_canvas_fit.height() as f64;
+                
+                let zoom_x = (width * 0.9) / (size_y * 50.0);
+                let zoom_y = (height * 0.9) / (size_x * 50.0);
+                
+                state.zoom_factor = zoom_x.min(zoom_y).clamp(0.1, 10.0);
+                println!(
+                    "GUI: Zoomed to fit bounds X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], zoom_factor: {:.2}x",
+                    min_x, max_x, min_y, max_y, state.zoom_factor
+                );
+            }
+            lidar_canvas_fit.queue_draw();
         });
 
         let scroll_controller = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
@@ -481,20 +623,28 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let btn_lidar_freq_ref = btn_lidar.clone();
         let is_updating_freq = is_updating.clone();
         let lidar_freq_scale_c = lidar_freq_scale.clone();
-        lidar_freq_scale.connect_value_changed(move |_| {
-            if !is_updating_freq.get() {
-                let freq = lidar_freq_scale_c.value() as f32;
-                let active = btn_lidar_freq_ref.is_active();
+
+        let drag_controller = gtk4::GestureDrag::new();
+        let rc_lidar_drag = rc_lidar_freq.clone();
+        let btn_lidar_drag_ref = btn_lidar_freq_ref.clone();
+        let scale_drag = lidar_freq_scale_c.clone();
+        let is_updating_drag = is_updating_freq.clone();
+
+        drag_controller.connect_drag_end(move |_, _, _| {
+            if !is_updating_drag.get() {
+                let freq = scale_drag.value() as f32;
+                let active = btn_lidar_drag_ref.is_active();
                 if active {
-                    let mut cmd = rc_lidar_freq.lock().unwrap();
+                    let mut cmd = rc_lidar_drag.lock().unwrap();
                     *cmd = RobotCommand::LidarControl {
                         active: true,
                         target_frequency_hz: freq,
                     };
-                    println!("GUI: Lidar frequency changed: {} Hz", freq);
+                    println!("GUI: Lidar frequency changed on release: {} Hz", freq);
                 }
             }
         });
+        lidar_freq_scale.add_controller(drag_controller);
 
         let kp_left_c = kp_left.clone();
         let kp_right_c = kp_right.clone();
@@ -769,6 +919,18 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                             log_text_view_c.scroll_to_mark(&mark, 0.0, true, 0.0, 1.0);
                             buffer.delete_mark(&mark);
                         }
+                        GuiUpdate::Capabilities {
+                            _has_accelerometer,
+                            _has_gyroscope,
+                            has_magnetometer,
+                            _wheel_diameter_mm,
+                            _wheel_track_mm,
+                            _encoder_ticks_per_rev,
+                        } => {
+                            println!("[GUI] Received capabilities: magnetometer={}", has_magnetometer);
+                            mag_label_c.set_visible(has_magnetometer);
+                            mag_canvas_c.set_visible(has_magnetometer);
+                        }
                     }
                 }
             }
@@ -795,7 +957,7 @@ mod tests {
         }
 
         let builder = Builder::new();
-        let ui_str = include_str!("../main_window.ui");
+        let ui_str = include_str!("../../resources/main_window.ui");
         
         // This will panic if XML is invalid
         builder.add_from_string(ui_str).expect("Failed to parse UI XML in tests");
@@ -822,6 +984,8 @@ mod tests {
             "btn_lidar",
             "btn_zoom_in",
             "btn_zoom_out",
+            "btn_center_robot",
+            "btn_zoom_fit",
             "btn_reset",
             "scan_rate_label",
             "log_text_view",

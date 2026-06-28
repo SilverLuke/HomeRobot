@@ -17,9 +17,4 @@ private:
     const struct device* dev_;
     struct sensor_value accel_[3];
     struct sensor_value gyro_[3];
-
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    float v_accel_[3];
-    float v_gyro_[3];
-#endif
 };

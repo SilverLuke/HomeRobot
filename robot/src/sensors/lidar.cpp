@@ -8,20 +8,71 @@
 
 LOG_MODULE_REGISTER(lidar, LOG_LEVEL_DBG);
 
+#if defined(CONFIG_BOARD_NATIVE_SIM)
+
+// ==========================================
+// SIMULATED IMPLEMENTATION
+// ==========================================
+
 Lidar::Lidar(const struct device* uart_dev, const struct pwm_dt_spec* motor_pwm)
     : uart_dev_(uart_dev), motor_pwm_(motor_pwm), rx_idx_(0) {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
     state_ = State::READING_DATA;
-#else
-    state_ = State::IDLE;
-#endif
 }
 
 bool Lidar::init() {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
     LOG_INF("Lidar (Simulated) initialized.");
     return true;
+}
+
+void Lidar::start() {
+    LOG_INF("Starting Lidar (Simulated)...");
+    state_ = State::READING_DATA;
+}
+
+void Lidar::stop() {
+    LOG_INF("Stopping Lidar (Simulated)...");
+    state_ = State::IDLE;
+}
+
+void Lidar::enable_motor(bool enable) {
+    // No physical motor in simulation
+}
+
+void Lidar::loop(ProtobufHandler* proto_handler) {
+    if (!proto_handler) return;
+
+    homerobot_LidarScan scan = homerobot_LidarScan_init_default;
+    if (GazeboBridge::get_virtual_lidar(&scan)) {
+        LOG_DBG("Forwarding virtual Lidar scan (%d points)", scan.points_count);
+
+        static ProtobufHandler::LidarPointData pts[200];
+        for (pb_size_t i = 0; i < scan.points_count; i++) {
+            pts[i].angle_deg = scan.points[i].angle_deg;
+            pts[i].distance_mm = scan.points[i].distance_mm;
+            pts[i].quality = scan.points[i].quality;
+            pts[i].scan_completed = scan.points[i].scan_completed;
+        }
+
+        proto_handler->send_lidar_scan(k_uptime_get_32(), pts, scan.points_count);
+    }
+}
+
+// Stubs for private methods not used in simulation
+void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {}
+void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler) {}
+
 #else
+
+// ==========================================
+// HARDWARE IMPLEMENTATION
+// ==========================================
+
+Lidar::Lidar(const struct device* uart_dev, const struct pwm_dt_spec* motor_pwm)
+    : uart_dev_(uart_dev), motor_pwm_(motor_pwm), rx_idx_(0) {
+    state_ = State::IDLE;
+}
+
+bool Lidar::init() {
     if (!device_is_ready(uart_dev_)) {
         LOG_ERR("UART device for Lidar not ready");
         return false;
@@ -31,18 +82,22 @@ bool Lidar::init() {
         LOG_ERR("Motor PWM for Lidar not ready");
         return false;
     }
+
+    ring_buf_init(&rx_ring_buf_, sizeof(rx_ring_buf_data_), rx_ring_buf_data_);
+    
+    // Set up interrupt callback for UART
+    uart_irq_callback_user_data_set(uart_dev_, lidar_uart_irq_handler, this);
+    uart_irq_rx_enable(uart_dev_);
  
-    LOG_INF("Lidar driver initialized");
+    LOG_INF("Lidar driver initialized with UART RX interrupt handler");
     return true;
-#endif
 }
 
 void Lidar::start() {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    LOG_INF("Starting Lidar (Simulated)...");
-    state_ = State::READING_DATA;
-    return;
-#else
+    if (state_ != State::IDLE) {
+        LOG_INF("Lidar is already running, skipping start sequence.");
+        return;
+    }
     printk("Lidar::start() called\n");
     LOG_INF("Starting Lidar...");
     enable_motor(true);
@@ -57,6 +112,8 @@ void Lidar::start() {
     consecutive_invalid_ = 0;
     last_sync_ms_ = 0;
     speed_integral_ = 0.0f;
+
+    ring_buf_reset(&rx_ring_buf_);
 
     // Send stop command first to halt any active scan
     uint8_t stop_cmd[] = {CMD_SYNC_BYTE, CMD_STOP};
@@ -95,15 +152,9 @@ void Lidar::start() {
     
     state_ = State::WAITING_HEADER;
     printk("Lidar started, state=WAITING_HEADER\n");
-#endif
 }
 
 void Lidar::stop() {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    LOG_INF("Stopping Lidar (Simulated)...");
-    state_ = State::IDLE;
-    return;
-#else
     printk("Lidar::stop() called\n");
     uint8_t stop_cmd[] = {CMD_SYNC_BYTE, CMD_STOP};
     for(int i=0; i<2; i++) uart_poll_out(uart_dev_, stop_cmd[i]);
@@ -111,49 +162,33 @@ void Lidar::stop() {
     state_ = State::IDLE;
     rx_idx_ = 0;
     points_count_ = 0;
-#endif
 }
 
 void Lidar::enable_motor(bool enable) {
-#if !defined(CONFIG_BOARD_NATIVE_SIM)
     if (motor_pwm_) {
         uint32_t pulse = enable ? (uint32_t)(0.6f * (float)motor_pwm_->period) : 0;
         int ret = pwm_set_pulse_dt(motor_pwm_, pulse);
         if (ret < 0) LOG_ERR("Failed to set motor PWM: %d", ret);
         LOG_INF("Lidar motor %s", enable ? "ENABLED (60% PWM)" : "DISABLED");
     }
-#endif
 }
+
 void Lidar::loop(ProtobufHandler* proto_handler) {
-#if defined(CONFIG_BOARD_NATIVE_SIM)
-    if (!proto_handler) return;
-
-    homerobot_LidarScan scan = homerobot_LidarScan_init_default;
-    if (GazeboBridge::get_virtual_lidar(&scan)) {
-        LOG_DBG("Forwarding virtual Lidar scan (%d points)", scan.points_count);
-
-        // Convert Nanopb LidarScan back to ProtobufHandler format for consistency
-        // or just send it directly if possible. 
-        // ProtobufHandler::send_lidar_scan expects an array of LidarPointData.
-
-        static ProtobufHandler::LidarPointData pts[200];
-        for (pb_size_t i = 0; i < scan.points_count; i++) {
-            pts[i].angle_deg = scan.points[i].angle_deg;
-            pts[i].distance_mm = scan.points[i].distance_mm;
-            pts[i].quality = scan.points[i].quality;
-            pts[i].scan_completed = scan.points[i].scan_completed;
-        }
-
-        proto_handler->send_lidar_scan(k_uptime_get_32(), pts, scan.points_count);
-    }
-#else
     if (uart_dev_ == nullptr || !device_is_ready(uart_dev_)) {
         return;
     }
     uint8_t rx_byte;
 
     int bytes_in_this_loop = 0;
-    while (uart_poll_in(uart_dev_, &rx_byte) == 0) {
+    while (true) {
+        unsigned int key = irq_lock();
+        uint32_t read_bytes = ring_buf_get(&rx_ring_buf_, &rx_byte, 1);
+        irq_unlock(key);
+
+        if (read_bytes == 0) {
+            break;
+        }
+
         total_bytes_read_++;
         bytes_in_this_loop++;
         process_byte(rx_byte, proto_handler);
@@ -174,7 +209,6 @@ void Lidar::loop(ProtobufHandler* proto_handler) {
         }
         last_log_ms_ = now;
     }
-#endif
 }
 
 void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {
@@ -210,7 +244,8 @@ void Lidar::process_byte(uint8_t byte, ProtobufHandler* proto_handler) {
                 if (first_byte_ok && second_byte_ok) {
                     consecutive_valid_++;
                     consecutive_invalid_ = 0;
-                    if (!sync_locked_ && consecutive_valid_ >= 100) {
+                    // Wait for 90 good points (approx. one quarter of a rotation) for a safe lock
+                    if (!sync_locked_ && consecutive_valid_ >= 90) {
                         sync_locked_ = true;
                         LOG_INF("Sync lock ACQUIRED");
                     }
@@ -267,19 +302,17 @@ void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler
  
                 float ctrl_out = (kp * error) + (ki * speed_integral_);
                 
-                // Base feedforward PWM duty cycle (approximate)
+                // Base feedforward PWM duty cycle
                 float base_pwm = 150.0f + (target_frequency_ - 5.0f) * 15.0f;
                 float final_pwm = base_pwm + ctrl_out;
  
                 if (final_pwm > 255.0f) final_pwm = 255.0f;
                 if (final_pwm < 80.0f) final_pwm = 80.0f;
  
-                #if !defined(CONFIG_BOARD_NATIVE_SIM)
                 if (motor_pwm_) {
                     uint32_t pulse = (uint32_t)((final_pwm / 255.0f) * (float)motor_pwm_->period);
                     pwm_set_pulse_dt(motor_pwm_, pulse);
                 }
-                #endif
             }
         }
         last_sync_ms_ = now;
@@ -297,3 +330,21 @@ void Lidar::handle_point(const node_info_t& node, ProtobufHandler* proto_handler
         points_count_ = 0;
     }
 }
+
+void Lidar::lidar_uart_irq_handler(const struct device *dev, void *user_data) {
+    Lidar *lidar = (Lidar *)user_data;
+    if (!uart_irq_update(dev)) {
+        return;
+    }
+
+    while (uart_irq_rx_ready(dev)) {
+        uint8_t byte;
+        int len = uart_fifo_read(dev, &byte, 1);
+        if (len <= 0) {
+            break;
+        }
+        ring_buf_put(&lidar->rx_ring_buf_, &byte, 1);
+    }
+}
+
+#endif

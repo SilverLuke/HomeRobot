@@ -89,7 +89,7 @@ pub fn handle_connection(
                                 if enc.left_encoder != 0 || enc.right_encoder != 0 {
                                     println!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", enc.left_encoder, enc.right_encoder);
                                 }
-                                odom.update(enc.left_encoder, enc.right_encoder);
+                                odom.update_encoders(enc.left_encoder, enc.right_encoder, msg.sequence_millis);
                                 slam.add_odom_pose(odom.pose, Instant::now());
                                 if !current_pose_initialized {
                                     current_pose = odom.pose;
@@ -111,6 +111,8 @@ pub fn handle_connection(
                             Payload::Imu(imu) => {
                                 telemetry_received = true;
                                 if let (Some(a), Some(g)) = (imu.acceleration, imu.gyroscope) {
+                                    odom.update_imu(g.z, msg.sequence_millis);
+
                                     let (mx, my, mz) = if let Some(m) = imu.magnetometer {
                                         (m.x, m.y, m.z)
                                     } else {
@@ -139,6 +141,48 @@ pub fn handle_connection(
                                         if !pending_scan.is_empty() && pending_scan.len() >= 30 && last_scan_flush_time.elapsed() >= Duration::from_millis(80) {
                                             // --- Full revolution ready: process the buffered sweep ---
                                             last_scan_flush_time = Instant::now();
+
+                                            // Calculate rotation delta statistics (differences between consecutive angles in sorted order)
+                                            if pending_scan.len() >= 2 {
+                                                let mut angles: Vec<f32> = pending_scan.iter().map(|p| p.angle_deg).collect();
+                                                angles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                                                
+                                                let mut deltas = Vec::with_capacity(angles.len());
+                                                for i in 0..angles.len() {
+                                                    let next_idx = (i + 1) % angles.len();
+                                                    let mut diff = if next_idx == 0 {
+                                                        (angles[0] + 360.0) - angles[i]
+                                                    } else {
+                                                        angles[next_idx] - angles[i]
+                                                    };
+                                                    if diff < 0.0 {
+                                                        diff += 360.0;
+                                                    }
+                                                    deltas.push(diff);
+                                                }
+                                                
+                                                let n = deltas.len() as f32;
+                                                let sum: f32 = deltas.iter().sum();
+                                                let avg = sum / n;
+                                                
+                                                let variance: f32 = deltas.iter().map(|&d| {
+                                                    let diff = d - avg;
+                                                    diff * diff
+                                                }).sum::<f32>() / n;
+                                                let std_dev = variance.sqrt();
+                                                
+                                                let mut min_val = f32::MAX;
+                                                let mut max_val = f32::MIN;
+                                                for &d in &deltas {
+                                                    if d < min_val { min_val = d; }
+                                                    if d > max_val { max_val = d; }
+                                                }
+                                                
+                                                stats.log(&format!(
+                                                    "[LIDAR ROTATION] Sweep points: {}, Avg delta: {:.4}°, StdDev: {:.4}°, Min: {:.4}°, Max: {:.4}°",
+                                                    angles.len(), avg, std_dev, min_val, max_val
+                                                ));
+                                            }
 
                                             // Track revolution time for scan-rate telemetry.
                                             let now = Instant::now();
@@ -188,7 +232,7 @@ pub fn handle_connection(
                                             let (rerun_pts, rerun_colors): (Vec<[f32; 3]>, Vec<rerun::Color>) = pending_scan.iter().map(|pt| {
                                                 let angle = -(pt.angle_deg as f32).to_radians();
                                                 let d = pt.distance_mm / 1000.0;
-                                                let t = (pt.quality as f32 / 63.0).clamp(0.0, 1.0);
+                                                let t = (pt.quality as f32 / 15.0).clamp(0.0, 1.0);
                                                 let r = ((1.0 - t) * 255.0) as u8;
                                                 let g = (t * 255.0) as u8;
                                                 ([d * angle.cos(), d * angle.sin(), 0.0], rerun::Color::from_rgb(r, g, 0))
@@ -211,6 +255,33 @@ pub fn handle_connection(
                             Payload::Config(conf) => {
                                 stats.log("[CONFIG] Robot configuration received");
                                 let _ = gui_tx.send(GuiUpdate::Config(conf));
+                            }
+                            Payload::Capabilities(cap) => {
+                                stats.log(&format!(
+                                    "[CAPABILITIES] Accel: {}, Gyro: {}, Mag: {}, Wheel Dia: {}mm, Track: {}mm, Ticks/Rev: {}",
+                                    cap.has_accelerometer, cap.has_gyroscope, cap.has_magnetometer,
+                                    cap.wheel_diameter_mm, cap.wheel_track_mm, cap.encoder_ticks_per_rev
+                                ));
+                                
+                                // 1. Update local odometry model sizes
+                                odom.update_sizes(cap.wheel_diameter_mm, cap.wheel_track_mm, cap.encoder_ticks_per_rev);
+                                
+                                // 2. Update global proxy sizes
+                                {
+                                    let mut sizes = crate::constants::ROBOT_SIZES.lock().unwrap();
+                                    sizes.wheel_base = cap.wheel_track_mm / 1000.0;
+                                    sizes.ticks_per_meter = (cap.encoder_ticks_per_rev as f32) / (std::f32::consts::PI * (cap.wheel_diameter_mm / 1000.0));
+                                }
+                                
+                                // 3. Update the GUI thread
+                                let _ = gui_tx.send(GuiUpdate::Capabilities {
+                                    _has_accelerometer: cap.has_accelerometer,
+                                    _has_gyroscope: cap.has_gyroscope,
+                                    has_magnetometer: cap.has_magnetometer,
+                                    _wheel_diameter_mm: cap.wheel_diameter_mm,
+                                    _wheel_track_mm: cap.wheel_track_mm,
+                                    _encoder_ticks_per_rev: cap.encoder_ticks_per_rev,
+                                });
                             }
                             Payload::RpcResponse(resp) => {
                                 stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
