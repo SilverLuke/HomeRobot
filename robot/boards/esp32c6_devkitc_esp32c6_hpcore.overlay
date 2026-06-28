@@ -211,7 +211,7 @@
         reg = <0>;
         #address-cells = <1>;
         #size-cells = <0>;
-        filter = <100>;
+        filter = <1023>;
         channelA@0 {
             reg = <0>;
             sig-pos-mode = <2>;
@@ -224,7 +224,7 @@
         reg = <1>;
         #address-cells = <1>;
         #size-cells = <0>;
-        filter = <100>;
+        filter = <1023>;
         channelA@0 {
             reg = <0>;
             sig-pos-mode = <2>;

@@ -2,6 +2,7 @@ use crate::homerobot::{server_to_robot_message, MotorMoveCommand};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RobotCommand {
+    Idle,
     StopAll,
     StopMoving,
     MotorAngle { 
@@ -38,18 +39,14 @@ pub enum RobotCommand {
 
 impl Default for RobotCommand {
     fn default() -> Self {
-        Self::MotorAngle {
-            left_power: 0,
-            left_angle: 0.0,
-            right_power: 0,
-            right_angle: 0.0,
-        }
+        Self::Idle
     }
 }
 
 impl RobotCommand {
     pub fn into_payload(&self) -> Option<server_to_robot_message::Payload> {
         match self {
+            RobotCommand::Idle => None,
             RobotCommand::ExecuteMotion { motion_type, left_ticks, right_ticks, max_power } => {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 use prost::Message;

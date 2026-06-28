@@ -30,7 +30,7 @@ use crate::connection::handle_connection;
 use prost::Message;
 
 fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotCommand>>) {
-    println!("[PROXY] cmd_sender connected.");
+    log::info!("[PROXY] cmd_sender connected.");
     stream.set_read_timeout(Some(Duration::from_millis(500))).ok();
     
     loop {
@@ -62,27 +62,27 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                         };
                                     }
                                     homerobot::server_to_robot_message::Payload::RpcRequest(r) => {
-                                        println!("[PROXY] Received RPC Request: {}", r.method);
+                                        log::info!("[PROXY] Received RPC Request: {}", r.method);
                                          if r.method == "RunDiagnostic" {
                                              *cmd = RobotCommand::RunDiagnostic;
-                                             println!("[PROXY] Forwarding RunDiagnostic");
+                                             log::info!("[PROXY] Forwarding RunDiagnostic");
                                          } else if r.method == "SaveMap" {
                                              *cmd = RobotCommand::SaveMap;
-                                             println!("[PROXY] Triggering SaveMap");
+                                             log::info!("[PROXY] Triggering SaveMap");
                                          } else if r.method == "StartExplore" {
                                              *cmd = RobotCommand::AutonomousExploration { enabled: true };
-                                             println!("[PROXY] Starting Autonomous Exploration");
+                                             log::info!("[PROXY] Starting Autonomous Exploration");
                                          } else if r.method == "StopExplore" {
                                              *cmd = RobotCommand::AutonomousExploration { enabled: false };
-                                             println!("[PROXY] Stopping Autonomous Exploration");
+                                             log::info!("[PROXY] Stopping Autonomous Exploration");
                                          } else if r.method == "NavigateTo" {
                                              if r.payload.len() >= 8 {
                                                  let x = f32::from_le_bytes(r.payload[0..4].try_into().unwrap());
                                                  let y = f32::from_le_bytes(r.payload[4..8].try_into().unwrap());
                                                  *cmd = RobotCommand::NavigateTo { x, y };
-                                                 println!("[PROXY] Starting Navigation to X={:.2}, Y={:.2}", x, y);
+                                                 log::info!("[PROXY] Starting Navigation to X={:.2}, Y={:.2}", x, y);
                                              } else {
-                                                 println!("[PROXY] Invalid payload for NavigateTo");
+                                                 log::warn!("[PROXY] Invalid payload for NavigateTo");
                                              }
                                          } else if r.method == "ExecuteMotion" {
                                              if let Ok(motion_req) = <homerobot::MotionRequest as prost::Message>::decode(&*r.payload) {
@@ -117,7 +117,7 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                                      right_ticks,
                                                      max_power: motion_req.max_power,
                                                  };
-                                                 println!("[PROXY] ExecuteMotion calculated: L={} R={}", left_ticks, right_ticks);
+                                                 log::info!("[PROXY] ExecuteMotion calculated: L={} R={}", left_ticks, right_ticks);
                                                  
                                                  drop(cmd);
                                                  
@@ -134,11 +134,11 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                                  
                                                  match completed.as_ref().unwrap() {
                                                      Ok(()) => {
-                                                         println!("[PROXY] Motion completed successfully.");
+                                                         log::info!("[PROXY] Motion completed successfully.");
                                                          let _ = stream.write_all(&[1u8]);
                                                      }
                                                      Err(e) => {
-                                                         println!("[PROXY] Motion failed: {}", e);
+                                                         log::error!("[PROXY] Motion failed: {}", e);
                                                          let _ = stream.write_all(&[0u8]);
                                                      }
                                                  }
@@ -147,21 +147,21 @@ fn handle_proxy_client(mut stream: TcpStream, robot_command: Arc<Mutex<RobotComm
                                          }
                                     }
                                     _ => {
-                                        println!("[PROXY] Received unknown payload type");
+                                        log::warn!("[PROXY] Received unknown payload type");
                                     }
                                 }
                             }
                         } else {
-                            println!("[PROXY] Received message with no payload");
+                            log::warn!("[PROXY] Received message with no payload");
                         }
                     } else {
-                        println!("[PROXY] Failed to decode Protobuf message");
+                        log::error!("[PROXY] Failed to decode Protobuf message");
                     }
                 }
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => { continue; }
             Err(_) => {
-                println!("[PROXY] cmd_sender disconnected.");
+                log::info!("[PROXY] cmd_sender disconnected.");
                 break;
             }
         }
@@ -236,7 +236,7 @@ fn main() -> io::Result<()> {
         let addr = "0.0.0.0:12345";
         let listener = TcpListener::bind(addr).expect("Could not bind");
         listener.set_nonblocking(true).ok();
-        println!("[SERVER] Listening on {}...\r", addr);
+        log::info!("[SERVER] Listening on {}...", addr);
 
         while stats_server.running.load(Ordering::Relaxed) && sig_count_server.load(Ordering::Relaxed) == 0 {
             match listener.accept() {
@@ -263,7 +263,7 @@ fn main() -> io::Result<()> {
         let addr = "0.0.0.0:12346";
         let listener = TcpListener::bind(addr).expect("Could not bind Proxy");
         listener.set_nonblocking(true).ok();
-        println!("[PROXY] Listening for cmd_sender on {}...\r", addr);
+        log::info!("[PROXY] Listening for cmd_sender on {}...", addr);
 
         while stats_proxy.running.load(Ordering::Relaxed) {
             match listener.accept() {
@@ -287,12 +287,12 @@ fn main() -> io::Result<()> {
         let socket = match UdpSocket::bind("0.0.0.0:5140") {
             Ok(s) => s,
             Err(e) => {
-                println!("[SYSLOG ERROR] Could not bind to port 5140: {}\r", e);
+                log::error!("[SYSLOG ERROR] Could not bind to port 5140: {}", e);
                 return;
             }
         };
         socket.set_read_timeout(Some(Duration::from_millis(500))).ok();
-        println!("[SYSLOG] Listening on UDP 0.0.0.0:5140...\r");
+        log::info!("[SYSLOG] Listening on UDP 0.0.0.0:5140");
 
         let mut buf = [0u8; 1024];
         while stats_syslog.running.load(Ordering::Relaxed) {
@@ -300,7 +300,9 @@ fn main() -> io::Result<()> {
                 Ok((amt, _src)) => {
                     if let Ok(msg) = std::str::from_utf8(&buf[..amt]) {
                         let clean_msg = msg.trim();
-                        println!("[ROBOT] {}\r", clean_msg);
+                        if is_headless {
+                            log::info!("[ROBOT] {}", clean_msg);
+                        }
                         let _ = gui_tx_syslog.send(crate::gui::GuiUpdate::Log(clean_msg.to_string()));
                     }
                 }
@@ -314,7 +316,7 @@ fn main() -> io::Result<()> {
 
     // 6. Run GTK GUI or Headless Loop
     if is_headless {
-        println!("[SERVER] Running in background. Waiting for connections...");
+        log::info!("[SERVER] Running in background. Waiting for connections...");
         while stats.running.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100));
         }

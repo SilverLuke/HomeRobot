@@ -47,7 +47,7 @@ impl Odometry {
         
         self.wheel_base = track_m;
         self.ticks_per_meter = (encoder_ticks_per_rev as f32) / (std::f32::consts::PI * diameter_m);
-        println!(
+        log::info!(
             "[ODOMETRY] Dynamic configuration applied: wheel_base = {:.4} m, ticks_per_meter = {:.2}",
             self.wheel_base, self.ticks_per_meter
         );
@@ -88,7 +88,7 @@ impl Odometry {
                 self.stationary_samples += 1;
                 if self.stationary_samples == 30 {
                     self.gyro_bias = self.stationary_gyro_sum / 30.0;
-                    println!("[ODOMETRY] Gyro calibration completed! Bias: {:.6} rad/s", self.gyro_bias);
+                    log::info!("[ODOMETRY] Gyro calibration completed! Bias: {:.6} rad/s", self.gyro_bias);
                 }
             }
         } else {

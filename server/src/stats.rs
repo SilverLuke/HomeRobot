@@ -20,6 +20,6 @@ impl Stats {
 
     /// Log a message
     pub fn log(&self, msg: &str) {
-        println!("{}\r", msg);
+        log::info!("{}", msg);
     }
 }

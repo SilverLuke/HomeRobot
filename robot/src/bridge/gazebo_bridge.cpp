@@ -67,7 +67,7 @@ void GazeboBridge::send_motor_cmd(const char* name, int direction, uint8_t power
         if (strcmp(name, "SX") == 0) {
             motor_l_.set_power(p);
         } else if (strcmp(name, "DX") == 0) {
-            motor_r_.set_power(p);
+            motor_r_.set_power(-p);
         }
     }
 }
@@ -84,7 +84,7 @@ void GazeboBridge::on_joint_state(const gz::msgs::Model &msg) {
     for (int i = 0; i < msg.joint_size(); ++i) {
         const auto &joint = msg.joint(i);
         if (joint.name() == "left_wheel_joint") {
-            ticks_[0] = (int32_t)(joint.axis1().position() * ticks_per_radian);
+            ticks_[0] = -(int32_t)(joint.axis1().position() * ticks_per_radian);
             motor_l_.set_velocity(joint.axis1().velocity());
         } else if (joint.name() == "right_wheel_joint") {
             ticks_[1] = (int32_t)(joint.axis1().position() * ticks_per_radian);

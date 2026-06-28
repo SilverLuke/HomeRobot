@@ -66,5 +66,11 @@ void Imu::get_accel(float& x, float& y, float& z) const {
 void Imu::get_gyro(float& x, float& y, float& z) const {
     x = (float)sensor_value_to_double(&gyro_[0]);
     y = (float)sensor_value_to_double(&gyro_[1]);
+#if defined(CONFIG_BOARD_NATIVE_SIM)
     z = (float)sensor_value_to_double(&gyro_[2]);
+#else
+    // Real IMU is mounted upside down, invert Z axis
+    z = -(float)sensor_value_to_double(&gyro_[2]);
+#endif
 }
+

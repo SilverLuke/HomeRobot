@@ -19,28 +19,38 @@ pub fn send_manual_command(
         Err(_) => return, // Lock busy, try again in 10ms
     };
 
-    if current_command != *last_sent_command {
-        let millis = start_time.elapsed().as_millis() as u32;
+    if let Some(payload) = current_command.into_payload() {
+        if current_command != *last_sent_command {
+            let millis = start_time.elapsed().as_millis() as u32;
 
-        let msg = ServerToRobotMessage {
-            sequence_millis: millis,
-            payload: current_command.into_payload(),
-        };
+            let msg = ServerToRobotMessage {
+                sequence_millis: millis,
+                payload: Some(payload),
+            };
 
-        let mut buf = Vec::new();
-        msg.encode(&mut buf).unwrap();
+            let mut buf = Vec::new();
+            msg.encode(&mut buf).unwrap();
 
-        // Add 2-byte length prefix
-        let len = buf.len() as u16;
-        let mut final_packet = len.to_be_bytes().to_vec();
-        final_packet.extend(buf);
+            // Add 2-byte length prefix
+            let len = buf.len() as u16;
+            let mut final_packet = len.to_be_bytes().to_vec();
+            final_packet.extend(buf);
 
-        if let Err(e) = protocol.send_packet(&final_packet) {
-            eprintln!("Error sending motor command: {:?}\r", e);
-        } else {
-            stats.log(&format!("[CMD] Sent: {:?}", current_command));
+            if let Err(e) = protocol.send_packet(&final_packet) {
+                log::error!("Error sending motor command: {:?}", e);
+            } else {
+                stats.log(&format!("[CMD] Sent: {:?}", current_command));
+            }
+
+            *last_sent_command = current_command.clone();
+
+            // If a real command was sent, reset back to Idle so it can be re-triggered
+            if current_command != RobotCommand::Idle {
+                if let Ok(mut cmd) = robot_command.lock() {
+                    *cmd = RobotCommand::Idle;
+                    *last_sent_command = RobotCommand::Idle;
+                }
+            }
         }
-
-        *last_sent_command = current_command;
     }
 }

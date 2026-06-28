@@ -9,8 +9,12 @@ void pcnt_init_unit(uint8_t unit_idx) {
     pcnt_ll_stop_count(hw, unit_idx);
     pcnt_ll_clear_count(hw, unit_idx);
     
-    // 2. We assume the devicetree already configured the filters and modes.
-    // We just ensure it is started.
+    // 2. Configure the hardware glitch filter to ignore noise pulses.
+    // 1023 is the maximum filter threshold in APB clock cycles (~12.8 microseconds at 80MHz).
+    pcnt_ll_set_glitch_filter_thres(hw, unit_idx, 1023);
+    pcnt_ll_enable_glitch_filter(hw, unit_idx, true);
+    
+    // 3. Start counting
     pcnt_ll_start_count(hw, unit_idx);
 }
 

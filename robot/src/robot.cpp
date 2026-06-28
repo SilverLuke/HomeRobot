@@ -118,14 +118,16 @@ void Robot::loop() {
             LOG_INF("ExecuteMotion: Target reached successfully");
             motor_sx_.target_reached(true);
             motor_dx_.target_reached(true);
+            motor_sx_.set_manual_power(BRAKE, 0);
+            motor_dx_.set_manual_power(BRAKE, 0);
             proto_handler_.send_rpc_response(k_uptime_get_32(), active_motion_call_id_, nullptr, 0);
             motion_active_ = false;
         } else if (k_uptime_get_32() - motion_start_time_ms_ > 10000) { // 10s timeout
             LOG_WRN("ExecuteMotion: Safety timeout exceeded");
             motor_sx_.target_reached(true);
             motor_dx_.target_reached(true);
-            motor_sx_.set_motor(BRAKE, 0);
-            motor_dx_.set_motor(BRAKE, 0);
+            motor_sx_.set_manual_power(BRAKE, 0);
+            motor_dx_.set_manual_power(BRAKE, 0);
             proto_handler_.send_rpc_response(k_uptime_get_32(), active_motion_call_id_, nullptr, 0, "Timeout");
             motion_active_ = false;
         }
@@ -240,8 +242,8 @@ void Robot::handle_server_connecting() {
         }
         
         // Reset encoder baselines so the first telemetry packet sends 0 delta
-        last_sent_enc_sx_ = enc_sx_.get_total_ticks();
-        last_sent_enc_dx_ = enc_dx_.get_total_ticks();
+        last_sent_enc_sx_ = motor_sx_.get_position();
+        last_sent_enc_dx_ = motor_dx_.get_position();
         
         disconnect_time_ms_ = 0;
         lidar_stopped_due_to_disconnect_ = false;
@@ -333,8 +335,8 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
                 LOG_INF("RPC ExecuteMotion: Type=%d L=%d R=%d MaxPower=%u",
                         motion_req.type, motion_req.left_ticks, motion_req.right_ticks, motion_req.max_power);
                 
-                motor_sx_.config_set_limit(5, motion_req.max_power);
-                motor_dx_.config_set_limit(5, motion_req.max_power);
+                motor_sx_.config_set_limit(40, motion_req.max_power);
+                motor_dx_.config_set_limit(40, motion_req.max_power);
                 
                 int32_t current_sx = motor_sx_.get_position();
                 int32_t current_dx = motor_dx_.get_position();
@@ -374,8 +376,9 @@ void Robot::handle_server_message(homerobot_ServerToRobotMessage& msg) {
     }
     else if (msg.which_payload == homerobot_ServerToRobotMessage_stop_all_tag) {
         LOG_INF("RPC: Stop all received");
-        motor_sx_.set_motor(BRAKE, 0);
-        motor_dx_.set_motor(BRAKE, 0);
+        motion_active_ = false;
+        motor_sx_.set_manual_power(BRAKE, 0);
+        motor_dx_.set_manual_power(BRAKE, 0);
         lidar_.stop();
     }
 }
@@ -393,8 +396,8 @@ void Robot::send_telemetry() {
             imu_.get_gyro(gx, gy, gz);
             proto_handler_.send_imu_data(now, ax, ay, az, gx, gy, gz);
         }
-        int32_t current_sx = enc_sx_.get_total_ticks();
-        int32_t current_dx = enc_dx_.get_total_ticks();
+        int32_t current_sx = motor_sx_.get_position();
+        int32_t current_dx = motor_dx_.get_position();
         int32_t delta_sx = current_sx - last_sent_enc_sx_;
         int32_t delta_dx = current_dx - last_sent_enc_dx_;
         if (delta_sx != 0 || delta_dx != 0) {

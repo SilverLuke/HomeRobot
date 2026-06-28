@@ -83,6 +83,13 @@ void Motor::loop() {
         return;
     }
 
+    if (target_is_reached_) {
+        direction_ = BRAKE;
+        power_ = 0;
+        set_motor(direction_, power_);
+        return;
+    }
+
     double control_signal = calculate_pid_signal(current_position, delta_time);
     power_ = limit_power(control_signal);
 

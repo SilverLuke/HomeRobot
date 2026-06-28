@@ -48,6 +48,15 @@ pub fn handle_connection(
     // Scan-rate tracking: timestamps of the last N completed revolutions.
     let mut revolution_times: std::collections::VecDeque<Instant> = std::collections::VecDeque::new();
 
+    // Lidar 5s summary stats
+    let mut last_lidar_summary_time = Instant::now();
+    let mut summary_sweeps = 0;
+    let mut summary_total_points = 0;
+    let mut summary_sum_avg_delta = 0.0;
+    let mut summary_sum_std_dev = 0.0;
+    let mut summary_min_delta = f32::MAX;
+    let mut summary_max_delta = f32::MIN;
+
     let mut current_pose = crate::odometry::Pose { x: 0.0, y: 0.0, theta: 0.0 };
     let mut current_pose_initialized = false;
     let mut active_path: Vec<(f32, f32)> = Vec::new();
@@ -80,20 +89,53 @@ pub fn handle_connection(
                     if let Some(payload) = msg.payload {
                         match payload {
                             Payload::Battery(bat) => {
-                                println!("[SERVER] Telemetry Heartbeat: Battery {}%", bat.percentage);
+                                log::info!("[SERVER] Telemetry Heartbeat: Battery {}%", bat.percentage);
                                 let _ = gui_tx.send(GuiUpdate::Battery { percentage: bat.percentage, voltage_mv: bat.voltage_mv });
                                 rec.log("robot/battery", &rerun::Scalars::new([bat.percentage as f64])).ok();
                             }
                             Payload::Encoders(enc) => {
                                 telemetry_received = true;
                                 if enc.left_encoder != 0 || enc.right_encoder != 0 {
-                                    println!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", enc.left_encoder, enc.right_encoder);
+                                    log::info!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", enc.left_encoder, enc.right_encoder);
                                 }
+                                let old_odom_pose = odom.pose;
                                 odom.update_encoders(enc.left_encoder, enc.right_encoder, msg.sequence_millis);
                                 slam.add_odom_pose(odom.pose, Instant::now());
                                 if !current_pose_initialized {
                                     current_pose = odom.pose;
                                     current_pose_initialized = true;
+                                } else {
+                                    // Propagate the odometry change to current_pose so the path-following controller 
+                                    // doesn't operate on stale position information between slower SLAM sweeps.
+                                    let dx = odom.pose.x - old_odom_pose.x;
+                                    let dy = odom.pose.y - old_odom_pose.y;
+                                    let dt = odom.pose.theta - old_odom_pose.theta;
+
+                                    // Rotate odometry translation delta to align with the current SLAM pose orientation
+                                    let diff_theta = current_pose.theta - old_odom_pose.theta;
+                                    let cos_diff = diff_theta.cos();
+                                    let sin_diff = diff_theta.sin();
+                                    let dx_map = dx * cos_diff - dy * sin_diff;
+                                    let dy_map = dx * sin_diff + dy * cos_diff;
+
+                                    current_pose.x += dx_map;
+                                    current_pose.y += dy_map;
+                                    current_pose.theta += dt;
+                                    while current_pose.theta > std::f32::consts::PI { current_pose.theta -= 2.0 * std::f32::consts::PI; }
+                                    while current_pose.theta < -std::f32::consts::PI { current_pose.theta += 2.0 * std::f32::consts::PI; }
+
+                                    // Send real-time smooth SLAM-based pose updates to the GUI
+                                    let _ = gui_tx.send(GuiUpdate::SlamPose {
+                                        x: current_pose.x,
+                                        y: current_pose.y,
+                                        theta: current_pose.theta,
+                                    });
+
+                                    // Log dead-reckoned SLAM Pose to Rerun
+                                    rec.log("robot/pose/slam", &rerun::Transform3D::from_translation_rotation(
+                                        [current_pose.x, current_pose.y, 0.0],
+                                        rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(current_pose.theta))
+                                    )).ok();
                                 }
                                 let _ = gui_tx.send(GuiUpdate::Encoders { left: odom.cumulative_left, right: odom.cumulative_right });
                                 let _ = gui_tx.send(GuiUpdate::Pose { 
@@ -178,10 +220,31 @@ pub fn handle_connection(
                                                     if d > max_val { max_val = d; }
                                                 }
                                                 
-                                                stats.log(&format!(
-                                                    "[LIDAR ROTATION] Sweep points: {}, Avg delta: {:.4}°, StdDev: {:.4}°, Min: {:.4}°, Max: {:.4}°",
-                                                    angles.len(), avg, std_dev, min_val, max_val
-                                                ));
+                                                summary_sweeps += 1;
+                                                summary_total_points += angles.len();
+                                                summary_sum_avg_delta += avg;
+                                                summary_sum_std_dev += std_dev;
+                                                if min_val < summary_min_delta { summary_min_delta = min_val; }
+                                                if max_val > summary_max_delta { summary_max_delta = max_val; }
+
+                                                if last_lidar_summary_time.elapsed() >= Duration::from_secs(5) {
+                                                    if summary_sweeps > 0 {
+                                                        let avg_sweep_points = (summary_total_points as f32) / (summary_sweeps as f32);
+                                                        let overall_avg_delta = summary_sum_avg_delta / (summary_sweeps as f32);
+                                                        let overall_avg_std_dev = summary_sum_std_dev / (summary_sweeps as f32);
+                                                        stats.log(&format!(
+                                                            "[LIDAR Summary (last 5s)] Received {} updates, total {} points | Sweep points: {:.1}, Avg delta: {:.4}°, StdDev: {:.4}°, Min: {:.4}°, Max: {:.4}°",
+                                                            summary_sweeps, summary_total_points, avg_sweep_points, overall_avg_delta, overall_avg_std_dev, summary_min_delta, summary_max_delta
+                                                        ));
+                                                    }
+                                                    summary_sweeps = 0;
+                                                    summary_total_points = 0;
+                                                    summary_sum_avg_delta = 0.0;
+                                                    summary_sum_std_dev = 0.0;
+                                                    summary_min_delta = f32::MAX;
+                                                    summary_max_delta = f32::MIN;
+                                                    last_lidar_summary_time = Instant::now();
+                                                }
                                             }
 
                                             // Track revolution time for scan-rate telemetry.
@@ -285,6 +348,11 @@ pub fn handle_connection(
                             }
                             Payload::RpcResponse(resp) => {
                                 stats.log(&format!("[RPC RESPONSE] ID: {}, Error: {}", resp.call_id, resp.error));
+                                if resp.error.is_empty() {
+                                    stats.log("[RPC] Motion execution completed successfully.");
+                                } else {
+                                    stats.log(&format!("[RPC] Motion execution ended with error: {}", resp.error));
+                                }
                                 {
                                     let &(ref lock, ref cvar) = &**MOTION_COMPLETED;
                                     let mut completed = lock.lock().unwrap();
@@ -330,7 +398,7 @@ pub fn handle_connection(
 
                 stats.log(&format!("[SLAM] Saving house map to {}...", abs_path_str));
                 if let Err(e) = slam.save_map(map_name) {
-                    eprintln!("Error saving map: {:?}\r", e);
+                    log::error!("Error saving map: {:?}", e);
                 } else {
                     stats.log(&format!("[SLAM] Map saved successfully to {}!", abs_path_str));
                 }
@@ -507,16 +575,20 @@ pub fn handle_connection(
                                             let _ = gui_tx.send(GuiUpdate::NavigationTarget(None));
 
                                             // Send immediate STOP command
-                                            let millis = start_time.elapsed().as_millis() as u32;
-                                            let msg = crate::homerobot::ServerToRobotMessage {
-                                                sequence_millis: millis,
-                                                payload: RobotCommand::StopMoving.into_payload(),
-                                            };
-                                            let mut buf = Vec::new();
-                                            prost::Message::encode(&msg, &mut buf).unwrap();
-                                            let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
-                                            final_packet.extend(buf);
-                                            let _ = protocol.send_packet(&final_packet);
+                                            let temp_cmd = RobotCommand::StopMoving;
+                                            if temp_cmd != last_sent_command {
+                                                let millis = start_time.elapsed().as_millis() as u32;
+                                                let msg = crate::homerobot::ServerToRobotMessage {
+                                                    sequence_millis: millis,
+                                                    payload: temp_cmd.into_payload(),
+                                                };
+                                                let mut buf = Vec::new();
+                                                prost::Message::encode(&msg, &mut buf).unwrap();
+                                                let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                                final_packet.extend(buf);
+                                                let _ = protocol.send_packet(&final_packet);
+                                                last_sent_command = temp_cmd;
+                                            }
                                         }
                                     }
                                     _ => unreachable!()
@@ -654,16 +726,19 @@ pub fn handle_connection(
                                     right_power: r_pwr,
                                     right_angle: r_dir,
                                 };
-                                let millis = start_time.elapsed().as_millis() as u32;
-                                let msg = crate::homerobot::ServerToRobotMessage {
-                                    sequence_millis: millis,
-                                    payload: temp_cmd.into_payload(),
-                                };
-                                let mut buf = Vec::new();
-                                prost::Message::encode(&msg, &mut buf).unwrap();
-                                let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
-                                final_packet.extend(buf);
-                                let _ = protocol.send_packet(&final_packet);
+                                if temp_cmd != last_sent_command {
+                                    let millis = start_time.elapsed().as_millis() as u32;
+                                    let msg = crate::homerobot::ServerToRobotMessage {
+                                        sequence_millis: millis,
+                                        payload: temp_cmd.into_payload(),
+                                    };
+                                    let mut buf = Vec::new();
+                                    prost::Message::encode(&msg, &mut buf).unwrap();
+                                    let mut final_packet = (buf.len() as u16).to_be_bytes().to_vec();
+                                    final_packet.extend(buf);
+                                    let _ = protocol.send_packet(&final_packet);
+                                    last_sent_command = temp_cmd;
+                                }
                             }
                         }
                     }

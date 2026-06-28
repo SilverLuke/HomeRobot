@@ -172,6 +172,233 @@
                   </object>
                 </child>
 
+                <!-- Motion Debugging (New Expander) -->
+                <child>
+                  <object class="GtkExpander">
+                    <property name="label">Motion Debugging</property>
+                    <property name="expanded">true</property>
+                    <child>
+                      <object class="GtkFrame">
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
+                            <property name="margin-start">10</property>
+                            <property name="margin-end">10</property>
+                            <property name="margin-top">10</property>
+                            <property name="margin-bottom">10</property>
+
+                            <!-- Rotate 90 Degrees Section -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkButton" id="btn_rotate_90_left">
+                                    <property name="label">Rotate 90° CCW</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_rotate_90_right">
+                                    <property name="label">Rotate 90° CW</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+
+                            <child>
+                              <object class="GtkSeparator"/>
+                            </child>
+
+                            <!-- Rotate X Degrees Section -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">Rotation (Degrees):</property>
+                                    <property name="xalign">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinButton" id="spin_rotate_angle">
+                                    <property name="adjustment">
+                                      <object class="GtkAdjustment">
+                                        <property name="lower">1</property>
+                                        <property name="upper">360</property>
+                                        <property name="value">45</property>
+                                        <property name="step-increment">1</property>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkButton" id="btn_rotate_x_left">
+                                        <property name="label">Rotate CCW</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_rotate_x_right">
+                                        <property name="label">Rotate CW</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+
+                            <child>
+                              <object class="GtkSeparator"/>
+                            </child>
+
+                            <!-- Move X cm Section -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">Distance (cm):</property>
+                                    <property name="xalign">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinButton" id="spin_move_distance">
+                                    <property name="adjustment">
+                                      <object class="GtkAdjustment">
+                                        <property name="lower">1</property>
+                                        <property name="upper">500</property>
+                                        <property name="value">20</property>
+                                        <property name="step-increment">1</property>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkButton" id="btn_move_x_forward">
+                                        <property name="label">Move Forward</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_move_x_backward">
+                                        <property name="label">Move Backward</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+
+                            <child>
+                              <object class="GtkSeparator"/>
+                            </child>
+
+                            <!-- Arc Move Section -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <child>
+                                  <object class="GtkGrid">
+                                    <property name="row-spacing">4</property>
+                                    <property name="column-spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Arc Radius (cm):</property>
+                                        <property name="xalign">0</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSpinButton" id="spin_arc_radius">
+                                        <property name="adjustment">
+                                          <object class="GtkAdjustment">
+                                            <property name="lower">10</property>
+                                            <property name="upper">1000</property>
+                                            <property name="value">50</property>
+                                            <property name="step-increment">1</property>
+                                          </object>
+                                        </property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Arc Length (cm):</property>
+                                        <property name="xalign">0</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSpinButton" id="spin_arc_distance">
+                                        <property name="adjustment">
+                                          <object class="GtkAdjustment">
+                                            <property name="lower">1</property>
+                                            <property name="upper">1000</property>
+                                            <property name="value">30</property>
+                                            <property name="step-increment">1</property>
+                                          </object>
+                                        </property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkButton" id="btn_arc_left">
+                                        <property name="label">Arc Left</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_arc_right">
+                                        <property name="label">Arc Right</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
                 <!-- Mapping & Sensors Operations -->
                 <child>
                   <object class="GtkExpander">
@@ -742,7 +969,7 @@
                             <property name="margin-bottom">10</property>
                             <property name="xalign">0</property>
                             <property name="label">WASD: Move Robot
-Q/E: Rotate In-Place (L/R)
+Q/E: Rotate In-Place (CCW/CW)
 L: Toggle LiDAR
 Space: STOP ALL
 H: Toggle Sidebar</property>
