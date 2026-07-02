@@ -19,6 +19,27 @@ const LOG_ODDS_FREE: i16 = -5;     // Decrease probability on free ray
 const LOG_ODDS_MAX: i16 = 100;     // Saturation cap
 const LOG_ODDS_MIN: i16 = -100;
 
+// Shared occupancy classification. Frontier detection, path planning and map
+// export must agree on what counts as free, otherwise frontier detection can
+// produce goals the planner considers unreachable by construction.
+/// A cell is traversable free space at or below this log-odds value.
+pub const CELL_FREE: i16 = -20;
+/// A cell is an obstacle at or above this log-odds value.
+pub const CELL_OCCUPIED: i16 = 20;
+
+pub fn cell_is_free(v: i16) -> bool {
+    v <= CELL_FREE
+}
+
+pub fn cell_is_occupied(v: i16) -> bool {
+    v >= CELL_OCCUPIED
+}
+
+/// Never observed: no lidar hit and no free ray has touched it.
+pub fn cell_is_unknown(v: i16) -> bool {
+    v == 0
+}
+
 impl OccupancyGrid {
     pub fn new(width: usize, height: usize, resolution: f32) -> Self {
         Self {
@@ -62,7 +83,7 @@ impl OccupancyGrid {
                 let idx = y * self.width + x;
                 
                 // A frontier cell is a FREE cell with at least one UNKNOWN neighbor
-                if self.data[idx] < -10 && !visited[idx] {
+                if cell_is_free(self.data[idx]) && !visited[idx] {
                     if self.is_frontier_cell(x, y) {
                         let cluster = self.expand_frontier_cluster(x, y, &mut visited);
                         if cluster.len() > 15 { // Ignore tiny frontiers / noise (minimum 75cm width)
@@ -77,13 +98,13 @@ impl OccupancyGrid {
 
     fn is_frontier_cell(&self, x: usize, y: usize) -> bool {
         // Must be free space
-        if self.data[y * self.width + x] >= -10 { return false; }
+        if !cell_is_free(self.data[y * self.width + x]) { return false; }
 
-        // Check 4-neighbors for unknown (log-odds == 0)
+        // Check 4-neighbors for unknown
         for &(dx, dy) in &[(0, 1), (0, -1), (1, 0), (-1, 0)] {
             let nx = (x as i32 + dx) as usize;
             let ny = (y as i32 + dy) as usize;
-            if self.data[ny * self.width + nx] == 0 {
+            if cell_is_unknown(self.data[ny * self.width + nx]) {
                 return true;
             }
         }
@@ -189,9 +210,9 @@ impl OccupancyGrid {
 
         let mut pixels = Vec::with_capacity(self.width * self.height);
         for &val in &self.data {
-            let pixel = if val > 10 {
+            let pixel = if cell_is_occupied(val) {
                 0 // Definitely occupied (Black)
-            } else if val < -5 {
+            } else if cell_is_free(val) {
                 255 // Definitely free (White)
             } else {
                 127 // Unknown / Low confidence (Gray)
@@ -201,5 +222,105 @@ impl OccupancyGrid {
 
         file.write_all(&pixels)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FREE: i16 = CELL_FREE - 10;
+    const WALL: i16 = CELL_OCCUPIED + 20;
+
+    fn fill(g: &mut OccupancyGrid, x0: usize, y0: usize, x1: usize, y1: usize, v: i16) {
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                g.data[y * g.width + x] = v;
+            }
+        }
+    }
+
+    /// 100x100 grid @5cm: a free room (30..70)² walled in, with an unknown
+    /// opening in the right wall at y=40..60.
+    fn room_with_opening() -> OccupancyGrid {
+        let mut g = OccupancyGrid::new(100, 100, 0.05);
+        fill(&mut g, 30, 30, 70, 70, FREE);
+        fill(&mut g, 29, 29, 71, 29, WALL); // bottom wall
+        fill(&mut g, 29, 71, 71, 71, WALL); // top wall
+        fill(&mut g, 29, 29, 29, 71, WALL); // left wall
+        fill(&mut g, 71, 29, 71, 71, WALL); // right wall
+        fill(&mut g, 71, 40, 71, 60, 0); // opening: unknown
+        g
+    }
+
+    #[test]
+    fn world_to_grid_round_trips_and_rejects_out_of_bounds() {
+        let g = OccupancyGrid::new(100, 100, 0.05);
+        assert_eq!(g.world_to_grid(0.0, 0.0), Some((50, 50)));
+        assert_eq!(g.world_to_grid(1.0, -1.0), Some((70, 30)));
+        assert_eq!(g.world_to_grid(-2.5, 0.0), Some((0, 50)));
+        assert_eq!(g.world_to_grid(10.0, 0.0), None);
+        assert_eq!(g.world_to_grid(0.0, -2.51), None);
+    }
+
+    #[test]
+    fn update_cell_clamps_log_odds() {
+        let mut g = OccupancyGrid::new(10, 10, 0.05);
+        for _ in 0..50 {
+            g.update_cell(0.0, 0.0, LOG_ODDS_OCCUPIED);
+        }
+        assert_eq!(g.data[5 * 10 + 5], LOG_ODDS_MAX);
+        for _ in 0..200 {
+            g.update_cell(0.0, 0.0, LOG_ODDS_FREE);
+        }
+        assert_eq!(g.data[5 * 10 + 5], LOG_ODDS_MIN);
+    }
+
+    #[test]
+    fn deskewed_scan_marks_hit_and_clears_ray_but_not_endpoint() {
+        let mut g = OccupancyGrid::new(100, 100, 0.05);
+        // Robot at origin, one obstacle hit 1m ahead.
+        g.update_from_deskewed_scan((0.0, 0.0), &[(1.0, 0.0)]);
+
+        let hit = g.data[50 * 100 + 70];
+        let mid = g.data[50 * 100 + 60];
+        let start = g.data[50 * 100 + 50];
+        assert_eq!(hit, LOG_ODDS_OCCUPIED, "endpoint must stay marked as a hit");
+        assert_eq!(mid, LOG_ODDS_FREE, "ray cells must be cleared");
+        assert_eq!(start, LOG_ODDS_FREE, "robot cell is on the ray");
+    }
+
+    #[test]
+    fn frontier_detected_at_room_opening() {
+        let g = room_with_opening();
+        let frontiers = g.find_frontiers();
+        assert_eq!(frontiers.len(), 1, "expected exactly one frontier at the opening");
+        let f = &frontiers[0];
+        // The frontier hugs the inside of the opening: x=70 (1.0m), centered on y=50 (0.0m).
+        assert!((f.centroid_x - 1.0).abs() < 0.05, "centroid_x = {}", f.centroid_x);
+        assert!(f.centroid_y.abs() < 0.05, "centroid_y = {}", f.centroid_y);
+        assert!(f.size > 15);
+    }
+
+    #[test]
+    fn fully_enclosed_room_has_no_frontiers() {
+        let mut g = room_with_opening();
+        fill(&mut g, 71, 40, 71, 60, WALL); // close the opening
+        assert!(g.find_frontiers().is_empty());
+    }
+
+    #[test]
+    fn detected_frontiers_are_reachable_by_the_planner() {
+        let g = room_with_opening();
+        let frontiers = g.find_frontiers();
+        assert!(!frontiers.is_empty());
+        for f in frontiers {
+            let path = crate::pathfinding::plan_path(&g, 0.0, 0.0, f.centroid_x, f.centroid_y);
+            assert!(
+                path.is_some(),
+                "frontier at ({}, {}) must be plannable",
+                f.centroid_x, f.centroid_y
+            );
+        }
     }
 }
