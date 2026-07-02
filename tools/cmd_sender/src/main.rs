@@ -21,6 +21,10 @@ struct Cli {
     /// Connect to proxy instead of listening for robot
     #[arg(short, long)]
     proxy: bool,
+
+    /// Server host to connect to in proxy mode
+    #[arg(long, default_value = "127.0.0.1")]
+    host: String,
 }
 
 #[derive(Subcommand)]
@@ -111,8 +115,9 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let mut stream = if cli.proxy {
-        println!("Connecting to Proxy on 127.0.0.1:12346...");
-        TcpStream::connect("127.0.0.1:12346")?
+        let addr = format!("{}:12346", cli.host);
+        println!("Connecting to Proxy on {}...", addr);
+        TcpStream::connect(addr.as_str())?
     } else {
         println!("Listening for robot connection on 0.0.0.0:12345...");
         let listener = TcpListener::bind("0.0.0.0:12345")?;
