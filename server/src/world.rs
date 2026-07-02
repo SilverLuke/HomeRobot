@@ -82,10 +82,6 @@ impl WorldModel {
         self.dirty = true;
     }
 
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
     /// True when there are unsaved changes and the autosave interval elapsed.
     pub fn autosave_due(&self, interval: Duration) -> bool {
         self.dirty && self.last_autosave.elapsed() >= interval
@@ -204,7 +200,8 @@ mod tests {
             last_autosave: Instant::now(),
         };
         world.save(path).unwrap();
-        assert!(!world.is_dirty());
+        // Saving clears the dirty flag: no autosave due even with a zero interval.
+        assert!(!world.autosave_due(Duration::ZERO));
 
         let loaded = WorldModel::load(path).unwrap();
         assert!(loaded.pose_initialized);

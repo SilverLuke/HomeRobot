@@ -130,6 +130,7 @@ pub struct Session<W: Write> {
 
 /// Entry point for a robot connection; returns when the connection drops or
 /// the server shuts down.
+#[allow(clippy::too_many_arguments)] // top-level wiring, called from one place
 pub fn run_session(
     stream: TcpStream,
     bus: CommandBus,

@@ -150,7 +150,7 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
         // Draw Map (Occupancy Grid)
         if state.show_map && !state.map_data.is_empty() {
             let res = 0.05; // 5cm
-            let m_scale = res as f64 * 1000.0 * scale; // pixels per grid cell
+            let m_scale = res * 1000.0 * scale; // pixels per grid cell
             
             for y in 0..state.map_height {
                 for x in 0..state.map_width {
@@ -168,8 +168,8 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
                     cr.set_source_rgb(color.0, color.1, color.2);
 
                     // Map origin is at the center of the grid
-                    let world_x = (x as f64 - state.map_width as f64 / 2.0) * res as f64;
-                    let world_y = (y as f64 - state.map_height as f64 / 2.0) * res as f64;
+                    let world_x = (x as f64 - state.map_width as f64 / 2.0) * res;
+                    let world_y = (y as f64 - state.map_height as f64 / 2.0) * res;
 
                     let dx = world_center_x - ((world_y - state.pan_y) * 1000.0 * scale);
                     let dy = world_center_y - ((world_x - state.pan_x) * 1000.0 * scale);

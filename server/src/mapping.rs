@@ -83,12 +83,10 @@ impl OccupancyGrid {
                 let idx = y * self.width + x;
                 
                 // A frontier cell is a FREE cell with at least one UNKNOWN neighbor
-                if cell_is_free(self.data[idx]) && !visited[idx] {
-                    if self.is_frontier_cell(x, y) {
-                        let cluster = self.expand_frontier_cluster(x, y, &mut visited);
-                        if cluster.len() > 15 { // Ignore tiny frontiers / noise (minimum 75cm width)
-                            frontiers.push(self.cluster_to_frontier(cluster));
-                        }
+                if cell_is_free(self.data[idx]) && !visited[idx] && self.is_frontier_cell(x, y) {
+                    let cluster = self.expand_frontier_cluster(x, y, &mut visited);
+                    if cluster.len() > 15 { // Ignore tiny frontiers / noise (minimum 75cm width)
+                        frontiers.push(self.cluster_to_frontier(cluster));
                     }
                 }
             }

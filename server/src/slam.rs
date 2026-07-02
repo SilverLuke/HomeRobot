@@ -56,7 +56,7 @@ impl BasicSlam {
         let mut points = Vec::new();
         for p in scan {
             if p.distance_mm < 200.0 || p.distance_mm > 8000.0 { continue; }
-            let angle_rad = (p.angle_deg as f32).to_radians();
+            let angle_rad = p.angle_deg.to_radians();
             let global_angle = pose.theta - angle_rad;
             let dist_m = p.distance_mm / 1000.0;
             let x = pose.x + dist_m * global_angle.cos();
@@ -143,7 +143,7 @@ impl BasicSlam {
             let robot_theta = slam_end_pose.theta + dt;
             
             // Project the point
-            let angle_rad = (p.angle_deg as f32).to_radians();
+            let angle_rad = p.angle_deg.to_radians();
             let global_angle = robot_theta - angle_rad;
             let dist_m = p.distance_mm / 1000.0;
             let x = robot_x + dist_m * global_angle.cos();
@@ -342,7 +342,7 @@ impl Slam for BasicSlam {
 
     fn add_odom_pose(&mut self, pose: Pose, timestamp: Instant) {
         self.pose_history.push_back((timestamp, pose));
-        while self.pose_history.len() > 0 && timestamp.duration_since(self.pose_history[0].0) > Duration::from_secs(2) {
+        while !self.pose_history.is_empty() && timestamp.duration_since(self.pose_history[0].0) > Duration::from_secs(2) {
             self.pose_history.pop_front();
         }
     }

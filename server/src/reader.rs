@@ -71,7 +71,7 @@ impl<S: Read + Write> ProtocolManager<S> {
     fn do_read(&mut self) -> io::Result<usize> {
         let free_space = BUFFER_SIZE - self.read_buffer.len();
         if free_space == 0 {
-            return Err(io::Error::new(io::ErrorKind::Other, "Buffer overflow"));
+            return Err(io::Error::other("Buffer overflow"));
         }
 
         let mut buffer = [0u8; 1024];

@@ -62,13 +62,7 @@ impl Odometry {
         // We calibrate using the first 30 stationary samples.
         if self.stationary_samples < 30 {
             let time_since_encoder_activity = match self.last_timestamp_ms {
-                Some(_) => {
-                    if timestamp_ms >= self.last_encoder_activity_ms {
-                        timestamp_ms - self.last_encoder_activity_ms
-                    } else {
-                        0
-                    }
-                }
+                Some(_) => timestamp_ms.saturating_sub(self.last_encoder_activity_ms),
                 None => 0,
             };
 
@@ -83,11 +77,8 @@ impl Odometry {
             }
         } else {
             // Once calibrated, slowly track slow thermal drift when stationary (> 2 seconds)
-            let time_since_encoder_activity = if timestamp_ms >= self.last_encoder_activity_ms {
-                timestamp_ms - self.last_encoder_activity_ms
-            } else {
-                0
-            };
+            let time_since_encoder_activity =
+                timestamp_ms.saturating_sub(self.last_encoder_activity_ms);
             if time_since_encoder_activity > 2000 {
                 let alpha_bias = 0.01;
                 self.gyro_bias = alpha_bias * gyro_z + (1.0 - alpha_bias) * self.gyro_bias;

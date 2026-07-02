@@ -28,7 +28,7 @@ ifeq ($(POWER_SUPPLY), ON)
   EXTRA_CMAKE_ARGS += -Dapp_DISABLE_BATTERY_CHECK=y
 endif
 
-.PHONY: all server build-s3 build-c6 build-sim all-sim build-lidar-debug flash monitor snapshot-logs clean proto help ota-flash ota-confirm
+.PHONY: all server build-s3 build-c6 build-sim all-sim build-lidar-debug flash monitor snapshot-logs clean proto help ota-flash ota-confirm ci
 
 
 
@@ -43,6 +43,9 @@ help: ## Show this help message
 proto: ## Generate Python Protobuf bindings
 	@echo "Generating Protobuf bindings..."
 	protoc --python_out=proto/ -Iproto/ proto/messages.proto
+
+ci: ## Run server CI (clippy + tests) on the build machine
+	./tools/ci.sh
 
 server: ## Build the Rust control server/dashboard
 	@echo "Building server with cargo..."

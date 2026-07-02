@@ -113,11 +113,10 @@ fn find_nearest_safe_cell(costmap: &Costmap, cx: usize, cy: usize) -> (usize, us
     if costmap.is_safe(cx, cy) {
         return (cx, cy);
     }
-    for r in 1..40 {
-        let r_i32 = r as i32;
-        for dx in -r_i32..=r_i32 {
-            for dy in -r_i32..=r_i32 {
-                if dx.abs() == r_i32 || dy.abs() == r_i32 {
+    for r in 1i32..40 {
+        for dx in -r..=r {
+            for dy in -r..=r {
+                if dx.abs() == r || dy.abs() == r {
                     let nx = cx as i32 + dx;
                     let ny = cy as i32 + dy;
                     if nx >= 0 && ny >= 0 && costmap.is_safe(nx as usize, ny as usize) {
