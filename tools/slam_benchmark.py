@@ -26,8 +26,12 @@ without extra Python packages.
 import argparse
 import json
 import math
+import os
+import re
 import struct
+import subprocess
 import sys
+import time
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -307,6 +311,87 @@ def map_metrics(grid, transform, arena, wall_tol=0.10):
 
 
 # ---------------------------------------------------------------------------
+# Ground-truth recording (Gazebo, build machine only)
+# ---------------------------------------------------------------------------
+
+POSE_TOPIC = "/world/homerobot_world/pose/info"
+_NUM = r":\s*([-0-9.eE+]+)"
+
+
+def parse_pose_block(buf, model="homerobot"):
+    """Extract the model's pose from accumulated `gz topic -e` text output.
+
+    Returns ((x, y, theta), consumed_index) when a complete block is
+    available, None while it is still partial. Same text-format parsing as
+    tools/regression_test.py, adapted for a streaming buffer.
+    """
+    start = buf.find('name: "%s"' % model)
+    if start == -1:
+        return None
+    window = buf[start:start + 1200]
+    pos = re.search(r"position\s*\{([^}]*)\}", window)
+    orient = re.search(r"orientation\s*\{([^}]*)\}", window)
+    if not pos or not orient:
+        return None
+
+    def field(name, text, default=0.0):
+        m = re.search(name + _NUM, text)
+        return float(m.group(1)) if m else default
+
+    x = field("x", pos.group(1))
+    y = field("y", pos.group(1))
+    oz = field("z", orient.group(1))
+    ow = field("w", orient.group(1), 1.0)
+    theta = math.atan2(2.0 * ow * oz, 1.0 - 2.0 * oz * oz)
+    return (x, y, theta), start + orient.end()
+
+
+def record_gt(out_path, duration=0.0, hz=20.0):
+    """Stream ground truth to CSV until `duration` elapses (0 = until ^C)."""
+    env = os.environ.copy()
+    env.setdefault("GZ_IP", "127.0.0.1")
+    env.setdefault("GZ_PARTITION", "homerobot_sim")
+    proc = subprocess.Popen(
+        ["gz", "topic", "-t", POSE_TOPIC, "-e"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
+    )
+    started = time.time()
+    last_row = 0.0
+    min_interval = 1.0 / hz
+    rows = 0
+    buf = ""
+    try:
+        with open(out_path, "w") as out:
+            out.write("t_unix,x,y,theta\n")
+            for line in proc.stdout:
+                buf += line
+                parsed = parse_pose_block(buf)
+                if parsed is None:
+                    if len(buf) > 65536:
+                        buf = buf[-4096:]
+                    continue
+                (x, y, theta), consumed = parsed
+                buf = buf[consumed:]
+                now = time.time()
+                if now - last_row >= min_interval:
+                    out.write("%.6f,%.6f,%.6f,%.6f\n" % (now, x, y, theta))
+                    out.flush()
+                    last_row = now
+                    rows += 1
+                if duration and now - started >= duration:
+                    break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        proc.terminate()
+    print("recorded %d ground-truth samples to %s" % (rows, out_path))
+    if rows == 0:
+        print("no samples — is the simulation running (GZ_PARTITION=homerobot_sim)?")
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Analysis entry point
 # ---------------------------------------------------------------------------
 
@@ -470,11 +555,33 @@ def self_test():
     if occ != expected_occ:
         failures.append("occupied count %d != %d" % (occ, expected_occ))
 
+    # 8. gz pose_v text parsing: 90deg yaw quaternion, split across "lines"
+    # like the streaming reader sees it.
+    sample = (
+        'pose {\n  name: "other_model"\n  position { x: 9 y: 9 z: 0 }\n'
+        '  orientation { x: 0 y: 0 z: 0 w: 1 }\n}\n'
+        'pose {\n  name: "homerobot"\n'
+        "  position {\n    x: 1.5\n    y: -0.5\n    z: 0.1\n  }\n"
+        "  orientation {\n    x: 0\n    y: 0\n    z: 0.7071068\n    w: 0.7071068\n  }\n}\n"
+    )
+    parsed = parse_pose_block(sample)
+    if parsed is None:
+        failures.append("pose_v parser returned None")
+    else:
+        (x, y, theta), consumed = parsed
+        check("pose_v parser x", x, 1.5, 1e-6)
+        check("pose_v parser y", y, -0.5, 1e-6)
+        check("pose_v parser theta (90deg yaw)", theta, math.pi / 2.0, 1e-4)
+        if consumed <= 0 or consumed > len(sample):
+            failures.append("pose_v parser consumed index out of range")
+    if parse_pose_block('pose {\n  name: "homerobot"\n  position { x: 1') is not None:
+        failures.append("pose_v parser must wait for a complete block")
+
     print()
     if failures:
         print("SELF-TEST FAILED: %s" % ", ".join(failures))
         return 1
-    print("SELF-TEST PASSED (%d checks)" % 9)
+    print("SELF-TEST PASSED (%d checks)" % 12)
     return 0
 
 
@@ -494,9 +601,17 @@ def main():
     p_an.add_argument("--arena-half", type=float, default=5.0)
     p_an.add_argument("--json", help="write metrics JSON here")
 
+    p_rec = sub.add_parser("record-gt", help="stream Gazebo ground truth to CSV")
+    p_rec.add_argument("--out", required=True)
+    p_rec.add_argument("--duration", type=float, default=0.0,
+                       help="seconds to record (0 = until interrupted)")
+    p_rec.add_argument("--hz", type=float, default=20.0)
+
     args = parser.parse_args()
     if args.cmd == "self-test":
         sys.exit(self_test())
+    if args.cmd == "record-gt":
+        sys.exit(record_gt(args.out, args.duration, args.hz))
     if args.cmd == "analyze":
         result = analyze(args.trace, args.gt, args.map, args.arena_half)
         for key, value in result.items():
