@@ -24,8 +24,8 @@ impl PartialOrd for Node {
 /// Checks if a circular region of a given radius in the occupancy grid is free of obstacles.
 ///
 /// Returns `true` if all cells within the circular radius around the center `(cx, cy)`
-/// have a log-odds occupancy value of at most `-20` (free space/low-confidence free space).
-/// Returns `false` if any cell is occupied or if the region goes out of bounds.
+/// are free space per the shared [`crate::mapping::cell_is_free`] classification.
+/// Returns `false` if any cell is occupied/unknown or if the region goes out of bounds.
 fn is_obstacle_free(grid: &OccupancyGrid, cx: usize, cy: usize, radius: usize) -> bool {
     let r_i32 = radius as i32;
     for dy in -r_i32..=r_i32 {
@@ -36,7 +36,7 @@ fn is_obstacle_free(grid: &OccupancyGrid, cx: usize, cy: usize, radius: usize) -
                 let ny = cy as i32 + dy;
                 if nx >= 0 && nx < grid.width as i32 && ny >= 0 && ny < grid.height as i32 {
                     let idx = (ny as usize) * grid.width + (nx as usize);
-                    if grid.data[idx] > -20 {
+                    if !crate::mapping::cell_is_free(grid.data[idx]) {
                         return false;
                     }
                 } else {
