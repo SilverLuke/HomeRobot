@@ -18,14 +18,32 @@ cd "$ROOT"
 SERVER_BIN="$ROOT/server/target/debug/server"
 export HR_CMD_SENDER="$ROOT/tools/cmd_sender/target/debug/cmd_sender"
 
+# PATH-SCOPED cleanup: never touch processes of another checkout (the
+# maintainer's dev copy lives on the same machine; generic name patterns
+# once killed their sim mid-session).
 kill_sim() {
-    pkill -9 -f "zephyr.ex[e]" 2>/dev/null || true
-    pkill -9 -f "g[z] sim" 2>/dev/null || true
-    pkill -9 -f "gz-sim-mai[n]" 2>/dev/null || true
-    pkill -9 -f "server/target/debug/serve[r]" 2>/dev/null || true
-    pkill -9 -f "Xvf[b]" 2>/dev/null || true
+    pkill -9 -f "$ROOT/build/sim/sim/zephyr/zephyr.exe" 2>/dev/null || true
+    pkill -9 -f "gz.*$ROOT/simulation/sim.world" 2>/dev/null || true
+    pkill -9 -f "$ROOT/server/target/debug/server" 2>/dev/null || true
+    pkill -9 -f "Xvfb :99" 2>/dev/null || true
     pkill -9 -f "slam_benchmark.py record-g[t]" 2>/dev/null || true
     sleep 1
+}
+
+# The sim stack cannot be shared: one TCP port (12345) and one GZ partition
+# (homerobot_sim). If another checkout's stack is live, refuse to run rather
+# than killing it.
+abort_if_foreign_sim() {
+    local foreign
+    foreign=$(pgrep -af "zephyr.exe|gz-sim-main|target/debug/server" 2>/dev/null \
+        | grep -vF "$ROOT" | grep -v pgrep || true)
+    if [ -n "$foreign" ]; then
+        echo "FATAL: another HomeRobot sim stack is running on this machine:" >&2
+        echo "$foreign" >&2
+        echo "The benchmark needs exclusive use of port 12345 and the" >&2
+        echo "'homerobot_sim' GZ partition. Stop that stack first." >&2
+        exit 1
+    fi
 }
 
 # Blocks until the pose trace gains rows beyond its current size. Rows are
@@ -50,6 +68,7 @@ run_one() {
     local pattern=$1 run=$2
     local out="logs/bench/${pattern}-${run}"
     echo "=== baseline ${pattern} ${run} ==="
+    abort_if_foreign_sim
     kill_sim
     rm -rf "$out" house_map.bin
     rm -f logs/sim/server.log logs/sim/zephyr.log logs/sim/gazebo.log

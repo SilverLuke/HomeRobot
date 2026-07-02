@@ -26,12 +26,12 @@ else
     echo "--- HomeRobot Native Simulation (Direct Link Mode) ---"
 fi
 
-# 1. Force Cleanup
-echo "[0/4] Cleaning up old processes..."
-pkill -9 -f "zephyr.exe" || true
-pkill -9 -f "gz-sim-main" || true
-pkill -9 -f "gz sim" || true
-pkill -9 -f "gazebo_bridge.main" || true
+# 1. Force Cleanup — PATH-SCOPED to this checkout. This machine can host
+# multiple HomeRobot checkouts (dev copy + CI/benchmark sandbox); generic
+# name-based patterns here once killed the other checkout's sim mid-session.
+echo "[0/4] Cleaning up old processes of $PROJECT_ROOT..."
+pkill -9 -f "$PROJECT_ROOT/build/sim/sim/zephyr/zephyr.exe" || true
+pkill -9 -f "gz.*$WORLD_FILE" || true
 pkill -9 -f "$SERVER_BIN" || true
 sleep 1
 
