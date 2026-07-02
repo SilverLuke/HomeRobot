@@ -67,7 +67,12 @@ void GazeboBridge::send_motor_cmd(const char* name, int direction, uint8_t power
         if (strcmp(name, "SX") == 0) {
             motor_l_.set_power(p);
         } else if (strcmp(name, "DX") == 0) {
-            motor_r_.set_power(-p);
+            // Both wheel joints share the same model-frame axis (0 1 0), so
+            // positive torque means "robot forward" on BOTH sides. The right
+            // side must NOT be negated: encoder direction differences are
+            // already handled by the Motor invert_encoder flags together with
+            // the ticks_[0] sign in on_joint_state.
+            motor_r_.set_power(p);
         }
     }
 }
