@@ -448,6 +448,18 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #     >=0.7m clearance from the interior obstacles and outer walls.
 # P3 room-hop: goto legs threading between the cylinder, the diagonal wall
 #     and the box, ending back at the start.
+# P4 = P2 driven with the server started under HR_FAULT_RIGHT_ENCODER=1
+#     (the fault is server-side; the tour is identical by design).
+# P5 restart: p5a drives out, the harness (tools/slam_baseline.sh) kills and
+#     restarts the server, p5b drives back — one GT recording spans both.
+P2_TOUR = [
+    ("goto", (2.5, 3.5)),
+    ("goto", (-4.5, 3.5)),
+    ("goto", (-4.5, -4.2)),
+    ("goto", (2.5, -4.2)),
+    ("goto", (0.0, 0.0)),
+]
+
 PATTERNS = {
     "p1": [
         ("motion", ["--action", "straight", "--distance", "2.0"]),
@@ -455,18 +467,21 @@ PATTERNS = {
         ("motion", ["--action", "straight", "--distance", "2.0"]),
         ("motion", ["--action", "rotate", "--angle", "180"]),
     ],
-    "p2": [
-        ("goto", (2.5, 3.5)),
-        ("goto", (-4.5, 3.5)),
-        ("goto", (-4.5, -4.2)),
-        ("goto", (2.5, -4.2)),
-        ("goto", (0.0, 0.0)),
-    ],
+    "p2": P2_TOUR,
     "p3": [
         ("goto", (-1.0, 2.8)),
         ("goto", (-4.0, 0.0)),
         ("goto", (-0.5, -2.8)),
         ("goto", (0.0, 0.0)),
+    ],
+    "p4": P2_TOUR,
+    "p5a": [
+        ("motion", ["--action", "straight", "--distance", "2.0"]),
+    ],
+    "p5b": [
+        ("motion", ["--action", "rotate", "--angle", "180"]),
+        ("motion", ["--action", "straight", "--distance", "2.0"]),
+        ("motion", ["--action", "rotate", "--angle", "180"]),
     ],
 }
 
@@ -574,6 +589,49 @@ def analyze(trace_path, gt_path, map_path=None, arena_half=5.0):
         result["occupied_cells"] = occ
         result["free_beyond_walls"] = beyond
     return result
+
+
+# ---------------------------------------------------------------------------
+# Summarize: aggregate metrics.json files into a markdown baseline table
+# ---------------------------------------------------------------------------
+
+SUMMARY_KEYS = [
+    ("ate_rmse_m", "ATE (m)"),
+    ("odom_ate_rmse_m", "odom ATE (m)"),
+    ("rpe_trans_m_per_m", "RPE t (m/m)"),
+    ("rpe_rot_deg_per_m", "RPE r (deg/m)"),
+    ("revisit_trans_m", "revisit (m)"),
+    ("revisit_rot_deg", "revisit (deg)"),
+    ("gt_path_length_m", "path (m)"),
+    ("wall_hit_pct", "wall-hit %"),
+    ("free_beyond_walls", "free-beyond"),
+]
+
+
+def summarize(paths):
+    """Group metrics.json files by pattern; print mean (min..max) per metric."""
+    by_pattern = {}
+    for path in paths:
+        with open(path) as f:
+            m = json.load(f)
+        by_pattern.setdefault(m.get("pattern", "?"), []).append(m)
+
+    header = ["pattern", "runs"] + [label for _, label in SUMMARY_KEYS]
+    print("| " + " | ".join(header) + " |")
+    print("|" + "---|" * len(header))
+    for pattern in sorted(by_pattern):
+        runs = by_pattern[pattern]
+        cells = [pattern, str(len(runs))]
+        for key, _ in SUMMARY_KEYS:
+            vals = [r[key] for r in runs if key in r and not math.isnan(r[key])]
+            if not vals:
+                cells.append("—")
+            elif len(vals) == 1:
+                cells.append("%.3f" % vals[0])
+            else:
+                cells.append("%.3f (%.3f..%.3f)"
+                             % (sum(vals) / len(vals), min(vals), max(vals)))
+        print("| " + " | ".join(cells) + " |")
 
 
 # ---------------------------------------------------------------------------
@@ -766,6 +824,7 @@ def main():
     p_an.add_argument("--map", help="house_map.bin for map metrics")
     p_an.add_argument("--arena-half", type=float, default=5.0)
     p_an.add_argument("--json", help="write metrics JSON here")
+    p_an.add_argument("--pattern", help="pattern label recorded in the JSON")
 
     p_rec = sub.add_parser("record-gt", help="stream Gazebo ground truth to CSV")
     p_rec.add_argument("--out", required=True)
@@ -786,7 +845,13 @@ def main():
     p_run.add_argument("--host", default="127.0.0.1")
     p_run.add_argument("--arena-half", type=float, default=5.0)
 
+    p_sum = sub.add_parser("summarize", help="aggregate metrics.json files into a table")
+    p_sum.add_argument("files", nargs="+")
+
     args = parser.parse_args()
+    if args.cmd == "summarize":
+        summarize(args.files)
+        sys.exit(0)
     if args.cmd == "self-test":
         sys.exit(self_test())
     if args.cmd == "record-gt":
@@ -822,6 +887,8 @@ def main():
         sys.exit(0)
     if args.cmd == "analyze":
         result = analyze(args.trace, args.gt, args.map, args.arena_half)
+        if args.pattern:
+            result["pattern"] = args.pattern
         for key, value in result.items():
             print("%-24s %s" % (key, value))
         if args.json:
