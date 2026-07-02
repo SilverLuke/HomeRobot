@@ -692,3 +692,202 @@ impl<W: Write> Session<W> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::homerobot::{MotorEncoders, RpcResponse};
+
+    fn test_session() -> (Session<Vec<u8>>, mpsc::Receiver<GuiUpdate>) {
+        let (gui_tx, gui_rx) = mpsc::channel();
+        let session = Session::new(
+            Vec::new(),
+            Stats::new(),
+            gui_tx,
+            Arc::new(Mutex::new(rerun::RecordingStream::disabled())),
+        );
+        (session, gui_rx)
+    }
+
+    /// Decode every length-prefixed frame the session wrote to the wire.
+    fn sent_messages(session: &Session<Vec<u8>>) -> Vec<ServerToRobotMessage> {
+        let mut buf = session.link.stream.as_slice();
+        let mut messages = Vec::new();
+        while buf.len() >= 2 {
+            let len = u16::from_be_bytes([buf[0], buf[1]]) as usize;
+            messages.push(ServerToRobotMessage::decode(&buf[2..2 + len]).expect("valid frame"));
+            buf = &buf[2 + len..];
+        }
+        messages
+    }
+
+    fn encoders_event(left: i32, right: i32, millis: u32) -> SessionEvent {
+        SessionEvent::FromRobot(RobotToServerMessage {
+            sequence_millis: millis,
+            payload: Some(Payload::Encoders(MotorEncoders {
+                left_encoder: left,
+                right_encoder: right,
+            })),
+        })
+    }
+
+    #[test]
+    fn encoder_telemetry_updates_pose_and_notifies_gui() {
+        let (mut session, gui_rx) = test_session();
+        // ~1m forward at the default 1736.2 ticks/m.
+        session.handle_event(encoders_event(1736, 1736, 100));
+
+        assert!(session.pose_initialized);
+        assert!((session.pose.x - 1.0).abs() < 0.01);
+
+        let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
+        assert!(updates.iter().any(|u| matches!(u, GuiUpdate::Encoders { left: 1736, right: 1736 })));
+        assert!(updates.iter().any(|u| matches!(u, GuiUpdate::Pose { x, .. } if (x - 1.0).abs() < 0.01)));
+    }
+
+    #[test]
+    fn execute_motion_rpc_completes_on_matching_call_id() {
+        let (mut session, _gui_rx) = test_session();
+        let (reply_tx, reply_rx) = mpsc::channel();
+        session.handle_event(SessionEvent::Command(Command::ExecuteMotion {
+            motion_type: 0,
+            left_ticks: 100,
+            right_ticks: 100,
+            max_power: 150,
+            reply: Some(reply_tx),
+        }));
+
+        let sent = sent_messages(&session);
+        let call_id = sent
+            .iter()
+            .find_map(|m| match &m.payload {
+                Some(OutPayload::RpcRequest(r)) => Some(r.call_id),
+                _ => None,
+            })
+            .expect("RpcRequest was sent");
+
+        session.handle_event(SessionEvent::FromRobot(RobotToServerMessage {
+            sequence_millis: 0,
+            payload: Some(Payload::RpcResponse(RpcResponse {
+                call_id,
+                payload: vec![],
+                error: String::new(),
+            })),
+        }));
+
+        assert_eq!(reply_rx.try_recv(), Ok(Ok(())));
+    }
+
+    #[test]
+    fn rpc_response_with_unknown_call_id_completes_nothing() {
+        let (mut session, _gui_rx) = test_session();
+        let (reply_tx, reply_rx) = mpsc::channel();
+        session.handle_event(SessionEvent::Command(Command::ExecuteMotion {
+            motion_type: 0,
+            left_ticks: 100,
+            right_ticks: 100,
+            max_power: 150,
+            reply: Some(reply_tx),
+        }));
+
+        session.handle_event(SessionEvent::FromRobot(RobotToServerMessage {
+            sequence_millis: 0,
+            payload: Some(Payload::RpcResponse(RpcResponse {
+                call_id: 9999,
+                payload: vec![],
+                error: String::new(),
+            })),
+        }));
+
+        assert!(reply_rx.try_recv().is_err(), "stale response must not complete a pending motion");
+    }
+
+    #[test]
+    fn identical_drive_commands_are_deduped_on_the_wire() {
+        let (mut session, _gui_rx) = test_session();
+        let drive = || Command::Drive { left_power: 100, left_angle: 1.0, right_power: 100, right_angle: 1.0 };
+        session.handle_event(SessionEvent::Command(drive()));
+        session.handle_event(SessionEvent::Command(drive()));
+
+        let motor_moves = sent_messages(&session)
+            .iter()
+            .filter(|m| matches!(m.payload, Some(OutPayload::MotorMove(_))))
+            .count();
+        assert_eq!(motor_moves, 1);
+    }
+
+    #[test]
+    fn manual_drive_cancels_autonomous_mode_and_stops_first() {
+        let (mut session, gui_rx) = test_session();
+        session.handle_event(encoders_event(10, 10, 100));
+        session.handle_event(SessionEvent::Command(Command::SetMode(NavMode::Exploration)));
+        let _ = gui_rx.try_iter().count(); // drain
+
+        session.handle_event(SessionEvent::Command(Command::Drive {
+            left_power: 80, left_angle: 1.0, right_power: 80, right_angle: 1.0,
+        }));
+
+        // Leaving Exploration emits a stop, then the manual drive follows.
+        let moves: Vec<u32> = sent_messages(&session)
+            .iter()
+            .filter_map(|m| match &m.payload {
+                Some(OutPayload::MotorMove(mv)) => Some(mv.left_power),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(moves.last(), Some(&80));
+        assert!(moves.contains(&0), "expected a stop when leaving autonomous mode");
+
+        let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
+        assert!(updates.iter().any(|u| matches!(u, GuiUpdate::NavigationTarget(None))));
+    }
+
+    #[test]
+    fn reset_zeroes_state_and_emits_reset_view() {
+        let (mut session, gui_rx) = test_session();
+        session.handle_event(encoders_event(1736, 1736, 100));
+        assert!(session.pose_initialized);
+        let _ = gui_rx.try_iter().count(); // drain
+
+        session.handle_event(SessionEvent::Command(Command::Reset));
+
+        assert!(!session.pose_initialized);
+        assert_eq!(session.pose.x, 0.0);
+        let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
+        assert!(updates.iter().any(|u| matches!(u, GuiUpdate::ResetView)));
+        assert!(updates.iter().any(|u| matches!(u, GuiUpdate::Map { width: 0, height: 0, .. })));
+    }
+
+    #[test]
+    fn failed_send_reports_error_to_rpc_caller() {
+        // A session over a full/broken sink: use a writer that always errors.
+        struct BrokenSink;
+        impl Write for BrokenSink {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "gone"))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let (gui_tx, _gui_rx) = mpsc::channel();
+        let mut session = Session::new(
+            BrokenSink,
+            Stats::new(),
+            gui_tx,
+            Arc::new(Mutex::new(rerun::RecordingStream::disabled())),
+        );
+        let (reply_tx, reply_rx) = mpsc::channel();
+        session.handle_event(SessionEvent::Command(Command::ExecuteMotion {
+            motion_type: 0,
+            left_ticks: 100,
+            right_ticks: 100,
+            max_power: 150,
+            reply: Some(reply_tx),
+        }));
+
+        assert!(matches!(reply_rx.try_recv(), Ok(Err(_))), "send failure must fail the RPC immediately");
+        assert!(session.pending_rpcs.is_empty());
+    }
+}
