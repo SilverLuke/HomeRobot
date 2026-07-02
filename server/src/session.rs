@@ -53,14 +53,16 @@ pub enum SessionEvent {
 /// Write half of the robot connection: message framing, sequence numbers and
 /// suppression of duplicate consecutive drive commands (the navigator re-emits
 /// its drive decision on every telemetry event).
-struct RobotLink {
-    stream: TcpStream,
+///
+/// Generic over the sink so tests can drive a session against a `Vec<u8>`.
+struct RobotLink<W: Write> {
+    stream: W,
     start_time: Instant,
     stats: Arc<Stats>,
     last_drive: Option<(u8, f32, u8, f32)>,
 }
 
-impl RobotLink {
+impl<W: Write> RobotLink<W> {
     fn send(&mut self, payload: OutPayload) -> io::Result<()> {
         let msg = ServerToRobotMessage {
             sequence_millis: self.start_time.elapsed().as_millis() as u32,
@@ -101,8 +103,8 @@ struct PendingRpc {
     reply: Option<mpsc::Sender<RpcResult>>,
 }
 
-pub struct Session {
-    link: RobotLink,
+pub struct Session<W: Write> {
+    link: RobotLink<W>,
     odom: Odometry,
     slam: BasicSlam,
     navigator: Navigator,
@@ -221,9 +223,9 @@ fn reader_thread(
     }
 }
 
-impl Session {
+impl<W: Write> Session<W> {
     fn new(
-        stream: TcpStream,
+        stream: W,
         stats: Arc<Stats>,
         gui_tx: mpsc::Sender<GuiUpdate>,
         rec: Arc<Mutex<rerun::RecordingStream>>,
