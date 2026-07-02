@@ -1,6 +1,3 @@
-use crate::odometry::Pose;
-use crate::homerobot::LidarPoint;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frontier {
     pub centroid_x: f32,
@@ -43,19 +40,6 @@ impl OccupancyGrid {
             Some((gx as usize, gy as usize))
         } else {
             None
-        }
-    }
-
-    /// Gets a cell probability (0..100) or -1 for unknown
-    #[allow(dead_code)]
-    pub fn get_cell(&self, x: f32, y: f32) -> i8 {
-        if let Some((gx, gy)) = self.world_to_grid(x, y) {
-            let val = self.data[gy * self.width + gx];
-            if val == 0 { -1 }
-            else if val > 0 { 100 }
-            else { 0 }
-        } else {
-            -1 // Unknown
         }
     }
 
@@ -144,30 +128,6 @@ impl OccupancyGrid {
             centroid_x: sum_x / cluster.len() as f32,
             centroid_y: sum_y / cluster.len() as f32,
             size: cluster.len(),
-        }
-    }
-
-    /// Apply a LiDAR scan to the map
-    pub fn update_from_scan(&mut self, pose: &Pose, points: &[LidarPoint]) {
-        let (rx, ry) = match self.world_to_grid(pose.x, pose.y) {
-            Some(coords) => coords,
-            None => return,
-        };
-
-        for p in points {
-            if p.distance_mm < 150.0 { continue; }
-            if p.distance_mm > 8000.0 { continue; }
-            
-            let angle_rad = (p.angle_deg as f32).to_radians();
-            let total_angle = pose.theta - angle_rad;
-            
-            let ox_world = pose.x + (p.distance_mm / 1000.0) * total_angle.cos();
-            let oy_world = pose.y + (p.distance_mm / 1000.0) * total_angle.sin();
-            
-            if let Some((ox, oy)) = self.world_to_grid(ox_world, oy_world) {
-                self.update_cell(ox_world, oy_world, LOG_ODDS_OCCUPIED);
-                self.raytrace_free(rx, ry, ox, oy);
-            }
         }
     }
 

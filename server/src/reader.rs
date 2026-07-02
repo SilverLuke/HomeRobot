@@ -1,25 +1,20 @@
 use crate::constants::BUFFER_SIZE;
 use crate::homerobot::RobotToServerMessage;
-use crate::stats::Stats;
 use circular_buffer::CircularBuffer;
 use prost::Message;
 use std::io;
 use std::io::{Read, Write};
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 pub struct ProtocolManager<S: Read + Write> {
     stream: S,
     read_buffer: Box<CircularBuffer<BUFFER_SIZE, u8>>,
-    stats: Arc<Stats>,
 }
 
 impl<S: Read + Write> ProtocolManager<S> {
-    pub(crate) fn new(stream: S, stats: Arc<Stats>) -> ProtocolManager<S> {
+    pub(crate) fn new(stream: S) -> ProtocolManager<S> {
         ProtocolManager {
             stream,
             read_buffer: CircularBuffer::<BUFFER_SIZE, u8>::boxed(),
-            stats,
         }
     }
 
@@ -88,7 +83,6 @@ impl<S: Read + Write> ProtocolManager<S> {
                 "Connection closed",
             )),
             Ok(read_bytes) => {
-                self.stats.total_rx.fetch_add(read_bytes, Ordering::SeqCst);
                 self.read_buffer.extend(&buffer[..read_bytes]);
                 Ok(read_bytes)
             }
@@ -158,7 +152,7 @@ mod tests {
     }
 
     fn manager(chunks: Vec<Vec<u8>>) -> ProtocolManager<ChunkedStream> {
-        ProtocolManager::new(ChunkedStream::new(chunks), crate::stats::Stats::new())
+        ProtocolManager::new(ChunkedStream::new(chunks))
     }
 
     #[test]

@@ -58,7 +58,6 @@ pub enum SessionEvent {
 struct RobotLink<W: Write> {
     stream: W,
     start_time: Instant,
-    stats: Arc<Stats>,
     last_drive: Option<(u8, f32, u8, f32)>,
 }
 
@@ -74,7 +73,6 @@ impl<W: Write> RobotLink<W> {
         packet.extend(buf);
         self.stream.write_all(&packet)?;
         self.stream.flush()?;
-        self.stats.total_tx.fetch_add(packet.len(), Ordering::SeqCst);
         Ok(())
     }
 
@@ -206,7 +204,7 @@ fn reader_thread(
     sig_count: Arc<AtomicUsize>,
     tx: mpsc::Sender<SessionEvent>,
 ) {
-    let mut protocol = ProtocolManager::new(stream, stats.clone());
+    let mut protocol = ProtocolManager::new(stream);
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
         match protocol.read_message() {
             Ok(Some(msg)) => {
@@ -235,7 +233,6 @@ impl<W: Write> Session<W> {
             link: RobotLink {
                 stream,
                 start_time,
-                stats: stats.clone(),
                 last_drive: None,
             },
             odom: Odometry::new(),

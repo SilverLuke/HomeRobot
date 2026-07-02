@@ -53,16 +53,6 @@ impl Odometry {
         );
     }
 
-    /// Update with encoder readings only. Kept for backwards compatibility and simulation/test fallbacks.
-    #[allow(dead_code)]
-    pub fn update(&mut self, left_delta: i32, right_delta: i32) {
-        let timestamp_ms = match self.last_timestamp_ms {
-            Some(last_ms) => last_ms + 100, // Assume standard 100ms telemetry interval
-            None => 100,
-        };
-        self.update_encoders(left_delta, right_delta, timestamp_ms);
-    }
-
     /// Feed new gyroscope reading from local IMU.
     pub fn update_imu(&mut self, gyro_z: f32, timestamp_ms: u32) {
         self.last_gyro_z = gyro_z;
@@ -177,7 +167,7 @@ mod tests {
         assert_eq!(odom.pose.x, 0.0);
 
         // Move forward slightly
-        odom.update(1736, 1736); // Approx 1 meter forward
+        odom.update_encoders(1736, 1736, 100); // Approx 1 meter forward
         assert_eq!(odom.cumulative_left, 1736);
         assert_eq!(odom.cumulative_right, 1736);
         assert!((odom.pose.x - 1.0).abs() < 0.01);
@@ -185,7 +175,7 @@ mod tests {
         assert_eq!(odom.pose.theta, 0.0);
 
         // Turn in place
-        odom.update(-425, 425);
+        odom.update_encoders(-425, 425, 200);
         assert_eq!(odom.cumulative_left, 1311);
         assert_eq!(odom.cumulative_right, 2161);
         assert!(odom.pose.theta > 0.0);
