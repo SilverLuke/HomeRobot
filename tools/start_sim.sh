@@ -95,6 +95,10 @@ else
     echo "[1/4] Display setup: using existing DISPLAY=$DISPLAY"
 fi
 
+# The simulation must not fight the real robot for the server: bind to
+# localhost only so LAN robots cannot connect to this instance (issues.md #5).
+export HR_BIND=127.0.0.1
+
 # 3. Start the Rust Server (Dashboard)
 if [ "$HEADLESS_MODE" = true ]; then
     echo "[2/4] Starting Headless Rust Server in Xvfb..."

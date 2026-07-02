@@ -172,6 +172,13 @@ fn motion_ticks(req: &homerobot::MotionRequest) -> (i32, i32) {
     }
 }
 
+/// Bind address for all listeners (robot, proxy, syslog). Defaults to all
+/// interfaces; set HR_BIND=127.0.0.1 to run a local-only instance (e.g. the
+/// simulation) that the real robot on the LAN cannot reach — see issues.md #5.
+fn bind_addr() -> String {
+    env::var("HR_BIND").unwrap_or_else(|_| "0.0.0.0".to_string())
+}
+
 fn main() -> io::Result<()> {
     // Initialize logger
     if std::env::var("RUST_LOG").is_err() {
@@ -238,8 +245,8 @@ fn main() -> io::Result<()> {
     let gui_tx_server = gui_tx.clone();
     let rec_server = rec.clone();
     thread::spawn(move || {
-        let addr = "0.0.0.0:12345";
-        let listener = TcpListener::bind(addr).expect("Could not bind");
+        let addr = format!("{}:12345", bind_addr());
+        let listener = TcpListener::bind(&addr).expect("Could not bind");
         listener.set_nonblocking(true).ok();
         log::info!("[SERVER] Listening on {}...", addr);
 
@@ -267,8 +274,8 @@ fn main() -> io::Result<()> {
     let bus_proxy = bus.clone();
     let stats_proxy = stats.clone();
     thread::spawn(move || {
-        let addr = "0.0.0.0:12346";
-        let listener = TcpListener::bind(addr).expect("Could not bind Proxy");
+        let addr = format!("{}:12346", bind_addr());
+        let listener = TcpListener::bind(&addr).expect("Could not bind Proxy");
         listener.set_nonblocking(true).ok();
         log::info!("[PROXY] Listening for cmd_sender on {}...", addr);
 
@@ -291,7 +298,7 @@ fn main() -> io::Result<()> {
     let gui_tx_syslog = gui_tx.clone();
     thread::spawn(move || {
         use std::net::UdpSocket;
-        let socket = match UdpSocket::bind("0.0.0.0:5140") {
+        let socket = match UdpSocket::bind(format!("{}:5140", bind_addr())) {
             Ok(s) => s,
             Err(e) => {
                 log::error!("[SYSLOG ERROR] Could not bind to port 5140: {}", e);
@@ -299,7 +306,7 @@ fn main() -> io::Result<()> {
             }
         };
         socket.set_read_timeout(Some(Duration::from_millis(500))).ok();
-        log::info!("[SYSLOG] Listening on UDP 0.0.0.0:5140");
+        log::info!("[SYSLOG] Listening on UDP {}:5140", bind_addr());
 
         let mut buf = [0u8; 1024];
         while stats_syslog.running.load(Ordering::Relaxed) {

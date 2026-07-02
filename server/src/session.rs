@@ -43,6 +43,9 @@ const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
 /// How often the world model is checked for autosave to disk.
 const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
+/// Minimum interval between full occupancy-grid updates to the GUI: the grid
+/// is ~720KB per message, far too heavy to clone on every 5Hz sweep.
+const MAP_GUI_INTERVAL: Duration = Duration::from_millis(1000);
 
 pub enum SessionEvent {
     FromRobot(RobotToServerMessage),
@@ -115,6 +118,11 @@ pub struct Session<W: Write> {
     pending_rpcs: HashMap<u32, PendingRpc>,
     next_call_id: u32,
     gui_tx: mpsc::Sender<GuiUpdate>,
+    /// Cleared when the GUI receiver is gone (headless): skips building the
+    /// heavy map updates entirely.
+    gui_connected: bool,
+    last_map_gui_update: Instant,
+    map_gui_interval: Duration,
     stats: Arc<Stats>,
     rec: Arc<Mutex<rerun::RecordingStream>>,
     start_time: Instant,
@@ -260,10 +268,18 @@ impl<W: Write> Session<W> {
             pending_rpcs: HashMap::new(),
             next_call_id: 1,
             gui_tx,
+            gui_connected: true,
+            last_map_gui_update: Instant::now() - MAP_GUI_INTERVAL,
+            map_gui_interval: MAP_GUI_INTERVAL,
             stats,
             rec,
             start_time,
         }
+    }
+
+    #[cfg(test)]
+    fn set_map_gui_interval(&mut self, interval: Duration) {
+        self.map_gui_interval = interval;
     }
 
     /// Rerun stream with the session timeline set to "now".
@@ -460,12 +476,19 @@ impl<W: Write> Session<W> {
         }).unzip();
         rec.log("robot/sensor/lidar", &rerun::Points3D::new(rerun_pts).with_colors(rerun_colors)).ok();
 
-        let (w, h, data) = world.slam.get_map_data();
-        let _ = self.gui_tx.send(GuiUpdate::Map {
-            width: w,
-            height: h,
-            data: data.to_vec(),
-        });
+        // The full grid clone is heavy; throttle it and skip it entirely once
+        // the GUI receiver is gone (headless mode).
+        if self.gui_connected && self.last_map_gui_update.elapsed() >= self.map_gui_interval {
+            self.last_map_gui_update = Instant::now();
+            let (w, h, data) = world.slam.get_map_data();
+            if self.gui_tx.send(GuiUpdate::Map {
+                width: w,
+                height: h,
+                data: data.to_vec(),
+            }).is_err() {
+                self.gui_connected = false;
+            }
+        }
     }
 
     fn log_slam_pose(&self, pose: Pose) {
@@ -881,6 +904,47 @@ mod tests {
 
         let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
         assert!(updates.iter().any(|u| matches!(u, GuiUpdate::NavigationTarget(None))));
+    }
+
+    #[test]
+    fn map_gui_updates_are_throttled() {
+        let (mut session, gui_rx) = test_session();
+        session.set_map_gui_interval(Duration::from_millis(400));
+
+        let sweep = |offset: f32| {
+            let mut points: Vec<crate::homerobot::LidarPoint> = (0..40)
+                .map(|i| crate::homerobot::LidarPoint {
+                    distance_mm: 1000.0,
+                    angle_deg: offset + i as f32 * 9.0,
+                    quality: 15,
+                    scan_completed: false,
+                })
+                .collect();
+            points.push(crate::homerobot::LidarPoint {
+                distance_mm: 1000.0,
+                angle_deg: offset,
+                quality: 15,
+                scan_completed: true, // flushes the buffered revolution
+            });
+            SessionEvent::FromRobot(RobotToServerMessage {
+                sequence_millis: 0,
+                payload: Some(Payload::Lidar(crate::homerobot::LidarScan { points })),
+            })
+        };
+
+        // Sweeps must be >80ms apart for the assembler, but within the map
+        // throttle window: expect exactly one Map update for the pair.
+        session.handle_event(sweep(0.0));
+        std::thread::sleep(Duration::from_millis(100));
+        session.handle_event(sweep(0.5));
+        let maps = gui_rx.try_iter().filter(|u| matches!(u, GuiUpdate::Map { .. })).count();
+        assert_eq!(maps, 1);
+
+        // After the throttle interval a new sweep publishes the map again.
+        std::thread::sleep(Duration::from_millis(350));
+        session.handle_event(sweep(1.0));
+        let maps = gui_rx.try_iter().filter(|u| matches!(u, GuiUpdate::Map { .. })).count();
+        assert_eq!(maps, 1);
     }
 
     #[test]
