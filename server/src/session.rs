@@ -31,8 +31,9 @@ use crate::navigator::{NavUpdate, Navigator};
 use crate::odometry::{Odometry, Pose};
 use crate::reader::ProtocolManager;
 use crate::scan::{CompletedSweep, ScanAssembler};
-use crate::slam::{BasicSlam, Slam};
+use crate::slam::Slam;
 use crate::stats::Stats;
+use crate::world::WorldModel;
 
 /// Lidar is switched on as soon as a robot connects.
 const DEFAULT_LIDAR_HZ: f32 = 5.0;
@@ -104,13 +105,10 @@ struct PendingRpc {
 pub struct Session<W: Write> {
     link: RobotLink<W>,
     odom: Odometry,
-    slam: BasicSlam,
+    /// Shared across sessions: the map and pose survive robot reconnects.
+    world: Arc<Mutex<WorldModel>>,
     navigator: Navigator,
     scan: ScanAssembler,
-    /// Best pose estimate: SLAM-corrected on each sweep, dead-reckoned from
-    /// encoder deltas in between.
-    pose: Pose,
-    pose_initialized: bool,
     min_front_dist: f32,
     pending_rpcs: HashMap<u32, PendingRpc>,
     next_call_id: u32,
@@ -125,6 +123,7 @@ pub struct Session<W: Write> {
 pub fn run_session(
     stream: TcpStream,
     bus: CommandBus,
+    world: Arc<Mutex<WorldModel>>,
     stats: Arc<Stats>,
     sig_count: Arc<AtomicUsize>,
     gui_tx: mpsc::Sender<GuiUpdate>,
@@ -171,7 +170,8 @@ pub fn run_session(
         });
     }
 
-    let mut session = Session::new(stream, stats.clone(), gui_tx.clone(), rec);
+    world.lock().unwrap().on_new_session();
+    let mut session = Session::new(stream, world, stats.clone(), gui_tx.clone(), rec);
     if let Err(e) = session.link.send(OutPayload::LidarControl(crate::homerobot::LidarControlCommand {
         active: true,
         target_frequency_hz: DEFAULT_LIDAR_HZ,
@@ -224,6 +224,7 @@ fn reader_thread(
 impl<W: Write> Session<W> {
     fn new(
         stream: W,
+        world: Arc<Mutex<WorldModel>>,
         stats: Arc<Stats>,
         gui_tx: mpsc::Sender<GuiUpdate>,
         rec: Arc<Mutex<rerun::RecordingStream>>,
@@ -236,11 +237,9 @@ impl<W: Write> Session<W> {
                 last_drive: None,
             },
             odom: Odometry::new(),
-            slam: BasicSlam::new(),
+            world,
             navigator: Navigator::new(),
             scan: ScanAssembler::new(),
-            pose: Pose { x: 0.0, y: 0.0, theta: 0.0 },
-            pose_initialized: false,
             min_front_dist: 10.0,
             pending_rpcs: HashMap::new(),
             next_call_id: 1,
@@ -259,22 +258,25 @@ impl<W: Write> Session<W> {
     }
 
     pub fn handle_event(&mut self, event: SessionEvent) {
+        // The session is the only writer while it lives; one lock per event.
+        let world = self.world.clone();
+        let mut world = world.lock().unwrap();
         match event {
             SessionEvent::FromRobot(msg) => {
                 let seq = msg.sequence_millis;
                 if let Some(payload) = msg.payload {
-                    self.handle_robot_payload(payload, seq);
+                    self.handle_robot_payload(&mut world, payload, seq);
                 }
             }
-            SessionEvent::Command(cmd) => self.handle_command(cmd),
-            SessionEvent::Tick => self.run_navigation(),
+            SessionEvent::Command(cmd) => self.handle_command(&mut world, cmd),
+            SessionEvent::Tick => self.run_navigation(&mut world),
             SessionEvent::Disconnected(_) => unreachable!("handled by the session loop"),
         }
     }
 
     // ---- Robot telemetry -------------------------------------------------
 
-    fn handle_robot_payload(&mut self, payload: Payload, sequence_millis: u32) {
+    fn handle_robot_payload(&mut self, world: &mut WorldModel, payload: Payload, sequence_millis: u32) {
         match payload {
             Payload::Battery(bat) => {
                 log::info!("[SERVER] Telemetry Heartbeat: Battery {}%", bat.percentage);
@@ -285,8 +287,8 @@ impl<W: Write> Session<W> {
                 self.rec().log("robot/battery", &rerun::Scalars::new([bat.percentage as f64])).ok();
             }
             Payload::Encoders(enc) => {
-                self.handle_encoders(enc.left_encoder, enc.right_encoder, sequence_millis);
-                self.run_navigation();
+                self.handle_encoders(world, enc.left_encoder, enc.right_encoder, sequence_millis);
+                self.run_navigation(world);
             }
             Payload::Imu(imu) => {
                 if let (Some(a), Some(g)) = (imu.acceleration, imu.gyroscope) {
@@ -301,13 +303,13 @@ impl<W: Write> Session<W> {
                     rec.log("robot/imu/accel", &rerun::Arrows3D::from_vectors([[a.x, a.y, a.z]])).ok();
                     rec.log("robot/imu/gyro/z", &rerun::Scalars::new([g.z as f64])).ok();
                 }
-                self.run_navigation();
+                self.run_navigation(world);
             }
             Payload::Lidar(scan) => {
                 for sweep in self.scan.push(scan.points) {
-                    self.process_sweep(sweep);
+                    self.process_sweep(world, sweep);
                 }
-                self.run_navigation();
+                self.run_navigation(world);
             }
             Payload::Config(conf) => {
                 self.stats.log("[CONFIG] Robot configuration received");
@@ -340,17 +342,17 @@ impl<W: Write> Session<W> {
         }
     }
 
-    fn handle_encoders(&mut self, left: i32, right: i32, sequence_millis: u32) {
+    fn handle_encoders(&mut self, world: &mut WorldModel, left: i32, right: i32, sequence_millis: u32) {
         if left != 0 || right != 0 {
             log::info!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", left, right);
         }
         let old_odom_pose = self.odom.pose;
         self.odom.update_encoders(left, right, sequence_millis);
-        self.slam.add_odom_pose(self.odom.pose, Instant::now());
+        world.slam.add_odom_pose(self.odom.pose, Instant::now());
 
-        if !self.pose_initialized {
-            self.pose = self.odom.pose;
-            self.pose_initialized = true;
+        if !world.pose_initialized {
+            world.pose = self.odom.pose;
+            world.pose_initialized = true;
         } else {
             // Propagate the odometry delta into the SLAM-corrected pose so the
             // path follower doesn't act on stale position between sweeps.
@@ -359,24 +361,24 @@ impl<W: Write> Session<W> {
             let dt = self.odom.pose.theta - old_odom_pose.theta;
 
             // Rotate the translation delta into the corrected pose's frame.
-            let diff_theta = self.pose.theta - old_odom_pose.theta;
+            let diff_theta = world.pose.theta - old_odom_pose.theta;
             let (sin_diff, cos_diff) = diff_theta.sin_cos();
-            self.pose.x += dx * cos_diff - dy * sin_diff;
-            self.pose.y += dx * sin_diff + dy * cos_diff;
-            self.pose.theta += dt;
-            while self.pose.theta > std::f32::consts::PI {
-                self.pose.theta -= 2.0 * std::f32::consts::PI;
+            world.pose.x += dx * cos_diff - dy * sin_diff;
+            world.pose.y += dx * sin_diff + dy * cos_diff;
+            world.pose.theta += dt;
+            while world.pose.theta > std::f32::consts::PI {
+                world.pose.theta -= 2.0 * std::f32::consts::PI;
             }
-            while self.pose.theta < -std::f32::consts::PI {
-                self.pose.theta += 2.0 * std::f32::consts::PI;
+            while world.pose.theta < -std::f32::consts::PI {
+                world.pose.theta += 2.0 * std::f32::consts::PI;
             }
 
             let _ = self.gui_tx.send(GuiUpdate::SlamPose {
-                x: self.pose.x,
-                y: self.pose.y,
-                theta: self.pose.theta,
+                x: world.pose.x,
+                y: world.pose.y,
+                theta: world.pose.theta,
             });
-            self.log_slam_pose();
+            self.log_slam_pose(world.pose);
         }
 
         let _ = self.gui_tx.send(GuiUpdate::Encoders {
@@ -397,7 +399,7 @@ impl<W: Write> Session<W> {
         ).ok();
     }
 
-    fn process_sweep(&mut self, sweep: CompletedSweep) {
+    fn process_sweep(&mut self, world: &mut WorldModel, sweep: CompletedSweep) {
         if let Some(summary) = sweep.summary {
             self.stats.log(&summary);
         }
@@ -417,17 +419,17 @@ impl<W: Write> Session<W> {
         }
 
         // SLAM correction on the complete, consistent sweep.
-        self.pose = self.slam.update(&sweep.points, &self.odom.pose);
-        self.pose_initialized = true;
+        world.pose = world.slam.update(&sweep.points, &self.odom.pose);
+        world.pose_initialized = true;
         let _ = self.gui_tx.send(GuiUpdate::Lidar(sweep.points.clone()));
         let _ = self.gui_tx.send(GuiUpdate::SlamPose {
-            x: self.pose.x,
-            y: self.pose.y,
-            theta: self.pose.theta,
+            x: world.pose.x,
+            y: world.pose.y,
+            theta: world.pose.theta,
         });
 
         let rec = self.rec();
-        self.log_slam_pose();
+        self.log_slam_pose(world.pose);
         let (rerun_pts, rerun_colors): (Vec<[f32; 3]>, Vec<rerun::Color>) = sweep.points.iter().map(|pt| {
             let angle = -pt.angle_deg.to_radians();
             let d = pt.distance_mm / 1000.0;
@@ -438,7 +440,7 @@ impl<W: Write> Session<W> {
         }).unzip();
         rec.log("robot/sensor/lidar", &rerun::Points3D::new(rerun_pts).with_colors(rerun_colors)).ok();
 
-        let (w, h, data) = self.slam.get_map_data();
+        let (w, h, data) = world.slam.get_map_data();
         let _ = self.gui_tx.send(GuiUpdate::Map {
             width: w,
             height: h,
@@ -446,34 +448,34 @@ impl<W: Write> Session<W> {
         });
     }
 
-    fn log_slam_pose(&self) {
+    fn log_slam_pose(&self, pose: Pose) {
         self.rec().log(
             "robot/pose/slam",
             &rerun::Transform3D::from_translation_rotation(
-                [self.pose.x, self.pose.y, 0.0],
-                rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(self.pose.theta)),
+                [pose.x, pose.y, 0.0],
+                rerun::RotationAxisAngle::new([0.0, 0.0, 1.0], rerun::Angle::from_radians(pose.theta)),
             ),
         ).ok();
     }
 
     // ---- Commands --------------------------------------------------------
 
-    fn handle_command(&mut self, cmd: Command) {
+    fn handle_command(&mut self, world: &mut WorldModel, cmd: Command) {
         match cmd {
             Command::Drive { left_power, left_angle, right_power, right_angle } => {
-                self.enter_manual();
+                self.enter_manual(world.pose);
                 if let Err(e) = self.link.send_drive(left_power, left_angle, right_power, right_angle) {
                     log::error!("[CMD] Failed to send drive command: {}", e);
                 }
             }
             Command::StopMoving => {
-                self.enter_manual();
+                self.enter_manual(world.pose);
                 if let Err(e) = self.link.stop() {
                     log::error!("[CMD] Failed to send stop: {}", e);
                 }
             }
             Command::StopAll => {
-                self.enter_manual();
+                self.enter_manual(world.pose);
                 if let Err(e) = self.link.send(OutPayload::StopAll(true)) {
                     log::error!("[CMD] Failed to send StopAll: {}", e);
                 }
@@ -506,7 +508,7 @@ impl<W: Write> Session<W> {
             }
             Command::RunDiagnostic => self.send_rpc("RunDiagnostic", Vec::new(), None),
             Command::ExecuteMotion { motion_type, left_ticks, right_ticks, max_power, reply } => {
-                self.enter_manual();
+                self.enter_manual(world.pose);
                 let req = crate::homerobot::MotionRequest {
                     r#type: motion_type,
                     distance: 0.0,
@@ -526,36 +528,34 @@ impl<W: Write> Session<W> {
                     .map(|p| p.join(map_name))
                     .unwrap_or_else(|_| std::path::PathBuf::from(map_name));
                 self.stats.log(&format!("[SLAM] Saving house map to {}...", abs_path.display()));
-                match self.slam.save_map(map_name) {
+                match world.slam.save_map(map_name) {
                     Ok(()) => self.stats.log(&format!("[SLAM] Map saved successfully to {}!", abs_path.display())),
                     Err(e) => log::error!("Error saving map: {:?}", e),
                 }
             }
-            Command::Reset => self.reset(),
+            Command::Reset => self.reset(world),
             Command::SetMode(mode) => {
-                let updates = self.navigator.set_mode(mode, self.pose);
+                let updates = self.navigator.set_mode(mode, world.pose);
                 self.apply_nav_updates(updates);
                 // Plan immediately instead of waiting for the next telemetry event.
-                self.run_navigation();
+                self.run_navigation(world);
             }
         }
     }
 
     /// Any manual command cancels autonomous navigation.
-    fn enter_manual(&mut self) {
-        let updates = self.navigator.set_mode(NavMode::Manual, self.pose);
+    fn enter_manual(&mut self, pose: Pose) {
+        let updates = self.navigator.set_mode(NavMode::Manual, pose);
         self.apply_nav_updates(updates);
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self, world: &mut WorldModel) {
         self.stats.log("[SERVER] Resetting map, path, and odometry...");
         let _ = self.link.stop();
         self.odom = Odometry::new();
-        self.slam = BasicSlam::new();
+        world.reset();
         self.navigator.reset();
         self.scan.reset();
-        self.pose = Pose { x: 0.0, y: 0.0, theta: 0.0 };
-        self.pose_initialized = false;
         self.min_front_dist = 10.0;
 
         let _ = self.gui_tx.send(GuiUpdate::ResetView);
@@ -633,11 +633,11 @@ impl<W: Write> Session<W> {
 
     // ---- Navigation ------------------------------------------------------
 
-    fn run_navigation(&mut self) {
-        if !self.pose_initialized {
+    fn run_navigation(&mut self, world: &mut WorldModel) {
+        if !world.pose_initialized {
             return;
         }
-        let updates = self.navigator.tick(&self.slam, self.pose, self.min_front_dist);
+        let updates = self.navigator.tick(&world.slam, world.pose, self.min_front_dist);
         self.apply_nav_updates(updates);
     }
 
@@ -696,14 +696,24 @@ mod tests {
     use crate::homerobot::{MotorEncoders, RpcResponse};
 
     fn test_session() -> (Session<Vec<u8>>, mpsc::Receiver<GuiUpdate>) {
+        test_session_with_world(Arc::new(Mutex::new(WorldModel::new())))
+    }
+
+    fn test_session_with_world(world: Arc<Mutex<WorldModel>>) -> (Session<Vec<u8>>, mpsc::Receiver<GuiUpdate>) {
         let (gui_tx, gui_rx) = mpsc::channel();
+        world.lock().unwrap().on_new_session();
         let session = Session::new(
             Vec::new(),
+            world,
             Stats::new(),
             gui_tx,
             Arc::new(Mutex::new(rerun::RecordingStream::disabled())),
         );
         (session, gui_rx)
+    }
+
+    fn world_of(session: &Session<Vec<u8>>) -> Arc<Mutex<WorldModel>> {
+        session.world.clone()
     }
 
     /// Decode every length-prefixed frame the session wrote to the wire.
@@ -734,8 +744,11 @@ mod tests {
         // ~1m forward at the default 1736.2 ticks/m.
         session.handle_event(encoders_event(1736, 1736, 100));
 
-        assert!(session.pose_initialized);
-        assert!((session.pose.x - 1.0).abs() < 0.01);
+        let world = world_of(&session);
+        let world = world.lock().unwrap();
+        assert!(world.pose_initialized);
+        assert!((world.pose.x - 1.0).abs() < 0.01);
+        drop(world);
 
         let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
         assert!(updates.iter().any(|u| matches!(u, GuiUpdate::Encoders { left: 1736, right: 1736 })));
@@ -843,16 +856,43 @@ mod tests {
     fn reset_zeroes_state_and_emits_reset_view() {
         let (mut session, gui_rx) = test_session();
         session.handle_event(encoders_event(1736, 1736, 100));
-        assert!(session.pose_initialized);
+        assert!(session.world.lock().unwrap().pose_initialized);
         let _ = gui_rx.try_iter().count(); // drain
 
         session.handle_event(SessionEvent::Command(Command::Reset));
 
-        assert!(!session.pose_initialized);
-        assert_eq!(session.pose.x, 0.0);
+        let world = world_of(&session);
+        let world = world.lock().unwrap();
+        assert!(!world.pose_initialized);
+        assert_eq!(world.pose.x, 0.0);
+        drop(world);
         let updates: Vec<GuiUpdate> = gui_rx.try_iter().collect();
         assert!(updates.iter().any(|u| matches!(u, GuiUpdate::ResetView)));
         assert!(updates.iter().any(|u| matches!(u, GuiUpdate::Map { width: 0, height: 0, .. })));
+    }
+
+    #[test]
+    fn world_state_survives_session_replacement() {
+        let world = Arc::new(Mutex::new(WorldModel::new()));
+
+        // First session drives ~1m forward, then the connection drops.
+        let (mut first, _gui1) = test_session_with_world(world.clone());
+        first.handle_event(encoders_event(1736, 1736, 100));
+        assert!((world.lock().unwrap().pose.x - 1.0).abs() < 0.01);
+        drop(first);
+
+        // The replacement session sees the same pose and map...
+        let (mut second, _gui2) = test_session_with_world(world.clone());
+        {
+            let w = world.lock().unwrap();
+            assert!(w.pose_initialized, "pose must survive the reconnect");
+            assert!((w.pose.x - 1.0).abs() < 0.01);
+        }
+
+        // ...and new odometry (restarting at zero) extends it instead of
+        // teleporting the robot back to the origin.
+        second.handle_event(encoders_event(1736, 1736, 100));
+        assert!((world.lock().unwrap().pose.x - 2.0).abs() < 0.02);
     }
 
     #[test]
@@ -871,6 +911,7 @@ mod tests {
         let (gui_tx, _gui_rx) = mpsc::channel();
         let mut session = Session::new(
             BrokenSink,
+            Arc::new(Mutex::new(WorldModel::new())),
             Stats::new(),
             gui_tx,
             Arc::new(Mutex::new(rerun::RecordingStream::disabled())),

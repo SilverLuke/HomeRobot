@@ -244,6 +244,14 @@ impl BasicSlam {
         }
         current_pose
     }
+
+    /// Forget odometry-frame tracking state. Called when a robot session
+    /// begins: each session's server-side odometry restarts at zero, so
+    /// deltas across the boundary would be garbage. Map and pose survive.
+    pub fn on_odometry_reset(&mut self) {
+        self.last_odom_pose = None;
+        self.pose_history.clear();
+    }
 }
 
 impl Slam for BasicSlam {
@@ -263,7 +271,9 @@ impl Slam for BasicSlam {
         };
         self.last_scan_time = Some(now);
 
-        // 1. Calculate Odom Delta
+        // 1. Calculate Odom Delta. With no previous odometry sample (first
+        // sweep of a session) there is no delta to apply: keep the current
+        // pose — it may carry state from a previous session.
         if let Some(last_odom) = self.last_odom_pose {
             let dx = odom_pose.x - last_odom.x;
             let dy = odom_pose.y - last_odom.y;
@@ -285,8 +295,6 @@ impl Slam for BasicSlam {
             // Normalize theta to [-PI, PI]
             while self.current_pose.theta > std::f32::consts::PI { self.current_pose.theta -= 2.0 * std::f32::consts::PI; }
             while self.current_pose.theta < -std::f32::consts::PI { self.current_pose.theta += 2.0 * std::f32::consts::PI; }
-        } else {
-            self.current_pose = *odom_pose;
         }
         self.last_odom_pose = Some(*odom_pose);
 
