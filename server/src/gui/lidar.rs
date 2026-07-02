@@ -8,6 +8,8 @@ pub struct GuiState {
     /// Angular sections of the latest sweep with no usable readings:
     /// (start_deg, end_deg, radius_mm) in the robot frame, end > start.
     pub scan_gaps: Vec<(f32, f32, f32)>,
+    /// A sweep section wider than this (degrees) counts as a gap.
+    pub gap_threshold_deg: f32,
     pub robot_x: f32,
     pub robot_y: f32,
     pub robot_theta: f32,
@@ -35,6 +37,7 @@ lazy_static::lazy_static! {
     pub static ref GUI_STATE: Mutex<GuiState> = Mutex::new(GuiState {
         display_scan: Vec::new(),
         scan_gaps: Vec::new(),
+        gap_threshold_deg: gap_threshold_deg(),
         robot_x: 0.0,
         robot_y: 0.0,
         robot_theta: 0.0,
@@ -60,7 +63,8 @@ lazy_static::lazy_static! {
 }
 
 /// A sweep section wider than this without readings counts as a gap.
-/// Override at runtime with the HR_GAP_THRESHOLD env var (degrees).
+/// The HR_GAP_THRESHOLD env var (degrees) sets the initial value; the GUI
+/// spin button adjusts it at runtime.
 pub const GAP_THRESHOLD_DEG: f32 = 4.0;
 
 pub fn gap_threshold_deg() -> f32 {

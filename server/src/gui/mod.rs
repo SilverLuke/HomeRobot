@@ -114,6 +114,7 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
         let btn_show_map: gtk4::ToggleButton = builder.object("btn_show_map").expect("Could not find btn_show_map");
         let btn_show_sensor: gtk4::ToggleButton = builder.object("btn_show_sensor").expect("Could not find btn_show_sensor");
         let log_text_view: gtk4::TextView = builder.object("log_text_view").expect("Could not find log_text_view");
+        let gap_threshold_spin: SpinButton = builder.object("gap_threshold_spin").expect("Could not find gap_threshold_spin");
 
         // Motion Debugging controls
         let btn_rotate_90_left: Button = builder.object("btn_rotate_90_left").expect("Could not find btn_rotate_90_left");
@@ -168,6 +169,7 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
         spin_arc_distance.set_focusable(false);
         btn_arc_left.set_focusable(false);
         btn_arc_right.set_focusable(false);
+        gap_threshold_spin.set_focusable(false);
 
         #[allow(deprecated)]
         {
@@ -201,6 +203,7 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
             spin_arc_distance.set_can_focus(false);
             btn_arc_left.set_can_focus(false);
             btn_arc_right.set_can_focus(false);
+            gap_threshold_spin.set_can_focus(false);
         }
 
         // Set up LIDAR drawing
@@ -208,6 +211,20 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
         crate::gui::lidar::setup_accel_plot(&accel_canvas);
         crate::gui::lidar::setup_gyro_plot(&gyro_canvas);
         crate::gui::lidar::setup_mag_plot(&mag_canvas);
+
+        // Gap threshold control: seed from the env-configured initial value,
+        // then recompute the wedges from the last sweep on every change.
+        gap_threshold_spin.set_value(crate::gui::lidar::gap_threshold_deg() as f64);
+        let lidar_canvas_gap = lidar_canvas.clone();
+        gap_threshold_spin.connect_value_changed(move |spin| {
+            let threshold = spin.value() as f32;
+            {
+                let mut state = GUI_STATE.lock().unwrap();
+                state.gap_threshold_deg = threshold;
+                state.scan_gaps = crate::gui::lidar::find_scan_gaps(&state.display_scan, threshold);
+            }
+            lidar_canvas_gap.queue_draw();
+        });
 
         // Map Drag & Click Navigation gesture
         let drag_controller = gtk4::GestureDrag::new();
@@ -1091,7 +1108,7 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
                                 let mut state = GUI_STATE.lock().unwrap();
                                 state.scan_gaps = crate::gui::lidar::find_scan_gaps(
                                     &points,
-                                    crate::gui::lidar::gap_threshold_deg(),
+                                    state.gap_threshold_deg,
                                 );
                                 crate::gui::lidar::update_scan(&mut state.display_scan, points);
                                 lidar_canvas_c.queue_draw();
@@ -1239,6 +1256,7 @@ mod tests {
             "btn_reset",
             "scan_rate_label",
             "log_text_view",
+            "gap_threshold_spin",
         ];
 
         for id in objects {

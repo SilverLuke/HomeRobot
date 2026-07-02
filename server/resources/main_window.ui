@@ -749,6 +749,40 @@
                                 </child>
                               </object>
                             </child>
+
+                            <child>
+                              <object class="GtkSeparator">
+                                <property name="orientation">horizontal</property>
+                              </object>
+                            </child>
+
+                            <!-- Threshold for shading missing lidar sections -->
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">Lidar Gap Threshold (&#176;)</property>
+                                    <property name="xalign">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinButton" id="gap_threshold_spin">
+                                    <property name="focusable">false</property>
+                                    <property name="digits">1</property>
+                                    <property name="adjustment">
+                                      <object class="GtkAdjustment">
+                                        <property name="lower">0.5</property>
+                                        <property name="upper">45</property>
+                                        <property name="value">4</property>
+                                        <property name="step-increment">0.5</property>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>

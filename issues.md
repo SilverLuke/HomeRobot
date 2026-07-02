@@ -64,6 +64,13 @@ chassis edge in the beam plane) or a fixed interference sector, rather than
 random UART/packet loss. Compare the wedge sector against the physical mounting
 to confirm; if it rotates with the robot chassis it is mechanical.
 
+**Second observation (robot logs, 2026-07-02):** the firmware lidar driver
+reports `PtsRcv == PtsRcvGood, PtsRcvErrors=0` — every point received over UART
+is valid. The missing slices therefore never leave the sensor: the RPLidar
+suppresses failed measurements (absorbing/black or specular surfaces, or an
+occluder) rather than sending invalid points. Consistent with the occlusion
+hypothesis; not a UART/firmware data-loss problem.
+
 
 ## 5. Two live robots flap the single session slot
 
