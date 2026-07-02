@@ -1,5 +1,35 @@
 # Known Issues
 
+## 4. [FIXED] Simulation: lidar returned a constant ring (zero FOV)
+
+**Observed/Fixed:** 2026-07-02. Every one of the 180 samples returned the SAME
+distance — measured at robot (0.74, 2.0) all rays read 7.0m and at (0.70, 3.39)
+all read 8.4m: in both cases exactly the distance to the wall directly BEHIND
+the robot. The scan was one backward ray replicated 180 times.
+
+**Root cause:** commit 399f509 ("fix simulation lidar direction") reversed the
+sensor sweep by setting `min_angle=3.14159, max_angle=-3.14159` in
+`simulation/homerobot/model.sdf`. Gazebo's gpu_lidar degenerates this to a
+zero-FOV scan where all samples share one direction. Since that commit, every
+sim map/SLAM result was built from garbage (uniform free discs through walls —
+hence the phantom out-of-arena frontiers).
+
+**Fix:**
+1. `model.sdf`: restored a valid CCW sweep (`min=-pi, max=+pi`).
+2. `gazebo_bridge.cpp`: negate the angle when converting to the RPLidar
+   clockwise convention the server expects — the mirroring 399f509 originally
+   tried to fix, now fixed in the right place.
+
+**Verified** headless on pcluca: ranges span 0.49–7.63m; with ground-truth pose,
+130/180 world-projected points land within 20cm of the actual walls (the rest
+hit the interior divider/pillars) vs 25/180 for the mirrored interpretation.
+Exploration now selects in-arena frontiers and reached one ("Goal reached
+within 0.20m") for the first time in sim.
+
+**Note for issue 1:** the dashboard lidar view could never have shown correct
+sim data before this fix. Re-test the dashboard against the sim GUI now — if it
+renders, issue 1 is specific to the real robot's data path.
+
 ## 1. Real robot: no lidar data on the dashboard
 
 **Observed:** 2026-07-02, real hardware, branch `refactor/server-event-model`. Robot
@@ -69,10 +99,9 @@ Verified headless on pcluca: 1.6m dead-straight drive (y drift <1e-7, encoders
 L=R positive), rotate-90 RPC completes (~96° physical), 90s autonomous
 exploration drove the robot ~4m while mapping.
 
-**Follow-up observation:** during exploration, frontier goals appear OUTSIDE the
-±5m arena walls (e.g. X=-6.2) and correctly fail planning/get blacklisted. Free
-space is being painted beyond walls — SLAM pose drift artifacts. Tracked under
-the deferred ICP/loop-closure work in docs/server-improvement-plan.md.
+**Follow-up observation (RESOLVED — see issue 4):** frontier goals outside the
+±5m arena were NOT SLAM drift; the sim lidar was returning a constant ring
+(issue 4), painting a fake free-space disc through the walls.
 
 ### Original report (for reference)
 

@@ -130,7 +130,10 @@ void GazeboBridge::on_lidar(const gz::msgs::LaserScan &msg) {
         if (std::isinf(dist)) dist = 0;
 
         double angle_rad = angle_min + (original_idx * angle_step);
-        double angle_deg = angle_rad * (180.0 / M_PI);
+        // Gazebo reports angles CCW-positive; the RPLidar (and everything
+        // downstream: server SLAM, dashboard) measures angles CLOCKWISE from
+        // the robot's front, so negate here.
+        double angle_deg = -angle_rad * (180.0 / M_PI);
         while (angle_deg < 0) angle_deg += 360.0;
         while (angle_deg >= 360.0) angle_deg -= 360.0;
         
