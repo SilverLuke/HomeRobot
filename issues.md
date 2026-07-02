@@ -26,14 +26,25 @@ place:
 2. Counting at standstill = noise pulses on the SIG/A line being counted; the
    1023-cycle glitch filter from 64c4797 reduced but did not eliminate it.
 
-**Debug steps:**
-1. Swap the left/right encoder connectors at the board: if the fault follows
-   the PCNT1 port → board/pin problem (check GPIO22 solder joint/wire); if it
-   follows the wheel → encoder or cable.
-2. Scope or bit-bang-read GPIO22 while turning the right wheel by hand both
-   ways: it must toggle. If always high, the B channel is dead.
-3. Turn the right wheel by hand one full revolution each way and compare the
-   reported deltas (expect ±360).
+**Swap test result (2026-07-02): CONFIRMED HARDWARE — the fault follows the
+encoder.** With the left/right connectors swapped at the board, the same
+misbehavior appears on the LEFT channel. ESP32 pins, PCNT configuration and
+firmware are exonerated; the right wheel's encoder assembly or its cable is
+faulty.
+
+Both symptoms are consistent with a single failure in the encoder/cable:
+- B/direction channel dead (broken wire, cold joint on the encoder PCB, or a
+  dead sensor channel) → direction never flips (pull-up reads constant HIGH).
+- The same damaged cable, or the dead output floating, picking up motor EMI →
+  phantom counts at standstill.
+
+**Next hardware checks:**
+1. Continuity-test the B wire end-to-end (encoder pin → connector pin), with a
+   wiggle test near the wheel where the cable flexes — breaks cluster there.
+2. Inspect the connector crimps and the solder joints on the encoder PCB.
+3. If the encoder is a detachable module, swap the left/right encoder UNITS at
+   the wheels: fault following the unit = replace the encoder; fault staying
+   with the position = the cable harness.
 
 ## 7. Real lidar: recurring missing slices up to ~8.5° per revolution
 
