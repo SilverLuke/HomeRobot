@@ -33,4 +33,9 @@ logs/**/*
 
 # Maps
 **/*.pgm
-**/*.png
+**/*.pgm
+
+# AI
+.gemini/
+.antigravity/
+.claude/
