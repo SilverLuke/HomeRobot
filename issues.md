@@ -54,7 +54,27 @@ while the dashboard heading reads the expected ~90°.
    the geometry constants are wrong.
 3. Confirm the gyro calibration log appeared before the test.
 
-## 3. Simulation: robot spins in place on forward drive (pre-existing)
+## 3. [FIXED] Simulation: robot spins in place on forward drive
+
+**Fixed 2026-07-02** by two sim-side changes (real firmware untouched):
+1. `gazebo_bridge.cpp`: removed the right-motor torque negation introduced by
+   64c4797 — both wheel joints share the same model-frame axis, so forward means
+   positive torque on BOTH joints. Encoder direction is already handled by the
+   Motor `invert_encoder` flags + the `ticks_[0]` sign.
+2. `simulation/homerobot/model.sdf`: wheel radius 0.033→0.0399 and track
+   0.26→0.24 to match the firmware capabilities (79.85mm / 240mm) — tick-based
+   motions were geometrically wrong in sim (rotate-90 ≈ 68° + PID crawl + timeout).
+
+Verified headless on pcluca: 1.6m dead-straight drive (y drift <1e-7, encoders
+L=R positive), rotate-90 RPC completes (~96° physical), 90s autonomous
+exploration drove the robot ~4m while mapping.
+
+**Follow-up observation:** during exploration, frontier goals appear OUTSIDE the
+±5m arena walls (e.g. X=-6.2) and correctly fail planning/get blacklisted. Free
+space is being painted beyond walls — SLAM pose drift artifacts. Tracked under
+the deferred ICP/loop-closure work in docs/server-improvement-plan.md.
+
+### Original report (for reference)
 
 **Observed:** 2026-07-02, headless Gazebo sim on pcluca. Real hardware drives
 correctly, so this is sim-model-specific.
