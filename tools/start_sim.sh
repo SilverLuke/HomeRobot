@@ -5,7 +5,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 cd "$PROJECT_ROOT"
 SIM_DIR="$PROJECT_ROOT/simulation"
-WORLD_FILE="$SIM_DIR/sim.world"
+# HR_WORLD selects the world by basename: sim (default, empty arena) or
+# house (4 rooms + furniture). Both define world name "homerobot_world" so
+# the ground-truth topic and all tooling stay identical.
+WORLD_FILE="$SIM_DIR/${HR_WORLD:-sim}.world"
 MODEL_PATH="$SIM_DIR"
 SERVER_BIN="$PROJECT_ROOT/server/target/debug/server"
 LOG_DIR="$PROJECT_ROOT/logs/sim"
