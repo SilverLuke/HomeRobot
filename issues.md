@@ -1,5 +1,59 @@
 # Known Issues
 
+## 6. Right encoder: direction never flips, counts noise at standstill
+
+**Observed:** 2026-07-02 on real hardware, encoder deltas logged server-side
+while driving small rotations in both directions
+(`cmd_sender motion --action rotate --angle 30 / --angle=-30`):
+
+- CCW rotation: `L=-5..-8, R=+2..+8` — signs correct.
+- CW rotation: `L=+6..+12, R=+2..+14` — right wheel is driven BACKWARD but its
+  encoder keeps counting POSITIVE.
+- Robot idle, motors off: `L=0, R=+2..+18` per 100ms telemetry packet —
+  continuous phantom forward ticks at ~40–180 ticks/s.
+
+**Impact:** odometry accumulates phantom forward-right motion at rest, closed-
+loop motions involving the right wheel can't converge (both rotate RPCs hit the
+firmware 10s timeout), SLAM input is degraded.
+
+**Analysis:** the right encoder is PCNT unit 1 — signal on GPIO23
+(`PCNT1_CH0SIG`), direction/control on GPIO22 (`PCNT1_CH0CTRL`), both
+`bias-pull-up` (overlay `pcnt_default`). The two symptoms point to the same
+place:
+1. Direction never flipping = the CTRL/B-phase input stuck at one level. With
+   the pull-up enabled, a disconnected or broken B wire reads constantly HIGH —
+   exactly this behavior.
+2. Counting at standstill = noise pulses on the SIG/A line being counted; the
+   1023-cycle glitch filter from 64c4797 reduced but did not eliminate it.
+
+**Debug steps:**
+1. Swap the left/right encoder connectors at the board: if the fault follows
+   the PCNT1 port → board/pin problem (check GPIO22 solder joint/wire); if it
+   follows the wheel → encoder or cable.
+2. Scope or bit-bang-read GPIO22 while turning the right wheel by hand both
+   ways: it must toggle. If always high, the B channel is dead.
+3. Turn the right wheel by hand one full revolution each way and compare the
+   reported deltas (expect ±360).
+
+## 7. Real lidar: recurring missing slices up to ~8.5° per revolution
+
+**Observed:** 2026-07-02, real hardware. Sweep stats show avg delta ~1.0–1.66°
+(217–359 points/rev) but max deltas of 8.3–8.5° in every 5s window — several
+consecutive samples missing per revolution.
+
+**Tooling (done):** the dashboard now shades missing angular sections as
+translucent red wedges radiating from the robot (threshold: >4° without
+readings; override with the `HR_GAP_THRESHOLD` env var, degrees). Invalid
+readings (distance < 10mm) also count as missing.
+
+**First observation from the live view:** the gaps are NOT uniformly
+distributed — they cluster in a consistent angular fan on one side of the
+robot. That pattern suggests a physical occlusion (mounting post, cabling,
+chassis edge in the beam plane) or a fixed interference sector, rather than
+random UART/packet loss. Compare the wedge sector against the physical mounting
+to confirm; if it rotates with the robot chassis it is mechanical.
+
+
 ## 5. Two live robots flap the single session slot
 
 **Observed:** 2026-07-02 during sim testing on pcluca. The REAL robot

@@ -5,6 +5,9 @@ use std::sync::Mutex;
 
 pub struct GuiState {
     pub display_scan: Vec<LidarPoint>,
+    /// Angular sections of the latest sweep with no usable readings:
+    /// (start_deg, end_deg, radius_mm) in the robot frame, end > start.
+    pub scan_gaps: Vec<(f32, f32, f32)>,
     pub robot_x: f32,
     pub robot_y: f32,
     pub robot_theta: f32,
@@ -31,6 +34,7 @@ pub struct GuiState {
 lazy_static::lazy_static! {
     pub static ref GUI_STATE: Mutex<GuiState> = Mutex::new(GuiState {
         display_scan: Vec::new(),
+        scan_gaps: Vec::new(),
         robot_x: 0.0,
         robot_y: 0.0,
         robot_theta: 0.0,
@@ -53,6 +57,47 @@ lazy_static::lazy_static! {
         show_map: true,
         show_lidar: true,
     });
+}
+
+/// A sweep section wider than this without readings counts as a gap.
+/// Override at runtime with the HR_GAP_THRESHOLD env var (degrees).
+pub const GAP_THRESHOLD_DEG: f32 = 4.0;
+
+pub fn gap_threshold_deg() -> f32 {
+    std::env::var("HR_GAP_THRESHOLD")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(GAP_THRESHOLD_DEG)
+}
+
+/// Finds the angular sections of a sweep with no usable readings (missing or
+/// invalid points). Returns (start_deg, end_deg, radius_mm) per gap in the
+/// robot frame; for wrap-around gaps end_deg exceeds 360.
+pub fn find_scan_gaps(points: &[LidarPoint], threshold_deg: f32) -> Vec<(f32, f32, f32)> {
+    let mut valid: Vec<(f32, f32)> = points
+        .iter()
+        .filter(|p| p.distance_mm >= 10.0)
+        .map(|p| (p.angle_deg, p.distance_mm))
+        .collect();
+    if valid.len() < 2 {
+        return Vec::new();
+    }
+    valid.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut gaps = Vec::new();
+    for i in 0..valid.len() {
+        let (a1, d1) = valid[i];
+        let (mut a2, d2) = valid[(i + 1) % valid.len()];
+        if i + 1 == valid.len() {
+            a2 += 360.0; // wrap-around segment
+        }
+        if a2 - a1 > threshold_deg {
+            // Reach roughly to where the neighboring data ends.
+            let radius = ((d1 + d2) / 2.0).clamp(300.0, 4000.0);
+            gaps.push((a1, a2, radius));
+        }
+    }
+    gaps
 }
 
 /// Updates the persistent scan data by replacing a "slice" of the scan.
@@ -275,6 +320,30 @@ pub fn setup_lidar_drawing(lidar_canvas: &DrawingArea) {
                 cr.line_to(dx, dy);
                 cr.stroke().unwrap();
                 cr.set_dash(&[], 0.0); // Reset dash
+            }
+        }
+
+        // Shade angular sections where the last sweep had no readings, so
+        // sensor blind spots are visible at a glance (red wedges).
+        if state.show_lidar && !state.scan_gaps.is_empty() {
+            // Screen angle of a robot-frame lidar angle `a` (clockwise
+            // convention): psi = -PI/2 - robot_theta + a.
+            let base = -std::f64::consts::FRAC_PI_2 - robot_theta;
+            for &(a1, a2, radius_mm) in &state.scan_gaps {
+                let r_px = radius_mm as f64 * scale;
+                let psi1 = base + (a1 as f64).to_radians();
+                let psi2 = base + (a2 as f64).to_radians();
+
+                cr.set_source_rgba(1.0, 0.15, 0.1, 0.18);
+                cr.move_to(robot_draw_x, robot_draw_y);
+                cr.arc(robot_draw_x, robot_draw_y, r_px, psi1, psi2);
+                cr.close_path();
+                cr.fill().unwrap();
+
+                cr.set_source_rgba(1.0, 0.3, 0.1, 0.55);
+                cr.set_line_width(1.0);
+                cr.arc(robot_draw_x, robot_draw_y, r_px, psi1, psi2);
+                cr.stroke().unwrap();
             }
         }
 
@@ -508,5 +577,56 @@ mod tests {
         let angles: Vec<f32> = old.iter().map(|p| p.angle_deg).collect();
         assert!(!angles.contains(&1.9999));
         assert_eq!(angles, vec![1.0, 2.0]);
+    }
+
+    fn pt(angle_deg: f32, distance_mm: f32) -> LidarPoint {
+        LidarPoint { distance_mm, angle_deg, quality: 15, scan_completed: false }
+    }
+
+    #[test]
+    fn uniform_sweep_has_no_gaps() {
+        let points: Vec<_> = (0..180).map(|i| pt(i as f32 * 2.0, 1000.0)).collect();
+        assert!(find_scan_gaps(&points, 4.0).is_empty());
+    }
+
+    #[test]
+    fn missing_slice_is_reported_with_bounds() {
+        // 2-degree sweep with the 90..120 degree slice removed.
+        let points: Vec<_> = (0..180)
+            .map(|i| pt(i as f32 * 2.0, 1000.0))
+            .filter(|p| p.angle_deg < 90.0 || p.angle_deg >= 120.0)
+            .collect();
+        let gaps = find_scan_gaps(&points, 4.0);
+        assert_eq!(gaps.len(), 1);
+        let (start, end, radius) = gaps[0];
+        assert_eq!(start, 88.0);
+        assert_eq!(end, 120.0);
+        assert_eq!(radius, 1000.0);
+    }
+
+    #[test]
+    fn wrap_around_gap_extends_past_360() {
+        // Points only between 20 and 340 degrees: the gap crosses zero.
+        let points: Vec<_> = (10..170).map(|i| pt(i as f32 * 2.0, 1000.0)).collect();
+        let gaps = find_scan_gaps(&points, 4.0);
+        assert_eq!(gaps.len(), 1);
+        let (start, end, _) = gaps[0];
+        assert_eq!(start, 338.0);
+        assert_eq!(end, 380.0); // 20 + 360
+    }
+
+    #[test]
+    fn invalid_readings_count_as_missing() {
+        let points: Vec<_> = (0..180)
+            .map(|i| {
+                let a = i as f32 * 2.0;
+                let d = if (90.0..120.0).contains(&a) { 0.0 } else { 1000.0 };
+                pt(a, d)
+            })
+            .collect();
+        let gaps = find_scan_gaps(&points, 4.0);
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0].0, 88.0);
+        assert_eq!(gaps[0].1, 120.0);
     }
 }
