@@ -11,6 +11,8 @@ mod odometry;
 mod slam;
 mod mapping;
 mod pathfinding;
+#[cfg(test)]
+mod test_fixtures;
 
 pub mod homerobot {
     include!(concat!(env!("OUT_DIR"), "/homerobot.rs"));
