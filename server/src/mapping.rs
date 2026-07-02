@@ -5,6 +5,7 @@ pub struct Frontier {
     pub size: usize,
 }
 
+#[derive(Clone)]
 pub struct OccupancyGrid {
     pub width: usize,
     pub height: usize,

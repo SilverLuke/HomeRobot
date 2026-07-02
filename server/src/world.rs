@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::mapping::OccupancyGrid;
 use crate::odometry::Pose;
-use crate::slam::BasicSlam;
+use crate::slam::{EngineKind, SlamEngine};
 
 /// Raw log-odds snapshot (the PGM export is lossy and for humans).
 pub const AUTOSAVE_PATH: &str = "house_map.bin";
@@ -18,7 +18,7 @@ const MAGIC: &[u8; 8] = b"HRWORLD1";
 const MAX_CELLS: usize = 4096 * 4096;
 
 pub struct WorldModel {
-    pub slam: BasicSlam,
+    pub slam: SlamEngine,
     /// Best pose estimate: SLAM-corrected on each sweep, dead-reckoned from
     /// encoder deltas in between.
     pub pose: Pose,
@@ -31,8 +31,12 @@ pub struct WorldModel {
 
 impl WorldModel {
     pub fn new() -> Self {
+        Self::new_with(EngineKind::from_env())
+    }
+
+    pub fn new_with(kind: EngineKind) -> Self {
         Self {
-            slam: BasicSlam::new(),
+            slam: SlamEngine::new(kind),
             pose: Pose { x: 0.0, y: 0.0, theta: 0.0 },
             pose_initialized: false,
             dirty: false,
@@ -117,6 +121,10 @@ impl WorldModel {
     }
 
     pub fn load(path: &str) -> io::Result<Self> {
+        Self::load_with(path, EngineKind::from_env())
+    }
+
+    pub fn load_with(path: &str, kind: EngineKind) -> io::Result<Self> {
         let mut file = io::BufReader::new(fs::File::open(path)?);
 
         let mut magic = [0u8; 8];
@@ -166,7 +174,7 @@ impl WorldModel {
         map.data = data;
 
         Ok(Self {
-            slam: BasicSlam::restore(map, pose),
+            slam: SlamEngine::restore(kind, map, pose),
             pose,
             pose_initialized,
             dirty: false,
@@ -178,7 +186,7 @@ impl WorldModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::slam::Slam;
+    use crate::slam::{BasicSlam, Slam};
 
     #[test]
     fn save_load_round_trips_map_and_pose() {
@@ -193,7 +201,7 @@ mod tests {
         let pose = Pose { x: 1.5, y: -0.75, theta: 0.5 };
 
         let mut world = WorldModel {
-            slam: BasicSlam::restore(grid, pose),
+            slam: SlamEngine::Basic(BasicSlam::restore(grid, pose)),
             pose,
             pose_initialized: true,
             dirty: true,

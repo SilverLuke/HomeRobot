@@ -9,6 +9,8 @@ mod session;
 mod world;
 mod odometry;
 mod slam;
+mod slam_grid;
+mod matcher;
 mod mapping;
 mod likelihood;
 mod pathfinding;

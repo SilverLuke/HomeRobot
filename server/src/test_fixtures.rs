@@ -43,6 +43,31 @@ impl SyntheticWorld {
         }
     }
 
+    /// Like [`cluttered_arena`] but with the octagon moved off the origin
+    /// (to (1.5, -2.0)) so the world origin is clear floor. Engine-level
+    /// tests MUST use this: a `GridSlam`'s frame is rooted wherever its
+    /// first sweep happens, and starting tests at the world origin is the
+    /// only way to keep SLAM frame == world frame without transform
+    /// bookkeeping. (`cluttered_arena`'s cylinder sits ON the origin — a
+    /// robot there sees only a 0.5m ring and rotation is unobservable.)
+    pub fn test_room(half: f32) -> Self {
+        let mut world = Self::cluttered_arena(half);
+        // Drop the 8 octagon segments (added last) and re-add displaced.
+        let n = world.segments.len();
+        world.segments.truncate(n - 8);
+        let r = 0.5;
+        let (cx, cy) = (1.5, -2.0);
+        for i in 0..8 {
+            let a0 = std::f32::consts::TAU * i as f32 / 8.0;
+            let a1 = std::f32::consts::TAU * (i + 1) as f32 / 8.0;
+            world.segments.push((
+                (cx + r * a0.cos(), cy + r * a0.sin()),
+                (cx + r * a1.cos(), cy + r * a1.sin()),
+            ));
+        }
+        world
+    }
+
     /// Arena plus interior structure similar to the sim world: a diagonal
     /// wall, a box, and an octagon standing in for the cylinder.
     pub fn cluttered_arena(half: f32) -> Self {
@@ -208,7 +233,8 @@ impl Trajectory {
         Self { poses }
     }
 
-    /// P2-style rectangular loop in the plain arena, returning to start.
+    /// P2-style rectangular loop from the origin, returning to it. Meant
+    /// for [`SyntheticWorld::test_room`], whose origin is clear floor.
     pub fn p2_loop(hz: f32) -> Self {
         Self::patrol(
             Pose { x: 0.0, y: 0.0, theta: 0.0 },
@@ -266,7 +292,7 @@ mod tests {
     /// P2-like loop, including gap sectors and noise.
     #[test]
     fn sweeps_projected_at_truth_land_on_walls() {
-        let world = SyntheticWorld::cluttered_arena(5.0);
+        let world = SyntheticWorld::test_room(5.0);
         let traj = Trajectory::p2_loop(5.0);
         let cfg = ScanConfig {
             gap_sectors: vec![(100.0, 130.0)], // issues.md #7-style missing fan
@@ -314,8 +340,12 @@ mod tests {
     #[test]
     fn patrol_reaches_waypoints_and_returns() {
         let traj = Trajectory::p2_loop(5.0);
+        let first = traj.poses[0];
         let last = traj.poses.last().unwrap();
-        assert!(last.x.abs() < 0.06 && last.y.abs() < 0.06, "loop must close");
+        assert!(
+            (last.x - first.x).abs() < 0.06 && (last.y - first.y).abs() < 0.06,
+            "loop must close on its start"
+        );
         // Steps are bounded by the commanded speed.
         for pair in traj.poses.windows(2) {
             let step = (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y);

@@ -104,8 +104,8 @@ impl<W: Write> RobotLink<W> {
 
 /// Per-sweep pose trace for offline SLAM evaluation, enabled with
 /// `HR_POSE_LOG=<path>`. The column layout is a contract with
-/// `tools/slam_benchmark.py` — extend, never reorder. `score` and `mode`
-/// are placeholders until the SLAM engine exposes match health.
+/// `tools/slam_benchmark.py` — extend, never reorder. `score`/`mode` come
+/// from `Slam::health()` (BasicSlam reports 0.0/"tracking").
 const POSE_TRACE_HEADER: &str = "t_unix,odom_x,odom_y,odom_theta,slam_x,slam_y,slam_theta,score,mode";
 
 struct PoseTrace {
@@ -562,8 +562,8 @@ impl<W: Write> Session<W> {
         world.pose_initialized = true;
         world.mark_dirty();
         if let Some(trace) = &mut self.pose_trace {
-            // score/mode are placeholders until Slam::health() exists (T11).
-            trace.record(&self.odom.pose, &world.pose, 0.0, "basic");
+            let health = world.slam.health();
+            trace.record(&self.odom.pose, &world.pose, health.last_score, health.mode.as_str());
         }
         let _ = self.gui_tx.send(GuiUpdate::Lidar(sweep.points.clone()));
         let _ = self.gui_tx.send(GuiUpdate::SlamPose {
@@ -1114,7 +1114,7 @@ mod tests {
         for col in &cols[..8] {
             col.parse::<f64>().expect("numeric columns must parse");
         }
-        assert_eq!(cols[8], "basic");
+        assert_eq!(cols[8], "tracking", "BasicSlam default health mode");
     }
 
     #[test]

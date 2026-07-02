@@ -37,6 +37,12 @@ fn gaussian_kernel() -> [[u8; KERNEL_SIZE]; KERNEL_SIZE] {
 pub struct LikelihoodField {
     pub width: usize,
     pub height: usize,
+    /// Grid geometry mirrored from the source [`OccupancyGrid`] so the
+    /// matcher can go from world meters to raster indices without holding
+    /// a second reference.
+    pub resolution: f32,
+    pub origin_x: f32,
+    pub origin_y: f32,
     fine: Vec<u8>,
     coarse_w: usize,
     coarse_h: usize,
@@ -51,6 +57,9 @@ impl LikelihoodField {
         Self {
             width,
             height,
+            resolution: 0.05,
+            origin_x: 0.0,
+            origin_y: 0.0,
             fine: vec![0; width * height],
             coarse_w,
             coarse_h,
@@ -59,12 +68,49 @@ impl LikelihoodField {
         }
     }
 
+    /// Fractional fine-grid coordinates of a world point (same mapping as
+    /// `OccupancyGrid::world_to_grid`, without the bounds check).
+    pub fn world_to_fine_f(&self, x: f32, y: f32) -> (f32, f32) {
+        (
+            (x - self.origin_x) / self.resolution + self.width as f32 / 2.0,
+            (y - self.origin_y) / self.resolution + self.height as f32 / 2.0,
+        )
+    }
+
+    /// Fine cell size in meters (== grid resolution).
+    pub fn fine_cell_m(&self) -> f32 {
+        self.resolution
+    }
+
+    /// Coarse cell size in meters.
+    pub fn coarse_cell_m(&self) -> f32 {
+        self.resolution * COARSE_FACTOR as f32
+    }
+
     pub fn fine_at(&self, x: usize, y: usize) -> u8 {
         if x < self.width && y < self.height {
             self.fine[y * self.width + x]
         } else {
             0
         }
+    }
+
+    /// Bilinearly interpolated fine value at fractional grid coordinates —
+    /// the fine matcher scores with this so a candidate's score reflects the
+    /// continuous field, not the nearest 5cm cell.
+    pub fn fine_bilinear(&self, fx: f32, fy: f32) -> f32 {
+        let x0 = fx.floor();
+        let y0 = fy.floor();
+        if x0 < 0.0 || y0 < 0.0 {
+            return 0.0;
+        }
+        let (ix, iy) = (x0 as usize, y0 as usize);
+        let (tx, ty) = (fx - x0, fy - y0);
+        let v00 = self.fine_at(ix, iy) as f32;
+        let v10 = self.fine_at(ix + 1, iy) as f32;
+        let v01 = self.fine_at(ix, iy + 1) as f32;
+        let v11 = self.fine_at(ix + 1, iy + 1) as f32;
+        v00 * (1.0 - tx) * (1.0 - ty) + v10 * tx * (1.0 - ty) + v01 * (1.0 - tx) * ty + v11 * tx * ty
     }
 
     /// Coarse lookup takes COARSE indices (fine / COARSE_FACTOR).
@@ -88,6 +134,9 @@ impl LikelihoodField {
     pub fn rebuild_region(&mut self, grid: &OccupancyGrid, dirty: (usize, usize, usize, usize)) {
         debug_assert_eq!(grid.width, self.width);
         debug_assert_eq!(grid.height, self.height);
+        self.resolution = grid.resolution;
+        self.origin_x = grid.origin_x;
+        self.origin_y = grid.origin_y;
         let (dx0, dy0, dx1, dy1) = dirty;
         let r = KERNEL_RADIUS;
         // Rewrite window (clamped).
