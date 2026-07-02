@@ -20,7 +20,7 @@ HomeRobot is a personal robotics project focused on creating an autonomous vacuu
 - **Motor Driver**: L298N H-bridge
 - **LiDAR**: RP-Lidar A1M8 (360-degree point cloud)
   - **UART**: UART1 (TX: GPIO 6, RX: GPIO 7)
-  - **Motor Enable**: GPIO 15
+  - **Motor Enable**: GPIO 3 (PWM, moved from GPIO 15 to keep the always-on LiDAR PWM away from the encoder inputs on GPIO 20-23)
 - **IMU**: BMI160 (6-axis Accel/Gyro)
   - **I2C**: I2C0 (SDA: GPIO 4, SCL: GPIO 5)
 - **Actuators**: 2x LEGO NXT 9842 Interactive Servo Motors (Differential Drive)
