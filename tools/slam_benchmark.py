@@ -367,9 +367,13 @@ class GTMonitor(threading.Thread):
         env = os.environ.copy()
         env.setdefault("GZ_IP", "127.0.0.1")
         env.setdefault("GZ_PARTITION", "homerobot_sim")
+        cmd = ["gz", "topic", "-t", POSE_TOPIC, "-e"]
+        # Force line buffering: a block-buffered pipe would make `latest` lag
+        # by seconds, breaking both leg settling and time pairing.
+        if os.path.exists("/usr/bin/stdbuf") or os.system("command -v stdbuf >/dev/null 2>&1") == 0:
+            cmd = ["stdbuf", "-oL"] + cmd
         self._proc = subprocess.Popen(
-            ["gz", "topic", "-t", POSE_TOPIC, "-e"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
         )
         out = open(self.out_path, "w") if self.out_path else None
         if out:

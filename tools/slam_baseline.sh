@@ -28,25 +28,21 @@ kill_sim() {
     sleep 1
 }
 
-wait_for_sweeps() { # blocks until the server is assembling lidar sweeps
-    for _ in $(seq 1 40); do
-        grep -q "LIDAR Summary" logs/sim/server.log 2>/dev/null && return 0
-        sleep 3
-    done
-    echo "FATAL: sim did not produce lidar sweeps within 120s" >&2
-    return 1
-}
-
-wait_for_trace_growth() { # blocks until $HR_POSE_LOG gains rows (reconnect done)
+# Blocks until the pose trace gains rows beyond its current size. Rows are
+# written once per processed sweep by a LIVE robot session, so this is the
+# one readiness signal that covers fresh start, session-up AND capabilities
+# (sent on connect, before any sweep) — unlike grepping server.log, which
+# can match leftovers from a previous run.
+wait_for_trace_growth() {
     local before
     before=$(wc -l < "$HR_POSE_LOG" 2>/dev/null || echo 0)
-    for _ in $(seq 1 30); do
+    for _ in $(seq 1 60); do
         sleep 2
         local now
         now=$(wc -l < "$HR_POSE_LOG" 2>/dev/null || echo 0)
         [ "$now" -gt "$((before + 5))" ] && return 0
     done
-    echo "FATAL: pose trace did not resume after restart" >&2
+    echo "FATAL: pose trace is not growing (no live robot session?)" >&2
     return 1
 }
 
@@ -56,6 +52,7 @@ run_one() {
     echo "=== baseline ${pattern} ${run} ==="
     kill_sim
     rm -rf "$out" house_map.bin
+    rm -f logs/sim/server.log logs/sim/zephyr.log logs/sim/gazebo.log
     mkdir -p "$out"
     export HR_POSE_LOG="$ROOT/$out/trace.csv"
 
@@ -66,7 +63,8 @@ run_one() {
     fi
 
     ./tools/start_sim.sh --headless > "$out/sim.log" 2>&1 &
-    wait_for_sweeps
+    wait_for_trace_growth
+    sleep 5 # settle: gyro calibration + first map cells before driving
 
     if [ "$pattern" = "p5" ]; then
         python3 tools/slam_benchmark.py record-gt --out "$out/gt.csv" &
