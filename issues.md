@@ -1,5 +1,26 @@
 # Known Issues
 
+## 5. Two live robots flap the single session slot
+
+**Observed:** 2026-07-02 during sim testing on pcluca. The REAL robot
+(192.168.199.123) is configured to connect to the same server the simulation
+uses. With the single-active-session policy (new connection replaces old,
+commit f955fec), the real robot and the sim robot replaced each other ~30
+times/second (~4000 replacements in a couple of minutes).
+
+The replacement mechanism itself behaves correctly — one writer at a time,
+sockets force-closed — but two persistent robots make the slot flap and no
+session lives long enough to assemble lidar sweeps.
+
+**Workaround:** power off / disconnect the real robot while running the sim on
+pcluca (or vice versa).
+
+**Proper fix (deferred):** make the server bind address/port configurable (env
+var or flag) so sim and real deployments don't share an endpoint; optionally
+add a replacement debounce (ignore new connections for the first ~2s of a
+session) to bound worst-case churn.
+
+
 ## 4. [FIXED] Simulation: lidar returned a constant ring (zero FOV)
 
 **Observed/Fixed:** 2026-07-02. Every one of the 180 samples returned the SAME
