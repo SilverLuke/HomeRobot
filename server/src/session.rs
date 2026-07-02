@@ -187,6 +187,10 @@ pub struct Session<W: Write> {
     rec: Arc<Mutex<rerun::RecordingStream>>,
     start_time: Instant,
     pose_trace: Option<PoseTrace>,
+    /// `HR_FAULT_RIGHT_ENCODER=1`: replay the issues.md #6 hardware fault on
+    /// incoming right-encoder deltas, for benchmarking SLAM under bad odometry.
+    fault_right_encoder: bool,
+    fault_rng: u32,
 }
 
 /// Entry point for a robot connection; returns when the connection drops or
@@ -337,6 +341,14 @@ impl<W: Write> Session<W> {
             rec,
             start_time,
             pose_trace: PoseTrace::from_env(),
+            fault_right_encoder: {
+                let on = std::env::var("HR_FAULT_RIGHT_ENCODER").as_deref() == Ok("1");
+                if on {
+                    log::warn!("[FAULT] Right-encoder fault injection ACTIVE (HR_FAULT_RIGHT_ENCODER=1)");
+                }
+                on
+            },
+            fault_rng: 0x1234_5678,
         }
     }
 
@@ -348,6 +360,11 @@ impl<W: Write> Session<W> {
     #[cfg(test)]
     fn set_pose_trace(&mut self, out: Box<dyn Write + Send>) {
         self.pose_trace = Some(PoseTrace::new(out));
+    }
+
+    #[cfg(test)]
+    fn set_fault_right_encoder(&mut self, on: bool) {
+        self.fault_right_encoder = on;
     }
 
     /// Rerun stream with the session timeline set to "now".
@@ -445,7 +462,26 @@ impl<W: Write> Session<W> {
         }
     }
 
+    /// Replays the observed right-encoder hardware fault (issues.md #6): the
+    /// dead B-phase means direction never flips (counts are always positive)
+    /// and EMI produces +2..+18 phantom ticks per idle telemetry packet.
+    /// Deterministic LCG so benchmark runs are reproducible.
+    fn faulted_right_delta(&mut self, right: i32) -> i32 {
+        self.fault_rng = self.fault_rng.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let noise = ((self.fault_rng >> 16) & 0x7fff) as i32;
+        if right == 0 {
+            2 + noise % 17
+        } else {
+            right.abs()
+        }
+    }
+
     fn handle_encoders(&mut self, world: &mut WorldModel, left: i32, right: i32, sequence_millis: u32) {
+        let right = if self.fault_right_encoder {
+            self.faulted_right_delta(right)
+        } else {
+            right
+        };
         if left != 0 || right != 0 {
             log::info!("[SERVER] Telemetry Heartbeat: Encoders delta L={} R={}", left, right);
         }
@@ -1019,6 +1055,31 @@ mod tests {
         session.handle_event(sweep_event(1.0));
         let maps = gui_rx.try_iter().filter(|u| matches!(u, GuiUpdate::Map { .. })).count();
         assert_eq!(maps, 1);
+    }
+
+    #[test]
+    fn right_encoder_fault_injection_matches_observed_signature() {
+        let (mut session, _gui_rx) = test_session();
+        session.set_fault_right_encoder(true);
+
+        // Reverse drive: the dead B-phase makes the right encoder count
+        // positive regardless of direction; the left channel is untouched.
+        session.handle_event(encoders_event(-100, -100, 100));
+        assert_eq!(session.odom.cumulative_left, -100);
+        assert_eq!(session.odom.cumulative_right, 100);
+
+        // Standstill: phantom forward ticks, +2..+18 per idle packet.
+        let before = session.odom.cumulative_right;
+        for i in 0..10u32 {
+            session.handle_event(encoders_event(0, 0, 200 + i * 100));
+        }
+        let phantom = session.odom.cumulative_right - before;
+        assert!(
+            (20..=180).contains(&phantom),
+            "phantom ticks {} outside the observed 2..18-per-packet range",
+            phantom
+        );
+        assert_eq!(session.odom.cumulative_left, -100, "left channel must stay clean");
     }
 
     #[test]
