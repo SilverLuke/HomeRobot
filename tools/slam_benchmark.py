@@ -31,6 +31,7 @@ import re
 import struct
 import subprocess
 import sys
+import threading
 import time
 
 # ---------------------------------------------------------------------------
@@ -346,24 +347,39 @@ def parse_pose_block(buf, model="homerobot"):
     return (x, y, theta), start + orient.end()
 
 
-def record_gt(out_path, duration=0.0, hz=20.0):
-    """Stream ground truth to CSV until `duration` elapses (0 = until ^C)."""
-    env = os.environ.copy()
-    env.setdefault("GZ_IP", "127.0.0.1")
-    env.setdefault("GZ_PARTITION", "homerobot_sim")
-    proc = subprocess.Popen(
-        ["gz", "topic", "-t", POSE_TOPIC, "-e"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
-    )
-    started = time.time()
-    last_row = 0.0
-    min_interval = 1.0 / hz
-    rows = 0
-    buf = ""
-    try:
-        with open(out_path, "w") as out:
+class GTMonitor(threading.Thread):
+    """Streams Gazebo ground truth in the background.
+
+    Always keeps `latest` = (t_unix, x, y, theta) for liveness/leg checks;
+    additionally appends throttled CSV rows when `out_path` is given.
+    """
+
+    def __init__(self, out_path=None, hz=20.0):
+        super().__init__(daemon=True)
+        self.out_path = out_path
+        self.min_interval = 1.0 / hz
+        self.latest = None
+        self.rows = 0
+        self._stop = threading.Event()
+        self._proc = None
+
+    def run(self):
+        env = os.environ.copy()
+        env.setdefault("GZ_IP", "127.0.0.1")
+        env.setdefault("GZ_PARTITION", "homerobot_sim")
+        self._proc = subprocess.Popen(
+            ["gz", "topic", "-t", POSE_TOPIC, "-e"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
+        )
+        out = open(self.out_path, "w") if self.out_path else None
+        if out:
             out.write("t_unix,x,y,theta\n")
-            for line in proc.stdout:
+        last_row = 0.0
+        buf = ""
+        try:
+            for line in self._proc.stdout:
+                if self._stop.is_set():
+                    break
                 buf += line
                 parsed = parse_pose_block(buf)
                 if parsed is None:
@@ -373,22 +389,143 @@ def record_gt(out_path, duration=0.0, hz=20.0):
                 (x, y, theta), consumed = parsed
                 buf = buf[consumed:]
                 now = time.time()
-                if now - last_row >= min_interval:
+                self.latest = (now, x, y, theta)
+                if out and now - last_row >= self.min_interval:
                     out.write("%.6f,%.6f,%.6f,%.6f\n" % (now, x, y, theta))
                     out.flush()
                     last_row = now
-                    rows += 1
-                if duration and now - started >= duration:
-                    break
+                    self.rows += 1
+        finally:
+            if out:
+                out.close()
+
+    def stop(self):
+        self._stop.set()
+        if self._proc:
+            self._proc.terminate()
+
+    def wait_alive(self, timeout=10.0):
+        """True once the first sample arrives (i.e. the sim is up)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.latest is not None:
+                return True
+            time.sleep(0.2)
+        return False
+
+
+def record_gt(out_path, duration=0.0, hz=20.0):
+    """Stream ground truth to CSV until `duration` elapses (0 = until ^C)."""
+    monitor = GTMonitor(out_path, hz)
+    monitor.start()
+    try:
+        if duration:
+            time.sleep(duration)
+        else:
+            while True:
+                time.sleep(1.0)
     except KeyboardInterrupt:
         pass
     finally:
-        proc.terminate()
-    print("recorded %d ground-truth samples to %s" % (rows, out_path))
-    if rows == 0:
+        monitor.stop()
+        monitor.join(timeout=3.0)
+    print("recorded %d ground-truth samples to %s" % (monitor.rows, out_path))
+    if monitor.rows == 0:
         print("no samples — is the simulation running (GZ_PARTITION=homerobot_sim)?")
         return 1
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Drive patterns (design doc §5.2). Waypoints are in the SERVER's SLAM frame,
+# which is zeroed at the spawn pose: world (1, 0, 0) => slam (0, 0, 0).
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# P1 out-and-back: closed-loop firmware motions, SLAM-independent.
+# P2 perimeter loop: goto circuit hugging the arena interior; legs keep
+#     >=0.7m clearance from the interior obstacles and outer walls.
+# P3 room-hop: goto legs threading between the cylinder, the diagonal wall
+#     and the box, ending back at the start.
+PATTERNS = {
+    "p1": [
+        ("motion", ["--action", "straight", "--distance", "2.0"]),
+        ("motion", ["--action", "rotate", "--angle", "180"]),
+        ("motion", ["--action", "straight", "--distance", "2.0"]),
+        ("motion", ["--action", "rotate", "--angle", "180"]),
+    ],
+    "p2": [
+        ("goto", (2.5, 3.5)),
+        ("goto", (-4.5, 3.5)),
+        ("goto", (-4.5, -4.2)),
+        ("goto", (2.5, -4.2)),
+        ("goto", (0.0, 0.0)),
+    ],
+    "p3": [
+        ("goto", (-1.0, 2.8)),
+        ("goto", (-4.0, 0.0)),
+        ("goto", (-0.5, -2.8)),
+        ("goto", (0.0, 0.0)),
+    ],
+}
+
+
+def run_cmd_sender(host, args, timeout):
+    """Invoke tools/cmd_sender in proxy mode; HR_CMD_SENDER can point at a
+    prebuilt binary, otherwise cargo-run from its crate directory."""
+    exe = os.environ.get("HR_CMD_SENDER")
+    if exe:
+        cmd, cwd = [exe], None
+    else:
+        cmd, cwd = ["cargo", "run", "--quiet", "--"], os.path.join(REPO_ROOT, "tools", "cmd_sender")
+    cmd += ["--proxy", "--host", host] + args
+    print("  $ cmd_sender %s" % " ".join(args))
+    try:
+        subprocess.run(cmd, cwd=cwd, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        print("  (cmd_sender timed out after %ds)" % timeout)
+
+
+def wait_until_stationary(get_latest, timeout, settle=3.0, min_move=0.05,
+                          grace=4.0, poll=0.5, sleep_fn=time.sleep, now_fn=time.time):
+    """Wait until ground truth stops moving (goal reached or nav gave up).
+
+    True when the robot moved less than `min_move` over the last `settle`
+    seconds (after an initial `grace` period), False on timeout. Clock and
+    sleep are injectable for the self-test.
+    """
+    history = []
+    start = now_fn()
+    while now_fn() - start < timeout:
+        latest = get_latest()
+        if latest is not None:
+            now = now_fn()
+            history.append((now, latest[1], latest[2]))
+            history = [h for h in history if now - h[0] <= settle + poll]
+            if now - start >= grace and len(history) >= 3 and now - history[0][0] >= settle:
+                xs = [h[1] for h in history]
+                ys = [h[2] for h in history]
+                if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) < min_move:
+                    return True
+        sleep_fn(poll)
+    return False
+
+
+def drive_pattern(pattern, host, monitor, leg_timeout=120.0):
+    """Execute one named pattern; leg completion is judged on ground truth."""
+    for step, arg in PATTERNS[pattern]:
+        if step == "motion":
+            # ExecuteMotion blocks in cmd_sender until the firmware reports
+            # completion; the stationary check is just a safety net.
+            run_cmd_sender(host, ["motion"] + arg, timeout=90)
+            wait_until_stationary(lambda: monitor.latest, timeout=15.0, grace=0.0)
+        elif step == "goto":
+            x, y = arg
+            run_cmd_sender(host, ["go-to", str(x), str(y)], timeout=30)
+            done = wait_until_stationary(lambda: monitor.latest, timeout=leg_timeout)
+            print("  leg (%.1f, %.1f): %s" % (x, y, "settled" if done else "TIMEOUT"))
+    run_cmd_sender(host, ["stop"], timeout=30)
 
 
 # ---------------------------------------------------------------------------
@@ -577,11 +714,40 @@ def self_test():
     if parse_pose_block('pose {\n  name: "homerobot"\n  position { x: 1') is not None:
         failures.append("pose_v parser must wait for a complete block")
 
+    # 9. Stationary detector with an injected clock: a robot that drives for
+    # 10s then stops settles shortly after; one that never stops times out.
+    def fake_run(stop_at):
+        clock = [0.0]
+
+        def now():
+            return clock[0]
+
+        def sleep(dt):
+            clock[0] += dt
+
+        def latest():
+            t = clock[0]
+            x = 0.2 * min(t, stop_at)
+            return (t, x, 0.0, 0.0)
+
+        done = wait_until_stationary(latest, timeout=60.0,
+                                     sleep_fn=sleep, now_fn=now)
+        return done, clock[0]
+
+    done, elapsed = fake_run(stop_at=10.0)
+    if not done:
+        failures.append("stationary detector missed the stop")
+    check("stationary detector settle time", elapsed, 13.5, 2.0)
+    done, elapsed = fake_run(stop_at=1e9)
+    if done:
+        failures.append("stationary detector fired on a moving robot")
+    check("stationary detector timeout", elapsed, 60.0, 1.0)
+
     print()
     if failures:
         print("SELF-TEST FAILED: %s" % ", ".join(failures))
         return 1
-    print("SELF-TEST PASSED (%d checks)" % 12)
+    print("SELF-TEST PASSED (%d checks)" % 14)
     return 0
 
 
@@ -607,11 +773,53 @@ def main():
                        help="seconds to record (0 = until interrupted)")
     p_rec.add_argument("--hz", type=float, default=20.0)
 
+    p_dr = sub.add_parser("drive", help="execute a drive pattern (sim must be up)")
+    p_dr.add_argument("--pattern", required=True, choices=sorted(PATTERNS))
+    p_dr.add_argument("--host", default="127.0.0.1")
+
+    p_run = sub.add_parser("run", help="record + drive + analyze in one command")
+    p_run.add_argument("--pattern", required=True, choices=sorted(PATTERNS))
+    p_run.add_argument("--trace", required=True,
+                       help="pose CSV the server writes (start it with HR_POSE_LOG)")
+    p_run.add_argument("--map", help="house_map.bin for map metrics")
+    p_run.add_argument("--out-dir", required=True)
+    p_run.add_argument("--host", default="127.0.0.1")
+    p_run.add_argument("--arena-half", type=float, default=5.0)
+
     args = parser.parse_args()
     if args.cmd == "self-test":
         sys.exit(self_test())
     if args.cmd == "record-gt":
         sys.exit(record_gt(args.out, args.duration, args.hz))
+    if args.cmd == "drive":
+        monitor = GTMonitor()
+        monitor.start()
+        if not monitor.wait_alive():
+            sys.exit("no ground truth — is the simulation running?")
+        drive_pattern(args.pattern, args.host, monitor)
+        monitor.stop()
+        sys.exit(0)
+    if args.cmd == "run":
+        os.makedirs(args.out_dir, exist_ok=True)
+        gt_path = os.path.join(args.out_dir, "gt.csv")
+        monitor = GTMonitor(out_path=gt_path)
+        monitor.start()
+        if not monitor.wait_alive():
+            sys.exit("no ground truth — is the simulation running?")
+        drive_pattern(args.pattern, args.host, monitor)
+        time.sleep(2.0)  # let the final sweeps land in the trace
+        monitor.stop()
+        monitor.join(timeout=3.0)
+        print("recorded %d ground-truth samples" % monitor.rows)
+        result = analyze(args.trace, gt_path, args.map, args.arena_half)
+        result["pattern"] = args.pattern
+        for key, value in result.items():
+            print("%-24s %s" % (key, value))
+        json_path = os.path.join(args.out_dir, "metrics.json")
+        with open(json_path, "w") as f:
+            json.dump(result, f, indent=2)
+        print("metrics written to %s" % json_path)
+        sys.exit(0)
     if args.cmd == "analyze":
         result = analyze(args.trace, args.gt, args.map, args.arena_half)
         for key, value in result.items():
