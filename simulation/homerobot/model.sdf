@@ -227,8 +227,12 @@
                         <horizontal>
                             <samples>180</samples>
                             <resolution>1</resolution>
-                            <min_angle>3.14159</min_angle>
-                            <max_angle>-3.14159</max_angle>
+                            <!-- Standard CCW sweep. A reversed range (min > max)
+                                 degenerates the FOV to zero and every sample
+                                 returns the same ray. The RPLidar clockwise
+                                 convention is applied in gazebo_bridge.cpp. -->
+                            <min_angle>-3.14159</min_angle>
+                            <max_angle>3.14159</max_angle>
                         </horizontal>
                     </scan>
                     <range>
