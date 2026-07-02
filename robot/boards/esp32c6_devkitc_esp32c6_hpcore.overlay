@@ -116,7 +116,7 @@
                      <LEDC_CH1_GPIO18>,
                      <LEDC_CH2_GPIO11>,
                      <LEDC_CH3_GPIO10>,
-                     <LEDC_CH4_GPIO15>;
+                     <LEDC_CH4_GPIO3>;
             output-enable;
         };
     };
