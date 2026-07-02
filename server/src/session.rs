@@ -102,6 +102,66 @@ impl<W: Write> RobotLink<W> {
     }
 }
 
+/// Per-sweep pose trace for offline SLAM evaluation, enabled with
+/// `HR_POSE_LOG=<path>`. The column layout is a contract with
+/// `tools/slam_benchmark.py` — extend, never reorder. `score` and `mode`
+/// are placeholders until the SLAM engine exposes match health.
+const POSE_TRACE_HEADER: &str = "t_unix,odom_x,odom_y,odom_theta,slam_x,slam_y,slam_theta,score,mode";
+
+struct PoseTrace {
+    out: Box<dyn Write + Send>,
+}
+
+impl PoseTrace {
+    /// Opens the trace in append mode so a robot reconnect (new session)
+    /// keeps extending the same run's file; the header is written only when
+    /// the file is empty.
+    fn from_env() -> Option<Self> {
+        let path = std::env::var("HR_POSE_LOG").ok().filter(|p| !p.is_empty())?;
+        match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            Ok(file) => {
+                let is_empty = file.metadata().map(|m| m.len() == 0).unwrap_or(false);
+                let mut trace = Self { out: Box::new(io::BufWriter::new(file)) };
+                if is_empty {
+                    trace.write_header();
+                }
+                log::info!("[POSE_LOG] Tracing SLAM poses to {}", path);
+                Some(trace)
+            }
+            Err(e) => {
+                log::error!("[POSE_LOG] Could not open {}: {}", path, e);
+                None
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn new(out: Box<dyn Write + Send>) -> Self {
+        let mut trace = Self { out };
+        trace.write_header();
+        trace
+    }
+
+    fn write_header(&mut self) {
+        let _ = writeln!(self.out, "{}", POSE_TRACE_HEADER);
+    }
+
+    fn record(&mut self, odom: &Pose, slam: &Pose, score: f32, mode: &str) {
+        let t_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        let _ = writeln!(
+            self.out,
+            "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.4},{}",
+            t_unix, odom.x, odom.y, odom.theta, slam.x, slam.y, slam.theta, score, mode
+        );
+        // Flushed per row: the benchmark tails the file live, and a killed
+        // server (restart pattern P5) must not lose buffered rows.
+        let _ = self.out.flush();
+    }
+}
+
 struct PendingRpc {
     method: String,
     reply: Option<mpsc::Sender<RpcResult>>,
@@ -126,6 +186,7 @@ pub struct Session<W: Write> {
     stats: Arc<Stats>,
     rec: Arc<Mutex<rerun::RecordingStream>>,
     start_time: Instant,
+    pose_trace: Option<PoseTrace>,
 }
 
 /// Entry point for a robot connection; returns when the connection drops or
@@ -275,12 +336,18 @@ impl<W: Write> Session<W> {
             stats,
             rec,
             start_time,
+            pose_trace: PoseTrace::from_env(),
         }
     }
 
     #[cfg(test)]
     fn set_map_gui_interval(&mut self, interval: Duration) {
         self.map_gui_interval = interval;
+    }
+
+    #[cfg(test)]
+    fn set_pose_trace(&mut self, out: Box<dyn Write + Send>) {
+        self.pose_trace = Some(PoseTrace::new(out));
     }
 
     /// Rerun stream with the session timeline set to "now".
@@ -458,6 +525,10 @@ impl<W: Write> Session<W> {
         world.pose = world.slam.update(&sweep.points, &self.odom.pose);
         world.pose_initialized = true;
         world.mark_dirty();
+        if let Some(trace) = &mut self.pose_trace {
+            // score/mode are placeholders until Slam::health() exists (T11).
+            trace.record(&self.odom.pose, &world.pose, 0.0, "basic");
+        }
         let _ = self.gui_tx.send(GuiUpdate::Lidar(sweep.points.clone()));
         let _ = self.gui_tx.send(GuiUpdate::SlamPose {
             x: world.pose.x,
@@ -793,6 +864,29 @@ mod tests {
         })
     }
 
+    /// A complete 41-point lidar revolution; the trailing `scan_completed`
+    /// marker flushes the buffered sweep through the assembler.
+    fn sweep_event(offset: f32) -> SessionEvent {
+        let mut points: Vec<crate::homerobot::LidarPoint> = (0..40)
+            .map(|i| crate::homerobot::LidarPoint {
+                distance_mm: 1000.0,
+                angle_deg: offset + i as f32 * 9.0,
+                quality: 15,
+                scan_completed: false,
+            })
+            .collect();
+        points.push(crate::homerobot::LidarPoint {
+            distance_mm: 1000.0,
+            angle_deg: offset,
+            quality: 15,
+            scan_completed: true,
+        });
+        SessionEvent::FromRobot(RobotToServerMessage {
+            sequence_millis: 0,
+            payload: Some(Payload::Lidar(crate::homerobot::LidarScan { points })),
+        })
+    }
+
     #[test]
     fn encoder_telemetry_updates_pose_and_notifies_gui() {
         let (mut session, gui_rx) = test_session();
@@ -912,40 +1006,54 @@ mod tests {
         let (mut session, gui_rx) = test_session();
         session.set_map_gui_interval(Duration::from_millis(400));
 
-        let sweep = |offset: f32| {
-            let mut points: Vec<crate::homerobot::LidarPoint> = (0..40)
-                .map(|i| crate::homerobot::LidarPoint {
-                    distance_mm: 1000.0,
-                    angle_deg: offset + i as f32 * 9.0,
-                    quality: 15,
-                    scan_completed: false,
-                })
-                .collect();
-            points.push(crate::homerobot::LidarPoint {
-                distance_mm: 1000.0,
-                angle_deg: offset,
-                quality: 15,
-                scan_completed: true, // flushes the buffered revolution
-            });
-            SessionEvent::FromRobot(RobotToServerMessage {
-                sequence_millis: 0,
-                payload: Some(Payload::Lidar(crate::homerobot::LidarScan { points })),
-            })
-        };
-
         // Sweeps must be >80ms apart for the assembler, but within the map
         // throttle window: expect exactly one Map update for the pair.
-        session.handle_event(sweep(0.0));
+        session.handle_event(sweep_event(0.0));
         std::thread::sleep(Duration::from_millis(100));
-        session.handle_event(sweep(0.5));
+        session.handle_event(sweep_event(0.5));
         let maps = gui_rx.try_iter().filter(|u| matches!(u, GuiUpdate::Map { .. })).count();
         assert_eq!(maps, 1);
 
         // After the throttle interval a new sweep publishes the map again.
         std::thread::sleep(Duration::from_millis(350));
-        session.handle_event(sweep(1.0));
+        session.handle_event(sweep_event(1.0));
         let maps = gui_rx.try_iter().filter(|u| matches!(u, GuiUpdate::Map { .. })).count();
         assert_eq!(maps, 1);
+    }
+
+    #[test]
+    fn pose_trace_writes_header_and_one_csv_row_per_sweep() {
+        /// Cloneable sink so the test keeps a handle to what the trace wrote.
+        #[derive(Clone, Default)]
+        struct SharedBuf(Arc<Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let (mut session, _gui_rx) = test_session();
+        let buf = SharedBuf::default();
+        session.set_pose_trace(Box::new(buf.clone()));
+
+        session.handle_event(encoders_event(100, 100, 100));
+        session.handle_event(sweep_event(0.0));
+
+        let text = String::from_utf8(buf.0.lock().unwrap().clone()).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], POSE_TRACE_HEADER);
+        assert_eq!(lines.len(), 2, "exactly one data row per processed sweep");
+
+        let cols: Vec<&str> = lines[1].split(',').collect();
+        assert_eq!(cols.len(), POSE_TRACE_HEADER.split(',').count());
+        for col in &cols[..8] {
+            col.parse::<f64>().expect("numeric columns must parse");
+        }
+        assert_eq!(cols[8], "basic");
     }
 
     #[test]
