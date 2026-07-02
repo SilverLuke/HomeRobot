@@ -1089,6 +1089,10 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
                         GuiUpdate::Lidar(points) => {
                             if !points.is_empty() {
                                 let mut state = GUI_STATE.lock().unwrap();
+                                state.scan_gaps = crate::gui::lidar::find_scan_gaps(
+                                    &points,
+                                    crate::gui::lidar::gap_threshold_deg(),
+                                );
                                 crate::gui::lidar::update_scan(&mut state.display_scan, points);
                                 lidar_canvas_c.queue_draw();
                             }
@@ -1167,6 +1171,7 @@ pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Ap
                                 state.map_height = 0;
                                 state.map_data.clear();
                                 state.display_scan.clear();
+                                state.scan_gaps.clear();
                                 state.frontiers.clear();
                                 state.current_path.clear();
                                 state.trajectory.clear();
