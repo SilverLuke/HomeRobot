@@ -118,7 +118,6 @@ pub struct Session<W: Write> {
     stats: Arc<Stats>,
     rec: Arc<Mutex<rerun::RecordingStream>>,
     start_time: Instant,
-    last_autosave: Instant,
 }
 
 /// Entry point for a robot connection; returns when the connection drops or
@@ -127,11 +126,15 @@ pub fn run_session(
     stream: TcpStream,
     bus: CommandBus,
     world: Arc<Mutex<WorldModel>>,
+    generation: Arc<AtomicUsize>,
     stats: Arc<Stats>,
     sig_count: Arc<AtomicUsize>,
     gui_tx: mpsc::Sender<GuiUpdate>,
     rec: Arc<Mutex<rerun::RecordingStream>>,
 ) {
+    // Single active robot: claiming a new generation retires every older
+    // session, so two connections never write the shared world concurrently.
+    let my_generation = generation.fetch_add(1, Ordering::SeqCst) + 1;
     stats.active_connections.fetch_add(1, Ordering::SeqCst);
     let addr = stream
         .peer_addr()
@@ -152,6 +155,9 @@ pub fn run_session(
         }
     };
     read_stream.set_read_timeout(Some(READ_TIMEOUT)).ok();
+    // Kept aside to force-close the socket when this session ends, so the
+    // reader thread unblocks and the robot notices immediately.
+    let shutdown_handle = stream.try_clone().ok();
     {
         let stats = stats.clone();
         let sig_count = sig_count.clone();
@@ -183,6 +189,10 @@ pub fn run_session(
     }
 
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
+        if generation.load(Ordering::SeqCst) != my_generation {
+            stats.log(&format!("[CONN] Session for {} replaced by a newer connection.", addr));
+            break;
+        }
         match event_rx.recv_timeout(EVENT_POLL_INTERVAL) {
             Ok(SessionEvent::Disconnected(reason)) => {
                 stats.log(&format!("[ERROR] Connection to {} lost: {}", addr, reason));
@@ -196,6 +206,9 @@ pub fn run_session(
     }
 
     session.fail_pending_rpcs("connection closed");
+    if let Some(handle) = shutdown_handle {
+        let _ = handle.shutdown(std::net::Shutdown::Both);
+    }
     stats.active_connections.fetch_sub(1, Ordering::SeqCst);
     stats.log(&format!("[CONN] Closing connection to {}", addr));
     let _ = gui_tx.send(GuiUpdate::Status("Idle".to_string()));
@@ -250,7 +263,6 @@ impl<W: Write> Session<W> {
             stats,
             rec,
             start_time,
-            last_autosave: Instant::now(),
         }
     }
 
@@ -273,12 +285,12 @@ impl<W: Write> Session<W> {
                 }
             }
             SessionEvent::Command(cmd) => self.handle_command(&mut world, cmd),
-            SessionEvent::Tick => {
-                self.run_navigation(&mut world);
-                self.maybe_autosave(&mut world);
-            }
+            SessionEvent::Tick => self.run_navigation(&mut world),
             SessionEvent::Disconnected(_) => unreachable!("handled by the session loop"),
         }
+        // Checked on every event, not just Tick: under continuous telemetry
+        // the receive timeout never fires, so Tick events are starved.
+        self.maybe_autosave(&mut world);
     }
 
     // ---- Robot telemetry -------------------------------------------------
@@ -553,10 +565,9 @@ impl<W: Write> Session<W> {
 
     /// Persist the world periodically so it survives server restarts.
     fn maybe_autosave(&mut self, world: &mut WorldModel) {
-        if self.last_autosave.elapsed() < AUTOSAVE_INTERVAL || !world.is_dirty() {
+        if !world.autosave_due(AUTOSAVE_INTERVAL) {
             return;
         }
-        self.last_autosave = Instant::now();
         match world.save(crate::world::AUTOSAVE_PATH) {
             Ok(()) => self.stats.log(&format!("[WORLD] Map autosaved to {}", crate::world::AUTOSAVE_PATH)),
             Err(e) => log::error!("[WORLD] Autosave failed: {}", e),

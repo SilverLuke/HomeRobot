@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::io::{self, Read, Write};
+use std::time::{Duration, Instant};
 
 use crate::mapping::OccupancyGrid;
 use crate::odometry::Pose;
@@ -23,6 +24,9 @@ pub struct WorldModel {
     pub pose: Pose,
     pub pose_initialized: bool,
     dirty: bool,
+    /// Lives here rather than in the session: sessions can be short-lived
+    /// (reconnects), but the autosave cadence must span them.
+    last_autosave: Instant,
 }
 
 impl WorldModel {
@@ -32,6 +36,7 @@ impl WorldModel {
             pose: Pose { x: 0.0, y: 0.0, theta: 0.0 },
             pose_initialized: false,
             dirty: false,
+            last_autosave: Instant::now(),
         }
     }
 
@@ -81,6 +86,11 @@ impl WorldModel {
         self.dirty
     }
 
+    /// True when there are unsaved changes and the autosave interval elapsed.
+    pub fn autosave_due(&self, interval: Duration) -> bool {
+        self.dirty && self.last_autosave.elapsed() >= interval
+    }
+
     /// Atomically persist map + pose (write to a temp file, then rename).
     pub fn save(&mut self, path: &str) -> io::Result<()> {
         let tmp_path = format!("{}.tmp", path);
@@ -106,6 +116,7 @@ impl WorldModel {
         }
         fs::rename(&tmp_path, path)?;
         self.dirty = false;
+        self.last_autosave = Instant::now();
         Ok(())
     }
 
@@ -163,6 +174,7 @@ impl WorldModel {
             pose,
             pose_initialized,
             dirty: false,
+            last_autosave: Instant::now(),
         })
     }
 }
@@ -189,6 +201,7 @@ mod tests {
             pose,
             pose_initialized: true,
             dirty: true,
+            last_autosave: Instant::now(),
         };
         world.save(path).unwrap();
         assert!(!world.is_dirty());

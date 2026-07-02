@@ -193,6 +193,7 @@ fn main() -> io::Result<()> {
 
     let stats = Stats::new();
     let bus = CommandBus::new();
+    let session_generation = Arc::new(AtomicUsize::new(0));
     let world = Arc::new(Mutex::new(crate::world::WorldModel::load_or_new(crate::world::AUTOSAVE_PATH)));
     let sig_count = Arc::new(AtomicUsize::new(0));
 
@@ -232,6 +233,7 @@ fn main() -> io::Result<()> {
     let stats_server = stats.clone();
     let bus_server = bus.clone();
     let world_server = world.clone();
+    let generation_server = session_generation.clone();
     let sig_count_server = sig_count.clone();
     let gui_tx_server = gui_tx.clone();
     let rec_server = rec.clone();
@@ -246,11 +248,12 @@ fn main() -> io::Result<()> {
                 Ok((stream, _)) => {
                     let bus = bus_server.clone();
                     let w = world_server.clone();
+                    let gen = generation_server.clone();
                     let st = Arc::clone(&stats_server);
                     let sc = Arc::clone(&sig_count_server);
                     let gtx = gui_tx_server.clone();
                     let rrec = rec_server.clone();
-                    thread::spawn(move || run_session(stream, bus, w, st, sc, gtx, rrec));
+                    thread::spawn(move || run_session(stream, bus, w, gen, st, sc, gtx, rrec));
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                     sleep(Duration::from_millis(100));
