@@ -285,7 +285,7 @@ Gazebo ground-truth benchmark for checkpoints and the promotion gate.
 | **P1 out-and-back**: 2m forward, 180°, return, 180° | sanity + RPE on straight motion |
 | **P2 perimeter loop**: waypoint circuit around the arena interior (~15–20m), ending at start | drift-on-revisit — the headline test |
 | **P3 room-hop**: through the interior divider/pillar area and back | matching through clutter + brief feature-poor stretches |
-| **P4 = P2 with encoder fault injected** | bad-odometry robustness |
+| **P4 = P1 with encoder fault injected** (firmware closed-loop motions run on the robot's clean encoders, so the tour is guaranteed — controlled fault/nominal comparison on identical motion) | bad-odometry robustness |
 | **P5 restart-in-place**: run P1, kill server mid-run, restart, continue | relocalization |
 
 Encoder fault injection: server-side, `HR_FAULT_RIGHT_ENCODER=1` replays the
@@ -321,7 +321,7 @@ and thresholds are frozen (adjusted only downward in leniency) before any
 | RPE rotation | ≤ 0.5 °/m | P1–P3 |
 | Revisit error | ≤ 0.15m, ≤ 5° after ≥15m | P2 |
 | Free-beyond-walls | ≤ 25 cells (noise allowance) | P2, P3 |
-| Fault-mode ATE | ≤ 2× the P2 ATE result | P4 |
+| Fault-mode ATE | ≤ 2× the P1 ATE result | P4 |
 | Reloc confirm | ≤ 3 sweeps, then ATE ≤ 0.10m | P5 |
 | **Promotion gate** | `GridSlam` beats `BasicSlam` on ATE and revisit error on P2, and regresses no metric by >10% on any pattern | all |
 

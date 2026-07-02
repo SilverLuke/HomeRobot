@@ -106,8 +106,11 @@ at start), P3 room-hop through the divider/pillar area. Integrated as
 **Description:** `HR_FAULT_RIGHT_ENCODER=1` corrupts right-encoder deltas at
 the `Session::handle_encoders` boundary, replaying the issues.md #6 signature
 (delta → |delta|, plus phantom ticks ~100/s at standstill, deterministic RNG).
-Benchmark gains P4 (= P2 + fault) and P5 (P1 with a mid-run server
-kill/restart, asserting map reload + continued tracking).
+Benchmark gains P4 (= P1's motion sequence + fault: firmware closed-loop
+motions run on the robot's clean encoders, so the tour is guaranteed and
+P4-vs-P1 is a controlled comparison; a goto tour under the fault cannot
+even start) and P5 (P1 with a mid-run server kill/restart, asserting map
+reload + continued tracking).
 **Acceptance criteria:**
 - [ ] Unit test: injected stream shows always-positive right deltas and
       nonzero standstill ticks; disabled ⇒ passthrough

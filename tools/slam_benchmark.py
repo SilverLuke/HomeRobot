@@ -452,33 +452,37 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #     >=0.7m clearance from the interior obstacles and outer walls.
 # P3 room-hop: goto legs threading between the cylinder, the diagonal wall
 #     and the box, ending back at the start.
-# P4 = P2 driven with the server started under HR_FAULT_RIGHT_ENCODER=1
-#     (the fault is server-side; the tour is identical by design).
+# P4 = P1's motion sequence with the server started under
+#     HR_FAULT_RIGHT_ENCODER=1: firmware closed-loop motions run on the
+#     robot's own (clean) encoders, so the physical tour is guaranteed and
+#     P4-vs-P1 is a controlled fault/nominal comparison on identical motion.
+#     (A goto tour under the fault measured nothing: BasicSlam navigation
+#     cannot even start, GT path length was 0.0 across all runs.)
 # P5 restart: p5a drives out, the harness (tools/slam_baseline.sh) kills and
 #     restarts the server, p5b drives back — one GT recording spans both.
-P2_TOUR = [
-    ("goto", (2.5, 3.5)),
-    ("goto", (-4.5, 3.5)),
-    ("goto", (-4.5, -4.2)),
-    ("goto", (2.5, -4.2)),
-    ("goto", (0.0, 0.0)),
+P1_MOTIONS = [
+    ("motion", ["--action", "straight", "--distance", "2.0"]),
+    ("motion", ["--action", "rotate", "--angle", "180"]),
+    ("motion", ["--action", "straight", "--distance", "2.0"]),
+    ("motion", ["--action", "rotate", "--angle", "180"]),
 ]
 
 PATTERNS = {
-    "p1": [
-        ("motion", ["--action", "straight", "--distance", "2.0"]),
-        ("motion", ["--action", "rotate", "--angle", "180"]),
-        ("motion", ["--action", "straight", "--distance", "2.0"]),
-        ("motion", ["--action", "rotate", "--angle", "180"]),
+    "p1": P1_MOTIONS,
+    "p2": [
+        ("goto", (2.5, 3.5)),
+        ("goto", (-4.5, 3.5)),
+        ("goto", (-4.5, -4.2)),
+        ("goto", (2.5, -4.2)),
+        ("goto", (0.0, 0.0)),
     ],
-    "p2": P2_TOUR,
     "p3": [
         ("goto", (-1.0, 2.8)),
         ("goto", (-4.0, 0.0)),
         ("goto", (-0.5, -2.8)),
         ("goto", (0.0, 0.0)),
     ],
-    "p4": P2_TOUR,
+    "p4": P1_MOTIONS,
     "p5a": [
         ("motion", ["--action", "straight", "--distance", "2.0"]),
     ],
@@ -541,9 +545,23 @@ def drive_pattern(pattern, host, monitor, leg_timeout=120.0):
             wait_until_stationary(lambda: monitor.latest, timeout=15.0, grace=0.0)
         elif step == "goto":
             x, y = arg
-            run_cmd_sender(host, ["go-to", str(x), str(y)], timeout=30)
-            done = wait_until_stationary(lambda: monitor.latest, timeout=leg_timeout)
-            print("  leg (%.1f, %.1f): %s" % (x, y, "settled" if done else "TIMEOUT"))
+            # Navigation can abort instantly from a cold start (sparse map =>
+            # A* fails => NavigateTo falls back to Manual). Retry the leg
+            # until ground truth shows actual displacement.
+            start_pos = monitor.latest
+            for attempt in range(3):
+                run_cmd_sender(host, ["go-to", str(x), str(y)], timeout=30)
+                done = wait_until_stationary(lambda: monitor.latest, timeout=leg_timeout)
+                cur = monitor.latest
+                moved = (
+                    start_pos is not None and cur is not None
+                    and math.hypot(cur[1] - start_pos[1], cur[2] - start_pos[2]) >= 0.2
+                )
+                print("  leg (%.1f, %.1f) attempt %d: %s%s"
+                      % (x, y, attempt + 1, "settled" if done else "TIMEOUT",
+                         "" if moved else ", no displacement"))
+                if moved:
+                    break
     run_cmd_sender(host, ["stop"], timeout=30)
 
 

@@ -64,7 +64,7 @@ run_one() {
 
     ./tools/start_sim.sh --headless > "$out/sim.log" 2>&1 &
     wait_for_trace_growth
-    sleep 5 # settle: gyro calibration + first map cells before driving
+    sleep 10 # settle: gyro calibration + enough initial map for first plans
 
     if [ "$pattern" = "p5" ]; then
         python3 tools/slam_benchmark.py record-gt --out "$out/gt.csv" &
