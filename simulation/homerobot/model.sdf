@@ -62,7 +62,7 @@
 
         <!-- Left Wheel -->
         <link name='left_wheel'>
-            <pose relative_to='base_link'>0 0.13 -0.02 1.5708 0 0</pose>
+            <pose relative_to='base_link'>0 0.12 -0.02 1.5708 0 0</pose>
             <inertial>
                 <mass>0.2</mass>
                 <inertia>
@@ -77,7 +77,7 @@
             <collision name='collision'>
                 <geometry>
                     <cylinder>
-                        <radius>0.033</radius>
+                        <radius>0.0399</radius>
                         <length>0.02</length>
                     </cylinder>
                 </geometry>
@@ -93,7 +93,7 @@
             <visual name='visual'>
                 <geometry>
                     <cylinder>
-                        <radius>0.033</radius>
+                        <radius>0.0399</radius>
                         <length>0.02</length>
                     </cylinder>
                 </geometry>
@@ -107,7 +107,7 @@
 
         <!-- Right Wheel -->
         <link name='right_wheel'>
-            <pose relative_to='base_link'>0 -0.13 -0.02 1.5708 0 0</pose>
+            <pose relative_to='base_link'>0 -0.12 -0.02 1.5708 0 0</pose>
             <inertial>
                 <mass>0.2</mass>
                 <inertia>
@@ -122,7 +122,7 @@
             <collision name='collision'>
                 <geometry>
                     <cylinder>
-                        <radius>0.033</radius>
+                        <radius>0.0399</radius>
                         <length>0.02</length>
                     </cylinder>
                 </geometry>
@@ -138,7 +138,7 @@
             <visual name='visual'>
                 <geometry>
                     <cylinder>
-                        <radius>0.033</radius>
+                        <radius>0.0399</radius>
                         <length>0.02</length>
                     </cylinder>
                 </geometry>
@@ -152,7 +152,7 @@
 
         <!-- Castor Wheel -->
         <link name='castor'>
-            <pose relative_to='base_link'>0.11 0 -0.035 0 0 0</pose>
+            <pose relative_to='base_link'>0.11 0 -0.045 0 0 0</pose>
             <inertial>
                 <mass>0.1</mass>
                 <inertia>
