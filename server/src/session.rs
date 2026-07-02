@@ -41,6 +41,8 @@ const DEFAULT_LIDAR_HZ: f32 = 5.0;
 /// when no telemetry is arriving.
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
+/// How often the world model is checked for autosave to disk.
+const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
 
 pub enum SessionEvent {
     FromRobot(RobotToServerMessage),
@@ -116,6 +118,7 @@ pub struct Session<W: Write> {
     stats: Arc<Stats>,
     rec: Arc<Mutex<rerun::RecordingStream>>,
     start_time: Instant,
+    last_autosave: Instant,
 }
 
 /// Entry point for a robot connection; returns when the connection drops or
@@ -247,6 +250,7 @@ impl<W: Write> Session<W> {
             stats,
             rec,
             start_time,
+            last_autosave: Instant::now(),
         }
     }
 
@@ -269,7 +273,10 @@ impl<W: Write> Session<W> {
                 }
             }
             SessionEvent::Command(cmd) => self.handle_command(&mut world, cmd),
-            SessionEvent::Tick => self.run_navigation(&mut world),
+            SessionEvent::Tick => {
+                self.run_navigation(&mut world);
+                self.maybe_autosave(&mut world);
+            }
             SessionEvent::Disconnected(_) => unreachable!("handled by the session loop"),
         }
     }
@@ -421,6 +428,7 @@ impl<W: Write> Session<W> {
         // SLAM correction on the complete, consistent sweep.
         world.pose = world.slam.update(&sweep.points, &self.odom.pose);
         world.pose_initialized = true;
+        world.mark_dirty();
         let _ = self.gui_tx.send(GuiUpdate::Lidar(sweep.points.clone()));
         let _ = self.gui_tx.send(GuiUpdate::SlamPose {
             x: world.pose.x,
@@ -540,6 +548,18 @@ impl<W: Write> Session<W> {
                 // Plan immediately instead of waiting for the next telemetry event.
                 self.run_navigation(world);
             }
+        }
+    }
+
+    /// Persist the world periodically so it survives server restarts.
+    fn maybe_autosave(&mut self, world: &mut WorldModel) {
+        if self.last_autosave.elapsed() < AUTOSAVE_INTERVAL || !world.is_dirty() {
+            return;
+        }
+        self.last_autosave = Instant::now();
+        match world.save(crate::world::AUTOSAVE_PATH) {
+            Ok(()) => self.stats.log(&format!("[WORLD] Map autosaved to {}", crate::world::AUTOSAVE_PATH)),
+            Err(e) => log::error!("[WORLD] Autosave failed: {}", e),
         }
     }
 
