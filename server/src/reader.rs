@@ -73,15 +73,6 @@ impl<S: Read + Write> ProtocolManager<S> {
             })
     }
 
-    pub fn send_packet(&mut self, packet: &[u8]) -> Result<(), std::io::Error> {
-        let bytes_written = self.stream.write(packet)?;
-        self.stats
-            .total_tx
-            .fetch_add(bytes_written, Ordering::SeqCst);
-        self.stream.flush()?;
-        Ok(())
-    }
-
     fn do_read(&mut self) -> io::Result<usize> {
         let free_space = BUFFER_SIZE - self.read_buffer.len();
         if free_space == 0 {

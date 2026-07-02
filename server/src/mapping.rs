@@ -1,7 +1,7 @@
 use crate::odometry::Pose;
 use crate::homerobot::LidarPoint;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Frontier {
     pub centroid_x: f32,
     pub centroid_y: f32,

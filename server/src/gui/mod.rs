@@ -4,7 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Builder, DrawingArea, Label, Button, EventControllerKey, SpinButton};
 use gdk4::Key;
 use std::sync::{Arc, Mutex, mpsc};
-use crate::command::RobotCommand;
+use crate::command::{Command, CommandBus, NavMode};
 use crate::homerobot::{LidarPoint, RobotConfig};
 use std::time::Duration;
 use crate::gui::lidar::{setup_lidar_drawing, GUI_STATE};
@@ -36,9 +36,11 @@ pub enum GuiUpdate {
         _wheel_track_mm: f32,
         _encoder_ticks_per_rev: u32,
     },
+    /// Robot session performed a full reset; clear cached view state.
+    ResetView,
 }
 
-pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Application, mpsc::Sender<GuiUpdate>) {
+pub fn init_gui(bus: CommandBus, rec: Arc<Mutex<rerun::RecordingStream>>) -> (Application, mpsc::Sender<GuiUpdate>) {
     let (tx, rx) = mpsc::channel::<GuiUpdate>();
     let rx = Arc::new(Mutex::new(rx));
 
@@ -46,7 +48,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         .application_id("com.homerobot.control")
         .build();
 
-    let rc_clone = robot_command.clone();
+    let bus_clone = bus.clone();
     let rec_clone = rec.clone();
     
     app.connect_activate(move |app| {
@@ -209,7 +211,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
 
         // Map Drag & Click Navigation gesture
         let drag_controller = gtk4::GestureDrag::new();
-        let rc_click = robot_command.clone();
+        let bus_click = bus.clone();
         let btn_explore_click = btn_explore.clone();
         
         let start_pan = std::rc::Rc::new(std::cell::Cell::new((0.0f64, 0.0f64)));
@@ -272,8 +274,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                         btn_explore_click.set_active(false);
                     }
                     
-                    let mut cmd = rc_click.lock().unwrap();
-                    *cmd = RobotCommand::NavigateTo { x: goal_x, y: goal_y };
+                    bus_click.send(Command::SetMode(NavMode::NavigateTo { x: goal_x, y: goal_y }));
                 }
             }
         });
@@ -298,17 +299,16 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         btn_lidar.add_css_class("lidar-on");
         btn_explore.add_css_class("explore-on");
 
-        let rc_explore = rc_clone.clone();
+        let bus_explore = bus_clone.clone();
         btn_explore.connect_toggled(move |btn| {
-            let mut cmd = rc_explore.lock().unwrap();
             let enabled = btn.is_active();
             log::info!("GUI: Exploration {}", if enabled { "ENABLED" } else { "DISABLED" });
-            *cmd = RobotCommand::AutonomousExploration { enabled };
+            bus_explore.send(Command::SetMode(if enabled { NavMode::Exploration } else { NavMode::Manual }));
         });
 
         let key_controller = EventControllerKey::new();
         key_controller.set_propagation_phase(gtk4::PropagationPhase::Bubble);
-        let rc_key = rc_clone.clone();
+        let bus_key = bus_clone.clone();
         let btn_lidar_clone = btn_lidar.clone();
         let btn_toggle_sidebar_clone = btn_toggle_sidebar.clone();
         let power_scale_clone = power_scale.clone();
@@ -316,51 +316,50 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let lidar_canvas_key = lidar_canvas.clone();
 
         key_controller.connect_key_pressed(move |_, key, _, _| {
-            let mut cmd = rc_key.lock().unwrap();
             let current_power = power_scale_clone.value() as u8;
 
             match key {
                 Key::w | Key::W => {
                     log::info!("GUI: Keyboard Move: Forward (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: current_power, left_angle: 1.0, 
                         right_power: current_power, right_angle: 1.0 
-                    };
+                    });
                 },
                 Key::s | Key::S => {
                     log::info!("GUI: Keyboard Move: Backward (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: current_power, left_angle: -1.0, 
                         right_power: current_power, right_angle: -1.0 
-                    };
+                    });
                 },
                 Key::a | Key::A => {
                     log::info!("GUI: Keyboard Move: Left (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: 0, left_angle: 0.0, 
                         right_power: current_power, right_angle: 1.0 
-                    };
+                    });
                 },
                 Key::d | Key::D => {
                     log::info!("GUI: Keyboard Move: Right (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: current_power, left_angle: 1.0, 
                         right_power: 0, right_angle: 0.0 
-                    };
+                    });
                 },
                 Key::q | Key::Q => {
                     log::info!("GUI: Keyboard Move: Rotate Left (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: current_power, left_angle: -1.0, 
                         right_power: current_power, right_angle: 1.0 
-                    };
+                    });
                 },
                 Key::e | Key::E => {
                     log::info!("GUI: Keyboard Move: Rotate Right (Power: {})", current_power);
-                    *cmd = RobotCommand::MotorAngle { 
+                    bus_key.send(Command::Drive { 
                         left_power: current_power, left_angle: 1.0, 
                         right_power: current_power, right_angle: -1.0 
-                    };
+                    });
                 },
                 Key::h | Key::H => {
                     let new_active = !btn_toggle_sidebar_clone.is_active();
@@ -370,10 +369,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 Key::l | Key::L => {
                     let new_state = !btn_lidar_clone.is_active();
                     log::info!("GUI: Keyboard Lidar Toggle: {}", if new_state { "ON" } else { "OFF" });
-                    *cmd = RobotCommand::LidarControl { 
+                    bus_key.send(Command::LidarControl { 
                         active: new_state, 
                         target_frequency_hz: if new_state { lidar_freq_scale_key.value() as f32 } else { 0.0 } 
-                    };
+                    });
                     btn_lidar_clone.set_active(new_state);
                 },
                 Key::space => {
@@ -384,11 +383,11 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                         state.current_path.clear();
                     }
                     lidar_canvas_key.queue_draw();
-                    *cmd = RobotCommand::StopMoving;
+                    bus_key.send(Command::StopMoving);
                 },
                 Key::t | Key::T => {
                     log::info!("GUI: Keyboard Trigger Diagnostics");
-                    *cmd = RobotCommand::RunDiagnostic;
+                    bus_key.send(Command::RunDiagnostic);
                 },
                 Key::plus | Key::equal | Key::KP_Add => {
                     let mut state = GUI_STATE.lock().unwrap();
@@ -419,55 +418,55 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         window.add_controller(key_controller);
 
         // Connect Movement Buttons
-        let rc_fwd = rc_clone.clone();
+        let bus_fwd = bus_clone.clone();
         let ps_fwd = power_scale.clone();
         btn_forward.connect_clicked(move |_| {
             let p = ps_fwd.value() as u8;
             log::info!("GUI: Button Move: Forward (Power: {})", p);
-            *rc_fwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: p, right_angle: 1.0 };
+            bus_fwd.send(Command::Drive { left_power: p, left_angle: 1.0, right_power: p, right_angle: 1.0 });
         });
 
-        let rc_bwd = rc_clone.clone();
+        let bus_bwd = bus_clone.clone();
         let ps_bwd = power_scale.clone();
         btn_backward.connect_clicked(move |_| {
             let p = ps_bwd.value() as u8;
             log::info!("GUI: Button Move: Backward (Power: {})", p);
-            *rc_bwd.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: -1.0, right_power: p, right_angle: -1.0 };
+            bus_bwd.send(Command::Drive { left_power: p, left_angle: -1.0, right_power: p, right_angle: -1.0 });
         });
 
-        let rc_left = rc_clone.clone();
+        let bus_left = bus_clone.clone();
         let ps_left = power_scale.clone();
         btn_left.connect_clicked(move |_| {
             let p = ps_left.value() as u8;
             log::info!("GUI: Button Move: Left (Power: {})", p);
-            *rc_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: 0, left_angle: 0.0, right_power: p, right_angle: 1.0 };
+            bus_left.send(Command::Drive { left_power: 0, left_angle: 0.0, right_power: p, right_angle: 1.0 });
         });
 
-        let rc_right = rc_clone.clone();
+        let bus_right = bus_clone.clone();
         let ps_right = power_scale.clone();
         btn_right.connect_clicked(move |_| {
             let p = ps_right.value() as u8;
             log::info!("GUI: Button Move: Right (Power: {})", p);
-            *rc_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: 0, right_angle: 0.0 };
+            bus_right.send(Command::Drive { left_power: p, left_angle: 1.0, right_power: 0, right_angle: 0.0 });
         });
 
-        let rc_rot_left = rc_clone.clone();
+        let bus_rot_left = bus_clone.clone();
         let ps_rot_left = power_scale.clone();
         btn_rotate_left.connect_clicked(move |_| {
             let p = ps_rot_left.value() as u8;
             log::info!("GUI: Button Move: Rotate Left (Power: {})", p);
-            *rc_rot_left.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: -1.0, right_power: p, right_angle: 1.0 };
+            bus_rot_left.send(Command::Drive { left_power: p, left_angle: -1.0, right_power: p, right_angle: 1.0 });
         });
 
-        let rc_rot_right = rc_clone.clone();
+        let bus_rot_right = bus_clone.clone();
         let ps_rot_right = power_scale.clone();
         btn_rotate_right.connect_clicked(move |_| {
             let p = ps_rot_right.value() as u8;
             log::info!("GUI: Button Move: Rotate Right (Power: {})", p);
-            *rc_rot_right.lock().unwrap() = RobotCommand::MotorAngle { left_power: p, left_angle: 1.0, right_power: p, right_angle: -1.0 };
+            bus_rot_right.send(Command::Drive { left_power: p, left_angle: 1.0, right_power: p, right_angle: -1.0 });
         });
 
-        let rc_stop = rc_clone.clone();
+        let bus_stop = bus_clone.clone();
         let lidar_canvas_stop = lidar_canvas.clone();
         btn_stop.connect_clicked(move |_| {
             log::info!("GUI: Button STOP");
@@ -477,16 +476,16 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 state.current_path.clear();
             }
             lidar_canvas_stop.queue_draw();
-            *rc_stop.lock().unwrap() = RobotCommand::StopMoving;
+            bus_stop.send(Command::StopMoving);
         });
 
-        let rc_save = rc_clone.clone();
+        let bus_save = bus_clone.clone();
         btn_save_map.connect_clicked(move |_| {
             log::info!("GUI: Button Save Map");
-            *rc_save.lock().unwrap() = RobotCommand::SaveMap;
+            bus_save.send(Command::SaveMap);
         });
 
-        let rc_reset = rc_clone.clone();
+        let bus_reset = bus_clone.clone();
         let lidar_canvas_reset = lidar_canvas.clone();
         btn_reset.connect_clicked(move |_| {
             log::info!("GUI: Button Reset Triggered");
@@ -499,11 +498,11 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 state.zoom_factor = 1.0;
             }
             lidar_canvas_reset.queue_draw();
-            *rc_reset.lock().unwrap() = RobotCommand::Reset;
+            bus_reset.send(Command::Reset);
         });
 
         // btn_rotate_90_left
-        let rc_rot_90_l = rc_clone.clone();
+        let bus_rot_90_l = bus_clone.clone();
         btn_rotate_90_left.connect_clicked(move |_| {
             let (ticks_per_meter, wheel_base) = {
                 let sizes = crate::constants::ROBOT_SIZES.lock().unwrap();
@@ -515,16 +514,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = -ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Rotate 90° CCW (L_ticks={}, R_ticks={})", left_ticks, right_ticks);
-            *rc_rot_90_l.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_rot_90_l.send(Command::ExecuteMotion {
                 motion_type: 1,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_rotate_90_right
-        let rc_rot_90_r = rc_clone.clone();
+        let bus_rot_90_r = bus_clone.clone();
         btn_rotate_90_right.connect_clicked(move |_| {
             let (ticks_per_meter, wheel_base) = {
                 let sizes = crate::constants::ROBOT_SIZES.lock().unwrap();
@@ -536,16 +536,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = -ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Rotate 90° CW (L_ticks={}, R_ticks={})", left_ticks, right_ticks);
-            *rc_rot_90_r.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_rot_90_r.send(Command::ExecuteMotion {
                 motion_type: 1,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_rotate_x_left
-        let rc_rot_x_l = rc_clone.clone();
+        let bus_rot_x_l = bus_clone.clone();
         let spin_rot_l = spin_rotate_angle.clone();
         btn_rotate_x_left.connect_clicked(move |_| {
             let angle_deg = spin_rot_l.value() as f32;
@@ -559,16 +560,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = -ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Rotate X° CCW: {}° (L_ticks={}, R_ticks={})", angle_deg, left_ticks, right_ticks);
-            *rc_rot_x_l.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_rot_x_l.send(Command::ExecuteMotion {
                 motion_type: 1,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_rotate_x_right
-        let rc_rot_x_r = rc_clone.clone();
+        let bus_rot_x_r = bus_clone.clone();
         let spin_rot_r = spin_rotate_angle.clone();
         btn_rotate_x_right.connect_clicked(move |_| {
             let angle_deg = -spin_rot_r.value() as f32;
@@ -582,16 +584,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = -ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Rotate X° CW: {}° (L_ticks={}, R_ticks={})", -angle_deg, left_ticks, right_ticks);
-            *rc_rot_x_r.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_rot_x_r.send(Command::ExecuteMotion {
                 motion_type: 1,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_move_x_forward
-        let rc_move_fwd = rc_clone.clone();
+        let bus_move_fwd = bus_clone.clone();
         let spin_move_fwd = spin_move_distance.clone();
         btn_move_x_forward.connect_clicked(move |_| {
             let dist_cm = spin_move_fwd.value() as f32;
@@ -601,16 +604,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Move Forward: {}cm (L_ticks={}, R_ticks={})", dist_cm, left_ticks, right_ticks);
-            *rc_move_fwd.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_move_fwd.send(Command::ExecuteMotion {
                 motion_type: 0,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_move_x_backward
-        let rc_move_bwd = rc_clone.clone();
+        let bus_move_bwd = bus_clone.clone();
         let spin_move_bwd = spin_move_distance.clone();
         btn_move_x_backward.connect_clicked(move |_| {
             let dist_cm = spin_move_bwd.value() as f32;
@@ -620,16 +624,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = ticks;
             let right_ticks = ticks;
             log::info!("GUI: Button Move Backward: {}cm (L_ticks={}, R_ticks={})", dist_cm, left_ticks, right_ticks);
-            *rc_move_bwd.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_move_bwd.send(Command::ExecuteMotion {
                 motion_type: 0,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_arc_left
-        let rc_arc_l = rc_clone.clone();
+        let bus_arc_l = bus_clone.clone();
         let spin_arc_r_l = spin_arc_radius.clone();
         let spin_arc_d_l = spin_arc_distance.clone();
         btn_arc_left.connect_clicked(move |_| {
@@ -647,16 +652,17 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = (left_dist * ticks_per_meter) as i32;
             let right_ticks = (right_dist * ticks_per_meter) as i32;
             log::info!("GUI: Button Arc Left: Radius={}cm, Dist={}cm (L_ticks={}, R_ticks={})", radius_cm, dist_cm, left_ticks, right_ticks);
-            *rc_arc_l.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_arc_l.send(Command::ExecuteMotion {
                 motion_type: 2,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
         // btn_arc_right
-        let rc_arc_r = rc_clone.clone();
+        let bus_arc_r = bus_clone.clone();
         let spin_arc_r_r = spin_arc_radius.clone();
         let spin_arc_d_r = spin_arc_distance.clone();
         btn_arc_right.connect_clicked(move |_| {
@@ -674,23 +680,23 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             let left_ticks = (left_dist * ticks_per_meter) as i32;
             let right_ticks = (right_dist * ticks_per_meter) as i32;
             log::info!("GUI: Button Arc Right: Radius={}cm, Dist={}cm (L_ticks={}, R_ticks={})", radius_cm, dist_cm, left_ticks, right_ticks);
-            *rc_arc_r.lock().unwrap() = RobotCommand::ExecuteMotion {
+            bus_arc_r.send(Command::ExecuteMotion {
                 motion_type: 2,
                 left_ticks,
                 right_ticks,
                 max_power: 150,
-            };
+                reply: None,
+            });
         });
 
-        let rc_lidar = rc_clone.clone();
+        let bus_lidar = bus_clone.clone();
         let lidar_freq_scale_btn = lidar_freq_scale.clone();
         btn_lidar.connect_toggled(move |btn| {
-            let mut cmd = rc_lidar.lock().unwrap();
             let active = btn.is_active();
-            *cmd = RobotCommand::LidarControl { 
+            bus_lidar.send(Command::LidarControl { 
                 active, 
                 target_frequency_hz: if active { lidar_freq_scale_btn.value() as f32 } else { 0.0 } 
-            };
+            });
             log::info!("GUI: Lidar toggled: {}", active);
         });
         btn_lidar.set_active(true);
@@ -839,13 +845,13 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         // PID Lock Logic and Apply Config Button
         let is_updating = std::rc::Rc::new(std::cell::Cell::new(false));
 
-        let rc_lidar_freq = rc_clone.clone();
+        let bus_lidar_freq = bus_clone.clone();
         let btn_lidar_freq_ref = btn_lidar.clone();
         let is_updating_freq = is_updating.clone();
         let lidar_freq_scale_c = lidar_freq_scale.clone();
 
         let drag_controller = gtk4::GestureDrag::new();
-        let rc_lidar_drag = rc_lidar_freq.clone();
+        let bus_lidar_drag = bus_lidar_freq.clone();
         let btn_lidar_drag_ref = btn_lidar_freq_ref.clone();
         let scale_drag = lidar_freq_scale_c.clone();
         let is_updating_drag = is_updating_freq.clone();
@@ -855,11 +861,10 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 let freq = scale_drag.value() as f32;
                 let active = btn_lidar_drag_ref.is_active();
                 if active {
-                    let mut cmd = rc_lidar_drag.lock().unwrap();
-                    *cmd = RobotCommand::LidarControl {
+                    bus_lidar_drag.send(Command::LidarControl {
                         active: true,
                         target_frequency_hz: freq,
-                    };
+                    });
                     log::info!("GUI: Lidar frequency changed on release: {} Hz", freq);
                 }
             }
@@ -960,7 +965,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
             }
         });
 
-        let rc_conf = rc_clone.clone();
+        let bus_conf = bus_clone.clone();
         let kpl = kp_left.clone();
         let kil = ki_left.clone();
         let kdl = kd_left.clone();
@@ -969,8 +974,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
         let kdr = kd_right.clone();
         let lfs = lidar_freq_scale.clone();
         apply_btn.connect_clicked(move |_| {
-            let mut cmd = rc_conf.lock().unwrap();
-            *cmd = RobotCommand::UpdateConfig {
+            bus_conf.send(Command::UpdateConfig {
                 left_kp: kpl.value() as f32,
                 left_ki: kil.value() as f32,
                 left_kd: kdl.value() as f32,
@@ -978,7 +982,7 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                 right_ki: kir.value() as f32,
                 right_kd: kdr.value() as f32,
                 lidar_frequency: lfs.value() as f32,
-            };
+            });
             log::info!("GUI: Sent RobotConfig update");
         });
 
@@ -1149,6 +1153,28 @@ pub fn init_gui(robot_command: Arc<Mutex<RobotCommand>>, rec: Arc<Mutex<rerun::R
                             log::info!("[GUI] Received capabilities: magnetometer={}", has_magnetometer);
                             mag_label_c.set_visible(has_magnetometer);
                             mag_canvas_c.set_visible(has_magnetometer);
+                        }
+                        GuiUpdate::ResetView => {
+                            {
+                                let mut state = GUI_STATE.lock().unwrap();
+                                state.robot_x = 0.0;
+                                state.robot_y = 0.0;
+                                state.robot_theta = 0.0;
+                                state.slam_x = 0.0;
+                                state.slam_y = 0.0;
+                                state.slam_theta = 0.0;
+                                state.map_width = 0;
+                                state.map_height = 0;
+                                state.map_data.clear();
+                                state.display_scan.clear();
+                                state.frontiers.clear();
+                                state.current_path.clear();
+                                state.trajectory.clear();
+                                state.accel_history.clear();
+                                state.gyro_history.clear();
+                                state.mag_history.clear();
+                            }
+                            lidar_canvas_c.queue_draw();
                         }
                     }
                 }
