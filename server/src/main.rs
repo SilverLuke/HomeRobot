@@ -10,6 +10,7 @@ mod world;
 mod odometry;
 mod slam;
 mod mapping;
+mod likelihood;
 mod pathfinding;
 #[cfg(test)]
 mod test_fixtures;

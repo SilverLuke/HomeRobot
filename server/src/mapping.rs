@@ -12,6 +12,12 @@ pub struct OccupancyGrid {
     pub origin_x: f32,   // world coordinates of grid center
     pub origin_y: f32,
     pub data: Vec<i16>,  // Log-odds probability: 0 is unknown, >0 is likely occupied, <0 is likely free
+    /// Bounding box (min_x, min_y, max_x, max_y) of cells whose
+    /// occupied-state flipped since the last [`take_dirty_occupancy`] call.
+    /// Drives incremental likelihood-field rebuilds; only updates through
+    /// [`update_cell`]/[`raytrace_free`] are tracked (direct `data` writes,
+    /// as tests do, are not).
+    dirty_occupancy: Option<(usize, usize, usize, usize)>,
 }
 
 const LOG_ODDS_OCCUPIED: i16 = 20; // Increase probability on hit
@@ -49,7 +55,21 @@ impl OccupancyGrid {
             origin_x: 0.0,
             origin_y: 0.0,
             data: vec![0; width * height], // Start with 0 (50% probability in log-odds)
+            dirty_occupancy: None,
         }
+    }
+
+    fn mark_dirty_cell(&mut self, x: usize, y: usize) {
+        self.dirty_occupancy = Some(match self.dirty_occupancy {
+            None => (x, y, x, y),
+            Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+        });
+    }
+
+    /// Consumes the dirty bounding box of occupied-state changes.
+    #[allow(dead_code)] // consumed by the likelihood field; wired into SLAM by plan T10
+    pub fn take_dirty_occupancy(&mut self) -> Option<(usize, usize, usize, usize)> {
+        self.dirty_occupancy.take()
     }
 
     /// Converts world coordinates (meters) to grid indices
@@ -69,7 +89,11 @@ impl OccupancyGrid {
         if let Some((gx, gy)) = self.world_to_grid(x, y) {
             let idx = gy * self.width + gx;
             let current = self.data[idx];
-            self.data[idx] = (current + delta).clamp(LOG_ODDS_MIN, LOG_ODDS_MAX);
+            let updated = (current + delta).clamp(LOG_ODDS_MIN, LOG_ODDS_MAX);
+            self.data[idx] = updated;
+            if cell_is_occupied(current) != cell_is_occupied(updated) {
+                self.mark_dirty_cell(gx, gy);
+            }
         }
     }
 
@@ -182,7 +206,11 @@ impl OccupancyGrid {
 
             let idx = (y0 as usize) * self.width + (x0 as usize);
             let current = self.data[idx];
-            self.data[idx] = (current + LOG_ODDS_FREE).clamp(LOG_ODDS_MIN, LOG_ODDS_MAX);
+            let updated = (current + LOG_ODDS_FREE).clamp(LOG_ODDS_MIN, LOG_ODDS_MAX);
+            self.data[idx] = updated;
+            if cell_is_occupied(current) != cell_is_occupied(updated) {
+                self.mark_dirty_cell(x0 as usize, y0 as usize);
+            }
 
             let e2 = 2 * err;
             if e2 >= dy {
