@@ -8,7 +8,10 @@ use crate::slam::Slam;
 const REPLAN_INTERVAL: Duration = Duration::from_millis(1000);
 const BLACKLIST_TTL: Duration = Duration::from_secs(45);
 const PROGRESS_TIMEOUT: Duration = Duration::from_secs(8);
-/// Translation (m) / rotation (rad) below which the robot counts as not moving.
+/// Progress means getting closer to the goal by at least this much (m), or —
+/// during the alignment phase — reducing the heading error by this much (rad).
+/// Raw pose movement does NOT count: a robot spinning in place against an
+/// obstacle must trip the stuck timeout.
 const PROGRESS_MIN_DIST: f32 = 0.03;
 const PROGRESS_MIN_ANGLE: f32 = 0.08;
 const GOAL_TOLERANCE: f32 = 0.20;
@@ -48,7 +51,11 @@ pub struct Navigator {
     goal: Option<(f32, f32)>,
     last_replan: Instant,
     last_progress_time: Instant,
-    last_progress_pose: Pose,
+    /// Closest we have ever been to the current goal.
+    best_goal_dist: f32,
+    /// Smallest heading error toward the current goal so far.
+    best_heading_err: f32,
+    progress_timeout: Duration,
     blacklist: Vec<(f32, f32, Instant)>,
 }
 
@@ -60,7 +67,9 @@ impl Navigator {
             goal: None,
             last_replan: Instant::now() - REPLAN_INTERVAL * 10,
             last_progress_time: Instant::now(),
-            last_progress_pose: Pose { x: 0.0, y: 0.0, theta: 0.0 },
+            best_goal_dist: f32::MAX,
+            best_heading_err: f32::MAX,
+            progress_timeout: PROGRESS_TIMEOUT,
             blacklist: Vec::new(),
         }
     }
@@ -75,8 +84,7 @@ impl Navigator {
         self.path.clear();
         self.goal = None;
         self.last_replan = Instant::now() - REPLAN_INTERVAL * 10; // force immediate replan
-        self.last_progress_time = Instant::now();
-        self.last_progress_pose = pose;
+        self.reset_progress(pose);
 
         let mut updates = vec![NavUpdate::PathChanged(Vec::new()), NavUpdate::GoalChanged(None)];
         if mode == NavMode::Manual && leaving_autonomous {
@@ -152,8 +160,7 @@ impl Navigator {
             Some(path) => {
                 self.path = path;
                 self.goal = Some((gx, gy));
-                self.last_progress_time = Instant::now();
-                self.last_progress_pose = pose;
+                self.reset_progress(pose);
                 updates.push(NavUpdate::PathChanged(self.path.clone()));
                 updates.push(NavUpdate::GoalChanged(self.goal));
             }
@@ -177,17 +184,24 @@ impl Navigator {
             return;
         }
 
-        let dist_moved = ((pose.x - self.last_progress_pose.x).powi(2)
-            + (pose.y - self.last_progress_pose.y).powi(2))
-        .sqrt();
-        let angle_moved = (pose.theta - self.last_progress_pose.theta).abs();
-        if dist_moved > PROGRESS_MIN_DIST || angle_moved > PROGRESS_MIN_ANGLE {
+        // Progress = getting closer to the goal, or turning toward it (the
+        // alignment phase before translation starts). Position/heading changes
+        // that don't improve on the best so far — oscillation, spinning
+        // against an obstacle — deliberately don't count.
+        let dist = goal_distance(pose, goal);
+        let err = goal_heading_error(pose, goal);
+        if dist < self.best_goal_dist - PROGRESS_MIN_DIST {
+            self.best_goal_dist = dist;
             self.last_progress_time = Instant::now();
-            self.last_progress_pose = pose;
+            return;
+        }
+        if err < self.best_heading_err - PROGRESS_MIN_ANGLE {
+            self.best_heading_err = err;
+            self.last_progress_time = Instant::now();
             return;
         }
 
-        if self.last_progress_time.elapsed() < PROGRESS_TIMEOUT {
+        if self.last_progress_time.elapsed() < self.progress_timeout {
             return;
         }
 
@@ -195,7 +209,7 @@ impl Navigator {
             NavMode::Exploration => {
                 log::warn!(
                     "[NAV] Stuck: no progress for {:?}. Blacklisting frontier X={:.2}, Y={:.2}",
-                    PROGRESS_TIMEOUT, goal.0, goal.1
+                    self.progress_timeout, goal.0, goal.1
                 );
                 self.blacklist.push((goal.0, goal.1, Instant::now()));
                 self.abandon_goal(updates);
@@ -269,6 +283,26 @@ impl Navigator {
         }
     }
 
+    /// Rebase the progress trackers on the current pose/goal pair.
+    fn reset_progress(&mut self, pose: Pose) {
+        self.last_progress_time = Instant::now();
+        match self.goal {
+            Some(goal) => {
+                self.best_goal_dist = goal_distance(pose, goal);
+                self.best_heading_err = goal_heading_error(pose, goal);
+            }
+            None => {
+                self.best_goal_dist = f32::MAX;
+                self.best_heading_err = f32::MAX;
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn set_progress_timeout(&mut self, timeout: Duration) {
+        self.progress_timeout = timeout;
+    }
+
     fn is_blacklisted(&self, x: f32, y: f32) -> bool {
         self.blacklist.iter().any(|(bx, by, _)| {
             let dx = x - bx;
@@ -304,6 +338,24 @@ impl Navigator {
     pub fn reset(&mut self) {
         *self = Navigator::new();
     }
+}
+
+fn goal_distance(pose: Pose, goal: (f32, f32)) -> f32 {
+    ((goal.0 - pose.x).powi(2) + (goal.1 - pose.y).powi(2)).sqrt()
+}
+
+/// Absolute heading error between the robot's orientation and the direction
+/// to the goal, normalized to [0, PI].
+fn goal_heading_error(pose: Pose, goal: (f32, f32)) -> f32 {
+    let target_theta = (goal.1 - pose.y).atan2(goal.0 - pose.x);
+    let mut diff = target_theta - pose.theta;
+    while diff > std::f32::consts::PI {
+        diff -= 2.0 * std::f32::consts::PI;
+    }
+    while diff < -std::f32::consts::PI {
+        diff += 2.0 * std::f32::consts::PI;
+    }
+    diff.abs()
 }
 
 #[cfg(test)]
@@ -448,6 +500,78 @@ mod tests {
             Some(NavUpdate::Drive { left_angle, right_angle, .. })
                 if *left_angle == -*right_angle
         ));
+    }
+
+    #[test]
+    fn spinning_in_place_triggers_stuck_detection() {
+        let mut nav = Navigator::new();
+        nav.set_progress_timeout(Duration::from_millis(50));
+        let slam = StubSlam { frontiers: vec![], path: Some(vec![(2.0, 0.0)]) };
+
+        nav.set_mode(NavMode::NavigateTo { x: 2.0, y: 0.0 }, pose(0.0, 0.0, 0.0));
+        nav.tick(&slam, pose(0.0, 0.0, 0.0), 10.0); // plans, baselines progress
+
+        // Oscillate the heading without approaching the goal. Under the old
+        // pose-delta rule every one of these counted as progress and the
+        // robot could spin against an obstacle forever.
+        let mut finished = Vec::new();
+        for i in 0..4 {
+            std::thread::sleep(Duration::from_millis(20));
+            let theta = if i % 2 == 0 { 0.3 } else { -0.3 };
+            finished.extend(
+                nav.tick(&slam, pose(0.0, 0.0, theta), 10.0)
+                    .into_iter()
+                    .filter(|u| matches!(u, NavUpdate::Finished { .. })),
+            );
+        }
+        assert!(
+            finished.contains(&NavUpdate::Finished { success: false }),
+            "oscillating rotation must trip the stuck timeout"
+        );
+    }
+
+    #[test]
+    fn rotating_toward_the_goal_counts_as_progress() {
+        let mut nav = Navigator::new();
+        nav.set_progress_timeout(Duration::from_millis(50));
+        // Goal straight "up": ideal heading is PI/2, robot starts at 0.
+        let slam = StubSlam { frontiers: vec![], path: Some(vec![(0.0, 2.0)]) };
+
+        nav.set_mode(NavMode::NavigateTo { x: 0.0, y: 2.0 }, pose(0.0, 0.0, 0.0));
+        nav.tick(&slam, pose(0.0, 0.0, 0.0), 10.0);
+
+        // Keep turning toward the goal, well past the timeout duration.
+        let mut theta = 0.0;
+        for _ in 0..5 {
+            std::thread::sleep(Duration::from_millis(20));
+            theta += 0.15;
+            let updates = nav.tick(&slam, pose(0.0, 0.0, theta), 10.0);
+            assert!(
+                !updates.iter().any(|u| matches!(u, NavUpdate::Finished { .. })),
+                "alignment rotation must count as progress"
+            );
+        }
+    }
+
+    #[test]
+    fn steady_approach_never_triggers_stuck() {
+        let mut nav = Navigator::new();
+        nav.set_progress_timeout(Duration::from_millis(50));
+        let slam = StubSlam { frontiers: vec![], path: Some(vec![(2.0, 0.0)]) };
+
+        nav.set_mode(NavMode::NavigateTo { x: 2.0, y: 0.0 }, pose(0.0, 0.0, 0.0));
+        nav.tick(&slam, pose(0.0, 0.0, 0.0), 10.0);
+
+        let mut x = 0.0;
+        for _ in 0..5 {
+            std::thread::sleep(Duration::from_millis(20));
+            x += 0.05;
+            let updates = nav.tick(&slam, pose(x, 0.0, 0.0), 10.0);
+            assert!(
+                !updates.iter().any(|u| matches!(u, NavUpdate::Finished { success: false })),
+                "monotonic approach must never count as stuck"
+            );
+        }
     }
 
     #[test]
