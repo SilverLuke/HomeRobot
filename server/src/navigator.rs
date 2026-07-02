@@ -158,6 +158,7 @@ impl Navigator {
 
         match slam.plan_path(gx, gy) {
             Some(path) => {
+                log::info!("[NAV] Planned path with {} waypoints to X={:.2}, Y={:.2}", path.len(), gx, gy);
                 self.path = path;
                 self.goal = Some((gx, gy));
                 self.reset_progress(pose);
