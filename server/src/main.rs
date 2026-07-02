@@ -193,7 +193,7 @@ fn main() -> io::Result<()> {
 
     let stats = Stats::new();
     let bus = CommandBus::new();
-    let world = Arc::new(Mutex::new(crate::world::WorldModel::new()));
+    let world = Arc::new(Mutex::new(crate::world::WorldModel::load_or_new(crate::world::AUTOSAVE_PATH)));
     let sig_count = Arc::new(AtomicUsize::new(0));
 
     // 1. Initialize GTK GUI (only if not headless)

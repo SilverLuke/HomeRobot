@@ -252,6 +252,21 @@ impl BasicSlam {
         self.last_odom_pose = None;
         self.pose_history.clear();
     }
+
+    pub fn map(&self) -> &OccupancyGrid {
+        &self.map
+    }
+
+    /// Rebuild SLAM state from a persisted map and pose (server restart).
+    /// The ICP reference cloud is rebuilt from live scans; until then the
+    /// pose is dead-reckoned only.
+    pub fn restore(map: OccupancyGrid, pose: Pose) -> Self {
+        let mut slam = Self::new();
+        slam.map = map;
+        slam.current_pose = pose;
+        slam.update_count = 1;
+        slam
+    }
 }
 
 impl Slam for BasicSlam {
