@@ -5,11 +5,8 @@ edition = "2021"
 
 [dependencies]
 circular-buffer = "1.2.0"
-mockall = "0.13.1"
 prost = "0.13"
 ctrlc = "3.4"
-signal-hook = "0.4.3"
-libc = "0.2.183"
 gtk4 = { version = "0.9.6", features = ["v4_16"] }
 gdk4 = "0.9.6"
 glib = "0.20"
