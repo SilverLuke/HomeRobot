@@ -139,7 +139,14 @@ the frontier and moves on.
 
 ### Checkpoint B (after Tasks 5-8)
 - [ ] Full exploration run in simulation completes without manual intervention
+      — BLOCKED by issues.md #3 (sim right wheel inverted, robot cannot translate);
+      unit tests cover the nav pipeline in the meantime
 - [ ] Human review before Phase 3
+
+> Status 2026-07-02: Phase 1 done (commits 2ba9c87, 4fd7d6f, acfc7b2, 773d135 +
+> sim smoke test on pcluca). Phase 2 done (412d234 thresholds+mapping tests,
+> 2ebd5b5 A* rewrite, 1d5d9be stuck detection). 46 tests green, zero warnings.
+> Hardware findings recorded in issues.md.
 
 ### Phase 3: Persistent world model
 
