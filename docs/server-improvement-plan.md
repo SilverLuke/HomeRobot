@@ -189,7 +189,10 @@ duplicated command execution.
 **Scope:** S
 
 ### Checkpoint C (after Tasks 9-11)
-- [ ] Reconnect + restart resilience demonstrated in simulation
+- [x] Reconnect + restart resilience demonstrated in simulation (2026-07-02:
+      world survives session replacement incl. ~4000-replacement stress via the
+      real-robot flap, `[WORLD] Map autosaved` + `[WORLD] Restored map (600x600)`
+      verified live; see issues.md #5 for the two-robot flap hazard)
 - [ ] Human review before Phase 4
 
 ### Phase 4: CI and polish
