@@ -48,7 +48,12 @@ const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
 const MAP_GUI_INTERVAL: Duration = Duration::from_millis(1000);
 
 pub enum SessionEvent {
-    FromRobot(RobotToServerMessage),
+    /// A robot message plus its ARRIVAL time (stamped in the reader thread).
+    /// Sweep deskewing needs capture-time, and the session loop can lag the
+    /// wire by hundreds of ms when a replan (frontier BFS + A*) stalls it —
+    /// stamping at processing time warped the deskew and collapsed the
+    /// match score on every stall-delayed sweep.
+    FromRobot(RobotToServerMessage, Instant),
     Command(Command),
     /// Periodic heartbeat, synthesized when no event arrived for a while.
     Tick,
@@ -298,7 +303,7 @@ fn reader_thread(
     while stats.running.load(Ordering::Relaxed) && sig_count.load(Ordering::Relaxed) == 0 {
         match protocol.read_message() {
             Ok(Some(msg)) => {
-                if tx.send(SessionEvent::FromRobot(msg)).is_err() {
+                if tx.send(SessionEvent::FromRobot(msg, Instant::now())).is_err() {
                     return;
                 }
             }
@@ -379,10 +384,10 @@ impl<W: Write> Session<W> {
         let world = self.world.clone();
         let mut world = world.lock().unwrap();
         match event {
-            SessionEvent::FromRobot(msg) => {
+            SessionEvent::FromRobot(msg, arrived) => {
                 let seq = msg.sequence_millis;
                 if let Some(payload) = msg.payload {
-                    self.handle_robot_payload(&mut world, payload, seq);
+                    self.handle_robot_payload(&mut world, payload, seq, arrived);
                 }
             }
             SessionEvent::Command(cmd) => self.handle_command(&mut world, cmd),
@@ -396,7 +401,13 @@ impl<W: Write> Session<W> {
 
     // ---- Robot telemetry -------------------------------------------------
 
-    fn handle_robot_payload(&mut self, world: &mut WorldModel, payload: Payload, sequence_millis: u32) {
+    fn handle_robot_payload(
+        &mut self,
+        world: &mut WorldModel,
+        payload: Payload,
+        sequence_millis: u32,
+        arrived: Instant,
+    ) {
         match payload {
             Payload::Battery(bat) => {
                 log::info!("[SERVER] Telemetry Heartbeat: Battery {}%", bat.percentage);
@@ -427,7 +438,7 @@ impl<W: Write> Session<W> {
             }
             Payload::Lidar(scan) => {
                 for sweep in self.scan.push(scan.points) {
-                    self.process_sweep(world, sweep);
+                    self.process_sweep(world, sweep, arrived);
                 }
                 self.run_navigation(world);
             }
@@ -538,7 +549,7 @@ impl<W: Write> Session<W> {
         ).ok();
     }
 
-    fn process_sweep(&mut self, world: &mut WorldModel, sweep: CompletedSweep) {
+    fn process_sweep(&mut self, world: &mut WorldModel, sweep: CompletedSweep, arrived: Instant) {
         if let Some(summary) = sweep.summary {
             self.stats.log(&summary);
         }
@@ -557,8 +568,9 @@ impl<W: Write> Session<W> {
             }
         }
 
-        // SLAM correction on the complete, consistent sweep.
-        world.pose = world.slam.update(&sweep.points, &self.odom.pose);
+        // SLAM correction on the complete, consistent sweep, anchored to
+        // the sweep's ARRIVAL time so deskewing survives event-loop lag.
+        world.pose = world.slam.update_at(&sweep.points, &self.odom.pose, arrived);
         world.pose_initialized = true;
         world.mark_dirty();
         if let Some(trace) = &mut self.pose_trace {
@@ -799,6 +811,16 @@ impl<W: Write> Session<W> {
         if !world.pose_initialized {
             return;
         }
+        // A lost engine (kidnap, score collapse, restart re-acquisition)
+        // means the pose the navigator would act on is dead-reckoned
+        // garbage: stop instead of driving blind into walls.
+        let mode = world.slam.health().mode;
+        if matches!(mode, crate::slam::SlamMode::Diverged | crate::slam::SlamMode::Relocalizing) {
+            if let Err(e) = self.link.stop() {
+                log::error!("[NAV] Failed to stop while SLAM is {}: {}", mode.as_str(), e);
+            }
+            return;
+        }
         let updates = self.navigator.tick(&world.slam, world.pose, self.min_front_dist);
         self.apply_nav_updates(updates);
     }
@@ -891,13 +913,16 @@ mod tests {
     }
 
     fn encoders_event(left: i32, right: i32, millis: u32) -> SessionEvent {
-        SessionEvent::FromRobot(RobotToServerMessage {
-            sequence_millis: millis,
-            payload: Some(Payload::Encoders(MotorEncoders {
-                left_encoder: left,
-                right_encoder: right,
-            })),
-        })
+        SessionEvent::FromRobot(
+            RobotToServerMessage {
+                sequence_millis: millis,
+                payload: Some(Payload::Encoders(MotorEncoders {
+                    left_encoder: left,
+                    right_encoder: right,
+                })),
+            },
+            Instant::now(),
+        )
     }
 
     /// A complete 41-point lidar revolution; the trailing `scan_completed`
@@ -917,10 +942,13 @@ mod tests {
             quality: 15,
             scan_completed: true,
         });
-        SessionEvent::FromRobot(RobotToServerMessage {
-            sequence_millis: 0,
-            payload: Some(Payload::Lidar(crate::homerobot::LidarScan { points })),
-        })
+        SessionEvent::FromRobot(
+            RobotToServerMessage {
+                sequence_millis: 0,
+                payload: Some(Payload::Lidar(crate::homerobot::LidarScan { points })),
+            },
+            Instant::now(),
+        )
     }
 
     #[test]
@@ -961,14 +989,17 @@ mod tests {
             })
             .expect("RpcRequest was sent");
 
-        session.handle_event(SessionEvent::FromRobot(RobotToServerMessage {
-            sequence_millis: 0,
-            payload: Some(Payload::RpcResponse(RpcResponse {
-                call_id,
-                payload: vec![],
-                error: String::new(),
-            })),
-        }));
+        session.handle_event(SessionEvent::FromRobot(
+            RobotToServerMessage {
+                sequence_millis: 0,
+                payload: Some(Payload::RpcResponse(RpcResponse {
+                    call_id,
+                    payload: vec![],
+                    error: String::new(),
+                })),
+            },
+            Instant::now(),
+        ));
 
         assert_eq!(reply_rx.try_recv(), Ok(Ok(())));
     }
@@ -985,14 +1016,17 @@ mod tests {
             reply: Some(reply_tx),
         }));
 
-        session.handle_event(SessionEvent::FromRobot(RobotToServerMessage {
-            sequence_millis: 0,
-            payload: Some(Payload::RpcResponse(RpcResponse {
-                call_id: 9999,
-                payload: vec![],
-                error: String::new(),
-            })),
-        }));
+        session.handle_event(SessionEvent::FromRobot(
+            RobotToServerMessage {
+                sequence_millis: 0,
+                payload: Some(Payload::RpcResponse(RpcResponse {
+                    call_id: 9999,
+                    payload: vec![],
+                    error: String::new(),
+                })),
+            },
+            Instant::now(),
+        ));
 
         assert!(reply_rx.try_recv().is_err(), "stale response must not complete a pending motion");
     }

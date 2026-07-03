@@ -42,6 +42,14 @@ pub trait Slam {
     /// Returns the corrected Pose.
     fn update(&mut self, scan: &[LidarPoint], odom_pose: &Pose) -> Pose;
 
+    /// Like [`update`], anchored to the sweep's ARRIVAL time. The session
+    /// event loop can lag the wire (replan stalls); deskewing against
+    /// processing time warps the cloud. Engines that deskew must override
+    /// this; the default ignores the timestamp (fine for stubs).
+    fn update_at(&mut self, scan: &[LidarPoint], odom_pose: &Pose, _scan_end_time: Instant) -> Pose {
+        self.update(scan, odom_pose)
+    }
+
     /// Record a high-frequency odometry pose with timestamp.
     fn add_odom_pose(&mut self, pose: Pose, timestamp: Instant);
 
@@ -228,9 +236,12 @@ impl BasicSlam {
 
 impl Slam for BasicSlam {
     fn update(&mut self, scan: &[LidarPoint], odom_pose: &Pose) -> Pose {
+        self.update_at(scan, odom_pose, Instant::now())
+    }
+
+    fn update_at(&mut self, scan: &[LidarPoint], odom_pose: &Pose, now: Instant) -> Pose {
         self.update_count += 1;
 
-        let now = Instant::now();
         let scan_duration = if let Some(last) = self.last_scan_time {
             let diff = now.duration_since(last);
             if diff > Duration::from_millis(50) && diff < Duration::from_millis(500) {
@@ -383,6 +394,13 @@ impl Slam for SlamEngine {
         match self {
             SlamEngine::Basic(s) => s.update(scan, odom_pose),
             SlamEngine::Grid(s) => s.update(scan, odom_pose),
+        }
+    }
+
+    fn update_at(&mut self, scan: &[LidarPoint], odom_pose: &Pose, scan_end_time: Instant) -> Pose {
+        match self {
+            SlamEngine::Basic(s) => s.update_at(scan, odom_pose, scan_end_time),
+            SlamEngine::Grid(s) => s.update_at(scan, odom_pose, scan_end_time),
         }
     }
 

@@ -196,7 +196,10 @@ impl GridSlam {
 
 impl Slam for GridSlam {
     fn update(&mut self, scan: &[LidarPoint], odom_pose: &Pose) -> Pose {
-        let now = Instant::now();
+        self.update_at(scan, odom_pose, Instant::now())
+    }
+
+    fn update_at(&mut self, scan: &[LidarPoint], odom_pose: &Pose, now: Instant) -> Pose {
         let scan_duration = if let Some(last) = self.last_scan_time {
             let diff = now.duration_since(last);
             if diff > Duration::from_millis(50) && diff < Duration::from_millis(500) {
