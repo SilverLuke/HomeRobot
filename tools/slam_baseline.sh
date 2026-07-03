@@ -23,7 +23,7 @@ export HR_CMD_SENDER="$ROOT/tools/cmd_sender/target/debug/cmd_sender"
 # once killed their sim mid-session).
 kill_sim() {
     pkill -9 -f "$ROOT/build/sim/sim/zephyr/zephyr.exe" 2>/dev/null || true
-    pkill -9 -f "gz.*$ROOT/simulation/sim.world" 2>/dev/null || true
+    pkill -9 -f "gz.*$ROOT/simulation/" 2>/dev/null || true # any world of THIS checkout
     pkill -9 -f "$ROOT/server/target/debug/server" 2>/dev/null || true
     pkill -9 -f "Xvfb :99" 2>/dev/null || true
     pkill -9 -f "slam_benchmark.py record-g[t]" 2>/dev/null || true
@@ -53,11 +53,11 @@ abort_if_foreign_sim() {
 # can match leftovers from a previous run.
 wait_for_trace_growth() {
     local before
-    before=$(wc -l < "$HR_POSE_LOG" 2>/dev/null || echo 0)
+    before=$( (wc -l < "$HR_POSE_LOG") 2>/dev/null || echo 0)
     for _ in $(seq 1 60); do
         sleep 2
         local now
-        now=$(wc -l < "$HR_POSE_LOG" 2>/dev/null || echo 0)
+        now=$( (wc -l < "$HR_POSE_LOG") 2>/dev/null || echo 0)
         [ "$now" -gt "$((before + 5))" ] && return 0
     done
     echo "FATAL: pose trace is not growing (no live robot session?)" >&2
@@ -91,9 +91,9 @@ run_one() {
         # PGM snapshot alongside the metrics.
         python3 tools/slam_benchmark.py record-gt --out "$out/gt.csv" &
         local gt_pid=$!
-        "$HR_CMD_SENDER" --proxy explore --enabled true
+        "$HR_CMD_SENDER" --proxy explore --enabled
         sleep "${HR_EXPLORE_SECS:-360}"
-        "$HR_CMD_SENDER" --proxy explore --enabled false || true
+        "$HR_CMD_SENDER" --proxy explore || true
         "$HR_CMD_SENDER" --proxy stop || true
         "$HR_CMD_SENDER" --proxy save-map || true
         sleep 2
@@ -108,7 +108,7 @@ run_one() {
         # Autosave interval is 30s; make sure the map+pose hit disk before the kill.
         sleep 40
         echo "--- killing server mid-run ---"
-        pkill -9 -f "server/target/debug/serve[r]"
+        pkill -9 -f "$SERVER_BIN" # PATH-SCOPED: never the other checkout's server
         sleep 2
         HEADLESS=1 HR_BIND=127.0.0.1 stdbuf -oL -eL "$SERVER_BIN" >> logs/sim/server.log 2>&1 &
         wait_for_trace_growth
