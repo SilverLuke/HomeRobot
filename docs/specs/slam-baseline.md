@@ -74,8 +74,18 @@ sweeps until the robot drove blind; odometry integrated 46m of wheel-spin).
 Sweeps now carry their reader-thread ARRIVAL time, and the session stops
 autonomous driving while the engine reports Diverged/Relocalizing.
 
-Map snapshots: `logs/bench/explore-{arena,house}-grid/map.pgm` on the build
-machine. Exploration ATE (~0.3–0.45m) is higher than the scripted patterns
+Map snapshots (cropped from the autosaved PGMs; originals in
+`logs/bench/explore-{arena,house}-grid/map.pgm` on the build machine):
+
+| Arena (autonomous, 6 min) | House (autonomous, 6 min) |
+|---|---|
+| ![arena exploration map](img/explore-arena-grid.png) | ![house exploration map](img/explore-house-grid.png) |
+
+For contrast, `img/explore-house-grid-before-fix.png` is the house map from
+the run BEFORE the sweep-timestamp fix — visibly smeared doubled walls in
+the left half.
+
+Exploration ATE (~0.3–0.45m) is higher than the scripted patterns
 (0.07–0.10m): exploration is rotation-heavy and the alignment includes the
 map-frame tilt; the visual maps are the acceptance evidence here.
 
