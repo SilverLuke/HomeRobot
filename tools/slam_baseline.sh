@@ -85,7 +85,23 @@ run_one() {
     wait_for_trace_growth
     sleep 10 # settle: gyro calibration + enough initial map for first plans
 
-    if [ "$pattern" = "p5" ]; then
+    if [ "$pattern" = "explore" ]; then
+        # Autonomous exploration for HR_EXPLORE_SECS (default 360s): the
+        # navigator picks frontiers on its own; we record GT, then save the
+        # PGM snapshot alongside the metrics.
+        python3 tools/slam_benchmark.py record-gt --out "$out/gt.csv" &
+        local gt_pid=$!
+        "$HR_CMD_SENDER" --proxy explore --enabled true
+        sleep "${HR_EXPLORE_SECS:-360}"
+        "$HR_CMD_SENDER" --proxy explore --enabled false || true
+        "$HR_CMD_SENDER" --proxy stop || true
+        "$HR_CMD_SENDER" --proxy save-map || true
+        sleep 2
+        kill "$gt_pid" 2>/dev/null || true
+        cp -f house_map.pgm "$out/map.pgm" 2>/dev/null || true
+        python3 tools/slam_benchmark.py analyze --trace "$HR_POSE_LOG" --gt "$out/gt.csv" \
+            --map house_map.bin --json "$out/metrics.json" --pattern explore || true
+    elif [ "$pattern" = "p5" ]; then
         python3 tools/slam_benchmark.py record-gt --out "$out/gt.csv" &
         local gt_pid=$!
         python3 tools/slam_benchmark.py drive --pattern p5a
