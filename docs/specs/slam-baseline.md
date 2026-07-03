@@ -59,6 +59,26 @@ Comparison notes (grid vs basic):
   `p5-grid1/trace.csv` rows 325–327). Map-fidelity metrics should only be
   trusted on 2D-excited trajectories (P2/P3); noted for the harness.
 
+## Autonomous exploration (GridSlam, 6 min, commit 646d077)
+
+| world | path (m) | ATE (m) | RPE r (deg/m) | modes | map (visual) |
+|---|---|---|---|---|---|
+| arena | 14.6 | 0.33 | 0.90 | 100% tracking | square + all 3 obstacles, crisp |
+| house | 18.0 | 0.44 | 1.12 | 100% tracking | full floor plan, rooms/doors/furniture |
+
+The first exploration attempt exposed (and `646d077` fixed) a latent
+pipeline bug affecting BOTH engines: exploration replans stall the session
+event loop, and sweeps were timestamped at processing time — deskewing then
+warped every stall-delayed cloud (score flapped 0.95↔0.20 on alternating
+sweeps until the robot drove blind; odometry integrated 46m of wheel-spin).
+Sweeps now carry their reader-thread ARRIVAL time, and the session stops
+autonomous driving while the engine reports Diverged/Relocalizing.
+
+Map snapshots: `logs/bench/explore-{arena,house}-grid/map.pgm` on the build
+machine. Exploration ATE (~0.3–0.45m) is higher than the scripted patterns
+(0.07–0.10m): exploration is rotation-heavy and the alignment includes the
+map-frame tilt; the visual maps are the acceptance evidence here.
+
 ## Threshold status (design doc §5.4)
 
 Frozen against the BasicSlam table above on 2026-07-03; the maintainer
